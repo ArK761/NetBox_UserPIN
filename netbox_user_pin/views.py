@@ -11,13 +11,16 @@ from django.utils.translation import gettext as _
 from django.views import View
 from utilities.request import safe_for_redirect
 
-from . import crypto, delegation, service
+from . import approvals, crypto, delegation, service
 from .forms import (
-    ChangePinForm, DelegateForm, MailSettingsForm, OtpForm, PinOtpForm, PinSettingsForm, RecoveryForm,
+    ApprovalForm, BackupCodesForm, BreakGlassForm, ChangePinForm, DelegateForm, MailSettingsForm, OtpForm, PinOtpForm, PinSettingsForm, RecoveryForm,
     ResetConfirmForm, SetPinForm, TestMailForm, UnlockForm,
 )
 from .mixins import PinRequiredMixin, not_allowed_response, step_up_gate
-from .models import PinAccess, PinAccessMode, PinDelegate, PinEvent, PinEventAction, PinSettings, UserPin
+from .models import (
+    ApprovalAction, ApprovalRequest, ApprovalStatus, PinAccess, PinAccessMode, PinDelegate, PinEvent,
+    PinEventAction, PinSettings, UserPin,
+)
 
 ADMIN_SCOPE = 'user-pin-admin'
 
@@ -55,6 +58,36 @@ def _verify_error(form, result, pin_field='pin', otp_field='otp'):
         form.add_error(None, _('No PIN is set.'))
 
 
+def _save_settings(request, form, action, redirect_name):
+    """Save a settings form directly, or create a four-eyes request when required."""
+    changes = {name: form.cleaned_data.get(name) for name in form.changed_data}
+    if not changes:
+        messages.info(request, _('No changes.'))
+        return redirect(redirect_name)
+    if approvals.required_for(action):
+        summary = ('Mail settings: ' if action == ApprovalAction.MAIL_SETTINGS else 'Settings: ') + ', '.join(
+            f'{name} = {value!r}' for name, value in changes.items())
+        return _four_eyes(request, action, {'changes': changes}, summary)
+    detail = '\n'.join(f'{n}: {form.initial.get(n)!r} -> {v!r}' for n, v in changes.items())
+    form.save()
+    service.log_event(PinEventAction.SETTINGS_CHANGED, actor=request.user, request=request, detail=detail)
+    messages.success(request, _('Settings saved.'))
+    return redirect(redirect_name)
+
+
+def _four_eyes(request, action, payload, summary):
+    """Create a four-eyes request and send the requester to its page to confirm."""
+    try:
+        req = approvals.create(action, payload, summary, request.user, request=request)
+    except ValidationError as exc:
+        for message in exc.messages:
+            messages.error(request, message)
+        return redirect(_next_url(request, 'plugins:netbox_user_pin:user_list'))
+    messages.info(request, _('This change needs a second person. Confirm it with your PIN and 2FA; another '
+                             'administrator or delegate confirms it in their session.'))
+    return redirect('plugins:netbox_user_pin:approval', pk=req.pk)
+
+
 class AllowedUserMixin(LoginRequiredMixin):
     """Logged in and permitted to use a PIN."""
 
@@ -90,6 +123,7 @@ class MyPinView(LoginRequiredMixin, View):
             'email_status': service.email_status(request.user, settings),
             'recovery_blockers': service.recovery_blockers(request.user, settings),
             'reset_pending': user_pin.reset_pending if user_pin else '',
+            'cli_reset_2fa': service.cli_reset_2fa_command(request.user),
             'unlocked_scopes': service.unlocked_scopes(request),
             'recent_events': PinEvent.objects.filter(user=request.user)[:10],
         })
@@ -469,6 +503,7 @@ class UserPinListView(AdminViewMixin, View):
                 'must_change': bool(user_pin and user_pin.must_change),
                 'suspended': bool(user_pin and user_pin.suspended),
                 'reset_pending': user_pin.reset_pending if user_pin else '',
+                'cli_reset_2fa': service.cli_reset_2fa_command(user),
                 'role': 'master' if user.is_superuser else ('delegate' if service.is_pin_admin(user) else ''),
                 'manageable': can_change and service.can_manage(request.user, user),
             })
@@ -527,7 +562,8 @@ class UserPinActionView(AdminViewMixin, View):
         if not service.can_manage(request.user, user):
             raise PermissionDenied(_('Delegates cannot manage the master, other delegates or themselves.'))
         try:
-            self._do(request, user, action)
+            if (response := self._do(request, user, action)) is not None:
+                return response
         except ValidationError as exc:
             for message in exc.messages:
                 messages.error(request, message)
@@ -537,6 +573,9 @@ class UserPinActionView(AdminViewMixin, View):
         actor = request.user
         if action in ('allow', 'deny', 'default'):
             access = {'allow': PinAccess.ALLOWED, 'deny': PinAccess.DENIED, 'default': PinAccess.DEFAULT}[action]
+            if approvals.required_for(ApprovalAction.ACCESS):
+                return _four_eyes(request, ApprovalAction.ACCESS, {'user_id': user.pk, 'access': access},
+                                  f'PIN access of {user}: {PinAccess(access).label}')
             service.set_access(user, access, actor=actor, request=request)
             messages.success(request, _('PIN access of {user} set to {access}.').format(
                 user=user, access=PinAccess(access).label))
@@ -616,19 +655,9 @@ class PinSettingsView(AdminViewMixin, View):
             raise PermissionDenied
         if (response := step_up_gate(request)) is not None:
             return response
-        instance = PinSettings.load()
-        form = PinSettingsForm(request.POST, instance=instance)
+        form = PinSettingsForm(request.POST, instance=PinSettings.load())
         if form.is_valid():
-            changes = []
-            for name in form.changed_data:
-                changes.append(f'{name}: {form.initial.get(name)!r} -> {form.cleaned_data.get(name)!r}')
-            form.save()
-            if changes:
-                service.log_event(
-                    PinEventAction.SETTINGS_CHANGED, actor=request.user, request=request, detail='\n'.join(changes)
-                )
-            messages.success(request, _('PIN settings saved.'))
-            return redirect('plugins:netbox_user_pin:settings')
+            return _save_settings(request, form, ApprovalAction.SETTINGS, 'plugins:netbox_user_pin:settings')
         return render(request, self.template_name, self._context(request, form))
 
 
@@ -690,14 +719,7 @@ class MailSettingsView(AdminViewMixin, View):
             return self._render(request, form, test_form)
         form = MailSettingsForm(request.POST, instance=PinSettings.load())
         if form.is_valid():
-            changes = [f'{n}: {form.initial.get(n)!r} -> {form.cleaned_data.get(n)!r}' for n in form.changed_data]
-            form.save()
-            if changes:
-                service.log_event(
-                    PinEventAction.SETTINGS_CHANGED, actor=request.user, request=request, detail='\n'.join(changes)
-                )
-            messages.success(request, _('Mail settings saved.'))
-            return redirect('plugins:netbox_user_pin:mail')
+            return _save_settings(request, form, ApprovalAction.MAIL_SETTINGS, 'plugins:netbox_user_pin:mail')
         return self._render(request, form, self._test_form())
 
 
@@ -726,8 +748,16 @@ class DelegateListView(AdminViewMixin, View):
         if (response := step_up_gate(request)) is not None:
             return response
         action = request.POST.get('action', 'add')
+        four_eyes = approvals.required_for(ApprovalAction.DELEGATE_ADD)
         if action in ('remove', 'toggle'):
             delegate = get_object_or_404(PinDelegate, pk=request.POST.get('pk'))
+            if four_eyes:
+                if action == 'remove':
+                    return _four_eyes(request, ApprovalAction.DELEGATE_REMOVE, {'delegate_id': delegate.pk},
+                                      f'Remove delegate {delegate}')
+                return _four_eyes(request, ApprovalAction.DELEGATE_TOGGLE,
+                                  {'delegate_id': delegate.pk, 'can_edit': not delegate.can_edit_settings},
+                                  f'Delegate {delegate}: can edit settings = {not delegate.can_edit_settings}')
             if action == 'remove':
                 delegate.delete()
                 event, detail = PinEventAction.DELEGATE_REMOVED, str(delegate)
@@ -742,9 +772,17 @@ class DelegateListView(AdminViewMixin, View):
             return redirect('plugins:netbox_user_pin:delegates')
         form = DelegateForm(request.POST)
         if form.is_valid():
+            user, group = form.cleaned_data['user'], form.cleaned_data['group']
+            can_edit = form.cleaned_data['can_edit_settings']
+            if four_eyes:
+                return _four_eyes(
+                    request, ApprovalAction.DELEGATE_ADD,
+                    {'user_id': user.pk if user else None, 'group_id': group.pk if group else None, 'can_edit': can_edit},
+                    f'Add delegate {"user " + str(user) if user else "group " + str(group)}, can edit settings = '
+                    f'{can_edit}',
+                )
             delegate = PinDelegate.objects.create(
-                user=form.cleaned_data['user'], group=form.cleaned_data['group'],
-                can_edit_settings=form.cleaned_data['can_edit_settings'], created_by=request.user.username,
+                user=user, group=group, can_edit_settings=can_edit, created_by=request.user.username,
             )
             delegation.sync_permissions()
             service.log_event(
@@ -753,4 +791,164 @@ class DelegateListView(AdminViewMixin, View):
             )
             messages.success(request, _('Delegate added.'))
             return redirect('plugins:netbox_user_pin:delegates')
+        return self._render(request, form)
+
+
+#
+# Four-eyes approvals
+#
+
+class ApprovalListView(AdminViewMixin, View):
+    permission_required = 'netbox_user_pin.view_userpin'
+
+    def get(self, request):
+        for req in ApprovalRequest.objects.filter(status=ApprovalStatus.PENDING):
+            approvals.refresh(req)
+        requests = ApprovalRequest.objects.prefetch_related('votes')
+        pending = [r for r in requests.filter(status=ApprovalStatus.PENDING)]
+        history = Paginator(requests.exclude(status=ApprovalStatus.PENDING), 30).get_page(request.GET.get('page'))
+        return render(request, 'netbox_user_pin/approval_list.html', {
+            'pending': [(r, approvals.can_vote(r, request.user)) for r in pending],
+            'page': history,
+            'settings': service.get_settings(),
+        })
+
+
+class ApprovalView(AdminViewMixin, View):
+    permission_required = 'netbox_user_pin.view_userpin'
+    template_name = 'netbox_user_pin/approval.html'
+
+    def _context(self, request, req, form=None, bg_form=None):
+        settings = service.get_settings()
+        is_requester = request.user.pk == req.requested_by_id
+        return {
+            'req': req,
+            'form': form or ApprovalForm(require_otp=settings.require_2fa_admin, with_reason=is_requester),
+            'bg_form': bg_form or BreakGlassForm(require_otp=settings.require_2fa_admin),
+            'can_vote': approvals.can_vote(req, request.user),
+            'is_requester': is_requester,
+            'can_cancel': req.is_open and (is_requester or request.user.is_superuser),
+            'can_break_glass': req.is_open and settings.break_glass and request.user.is_superuser,
+            **_approval_status_context(req),
+        }
+
+    def get(self, request, pk):
+        req = approvals.refresh(get_object_or_404(ApprovalRequest, pk=pk))
+        return render(request, self.template_name, self._context(request, req))
+
+    def post(self, request, pk):
+        req = approvals.refresh(get_object_or_404(ApprovalRequest, pk=pk))
+        settings = service.get_settings()
+        action = request.POST.get('action')
+        if action == 'cancel':
+            try:
+                approvals.cancel(req, request.user, request=request)
+            except ValidationError as exc:
+                messages.error(request, ' '.join(exc.messages))
+            return redirect('plugins:netbox_user_pin:approval', pk=pk)
+        if action == 'break-glass':
+            bg_form = BreakGlassForm(request.POST, require_otp=settings.require_2fa_admin)
+            if bg_form.is_valid():
+                try:
+                    approvals.break_glass(req, request.user, bg_form.cleaned_data['reason'],
+                                          bg_form.cleaned_data['pin'], bg_form.cleaned_data.get('otp'),
+                                          request=request)
+                except ValidationError as exc:
+                    bg_form.add_error(None, ' '.join(exc.messages))
+                else:
+                    return redirect('plugins:netbox_user_pin:approval', pk=pk)
+            return render(request, self.template_name, self._context(request, req, bg_form=bg_form))
+        is_requester = request.user.pk == req.requested_by_id
+        form = ApprovalForm(request.POST, require_otp=settings.require_2fa_admin, with_reason=is_requester)
+        if form.is_valid():
+            try:
+                approvals.vote(req, request.user, approve=action != 'reject', pin=form.cleaned_data['pin'],
+                               otp=form.cleaned_data.get('otp'), reason=form.cleaned_data.get('reason'),
+                               request=request)
+            except ValidationError as exc:
+                form.add_error(None, ' '.join(exc.messages))
+            else:
+                return redirect('plugins:netbox_user_pin:approval', pk=pk)
+        return render(request, self.template_name, self._context(request, req, form=form))
+
+
+def _approval_status_context(req):
+    votes = {v.user_id: v for v in req.votes.all()}
+    requester_vote = votes.get(req.requested_by_id)
+    others = [v for uid, v in votes.items() if uid != req.requested_by_id]
+    return {
+        'req': req,
+        'requester_vote': requester_vote,
+        'other_vote': others[0] if others else None,
+        'is_open': req.is_open,
+    }
+
+
+class ApprovalStatusView(AdminViewMixin, View):
+    """HTMX partial, polled every few seconds so both participants see each other's confirmation live."""
+    permission_required = 'netbox_user_pin.view_userpin'
+
+    def get(self, request, pk):
+        req = approvals.refresh(get_object_or_404(ApprovalRequest, pk=pk))
+        response = render(request, 'netbox_user_pin/inc/approval_status.html', _approval_status_context(req))
+        if request.GET.get('open') and not req.is_open:
+            response['HX-Refresh'] = 'true'   # finished meanwhile: reload the whole page
+        return response
+
+
+#
+# Show backup codes (PIN + 2FA code or PIN + e-mailed verification code)
+#
+
+class BackupCodesView(AllowedUserMixin, View):
+    template_name = 'netbox_user_pin/show_backup_codes.html'
+    SESSION_KEY = '_netbox_user_pin_codes_verified'
+    VERIFIED_SECONDS = 300
+
+    def _render(self, request, form, codes=None, renewed=False):
+        return render(request, self.template_name, {
+            'form': form,
+            'codes': codes,
+            'renewed': renewed,
+            'email_blockers': service.backup_codes_email_blockers(request.user),
+            'email_pending': service.email_code_pending(request.user, 'backup-codes'),
+        })
+
+    def get(self, request):
+        if not service.has_2fa(request.user):
+            return redirect('plugins:netbox_user_pin:totp_setup')
+        return self._render(request, BackupCodesForm())
+
+    def post(self, request):
+        import time
+        action = request.POST.get('action')
+        if action == 'send-email':
+            try:
+                service.send_backup_codes_email_code(request.user, request=request)
+            except ValidationError as exc:
+                messages.error(request, ' '.join(exc.messages))
+            else:
+                messages.success(request, _('A verification code was sent to {email}.').format(
+                    email=request.user.email))
+            return redirect('plugins:netbox_user_pin:backup_codes')
+        if action == 'regenerate':
+            if request.session.get(self.SESSION_KEY, 0) < time.time():
+                messages.error(request, _('Please verify again.'))
+                return redirect('plugins:netbox_user_pin:backup_codes')
+            request.session.pop(self.SESSION_KEY, None)
+            codes = service.new_backup_codes(request.user, request=request)
+            return self._render(request, BackupCodesForm(), [(c, False) for c in codes], renewed=True)
+        form = BackupCodesForm(request.POST)
+        if form.is_valid():
+            try:
+                codes, renewed = service.show_backup_codes(
+                    request.user, form.cleaned_data['pin'], otp=form.cleaned_data.get('otp'),
+                    email_code=form.cleaned_data.get('email_code'), request=request,
+                )
+            except ValidationError as exc:
+                field = {'pin': 'pin', 'otp': 'otp', 'email_code': 'email_code'}.get(exc.code)
+                _apply_form_errors(form, exc, field)
+            else:
+                request.session[self.SESSION_KEY] = time.time() + self.VERIFIED_SECONDS
+                return self._render(request, form, codes, renewed)
         return self._render(request, form)

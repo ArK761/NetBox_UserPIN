@@ -1,6 +1,6 @@
 from netbox.plugins import PluginConfig
 
-__version__ = '0.4.0'
+__version__ = '0.5.0'
 
 
 class UserPinConfig(PluginConfig):
@@ -21,12 +21,25 @@ class UserPinConfig(PluginConfig):
         'argon2_time_cost': 3,
         'argon2_memory_cost': 65536,
         'argon2_parallelism': 4,
+        # Paths used to show the emergency server commands in the UI.
+        'cli_venv': '/opt/netbox/venv',
+        'cli_netbox_dir': '/opt/netbox/netbox',
     }
 
     def ready(self):
         super().ready()
         from . import crypto
         crypto.validate_configuration()
+        self._register_event_types()
+
+    @staticmethod
+    def _register_event_types():
+        from netbox.events import EVENT_TYPE_KIND_WARNING, EventType
+        from netbox.registry import registry
+
+        from .approvals import EVENT_TYPE
+        if EVENT_TYPE not in registry['event_types']:
+            EventType(EVENT_TYPE, 'PIN four-eyes approval requested', kind=EVENT_TYPE_KIND_WARNING).register()
 
 
 config = UserPinConfig

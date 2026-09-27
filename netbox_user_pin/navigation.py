@@ -14,6 +14,10 @@ menu = PluginMenu(
                 permissions=['netbox_user_pin.view_userpin'],
             ),
             PluginMenuItem(
+                link='plugins:netbox_user_pin:approval_list', link_text='Approvals (four eyes)',
+                permissions=['netbox_user_pin.view_userpin'],
+            ),
+            PluginMenuItem(
                 link='plugins:netbox_user_pin:event_list', link_text='Audit log',
                 permissions=['netbox_user_pin.view_pinevent'],
             ),

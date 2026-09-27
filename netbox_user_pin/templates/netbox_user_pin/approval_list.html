@@ -1,0 +1,46 @@
+{% extends 'generic/_base.html' %}
+{% block title %}Four-eyes approvals{% endblock %}
+{% block content %}
+{% if not settings.four_eyes %}<div class="alert alert-secondary"><div>Four-eyes approval is currently off (Settings → Protection).</div></div>{% endif %}
+<div class="card">
+  <h2 class="card-header">Waiting</h2>
+  <table class="table table-hover">
+    <thead><tr><th>#</th><th>Change</th><th>Requested by</th><th>Confirmed</th><th>Valid until</th><th></th></tr></thead>
+    <tbody>
+      {% for req, can_vote in pending %}
+        <tr>
+          <td>{{ req.pk }}</td>
+          <td>{{ req.summary }}</td>
+          <td>{{ req.requested_by_name }}</td>
+          <td>{% for v in req.votes.all %}<span class="badge text-bg-{% if v.approve %}green{% else %}red{% endif %}">{{ v.username }}</span> {% empty %}—{% endfor %}</td>
+          <td>{{ req.expires|date:"Y-m-d H:i" }}</td>
+          <td class="text-end"><a class="btn btn-sm {% if can_vote %}btn-primary{% else %}btn-outline-secondary{% endif %}" href="{% url 'plugins:netbox_user_pin:approval' pk=req.pk %}">{% if can_vote %}Confirm{% else %}Open{% endif %}</a></td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="6" class="text-secondary">Nothing is waiting.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<div class="card">
+  <h2 class="card-header">History</h2>
+  <table class="table table-hover">
+    <thead><tr><th>#</th><th>Change</th><th>Requested by</th><th>Confirmed by</th><th>Status</th><th>Finished</th></tr></thead>
+    <tbody>
+      {% for req in page %}
+        <tr>
+          <td><a href="{% url 'plugins:netbox_user_pin:approval' pk=req.pk %}">{{ req.pk }}</a></td>
+          <td>{{ req.summary }}</td>
+          <td>{{ req.requested_by_name }}</td>
+          <td>{% for v in req.votes.all %}{{ v.username }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
+          <td>{{ req.get_status_display }}{% if req.break_glass %} <span class="badge text-bg-red">BREAK-GLASS</span>{% endif %}</td>
+          <td>{{ req.finished|date:"Y-m-d H:i"|default:"—" }}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="6" class="text-secondary">No history.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% include 'netbox_user_pin/inc/pager.html' %}
+{% endblock %}

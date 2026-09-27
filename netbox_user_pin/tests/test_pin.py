@@ -8,9 +8,9 @@ from django.test import RequestFactory, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
-from netbox_user_pin import crypto, service, totp
+from netbox_user_pin import approvals, crypto, service, totp
 from netbox_user_pin.models import (
-    PinAccess, PinAccessMode, PinDelegate, PinEvent, PinEventAction, PinScopeMode, PinSettings, UserPin,
+    ApprovalRequest, ApprovalStatus, PinAccess, PinAccessMode, PinDelegate, PinEvent, PinEventAction, PinScopeMode, PinSettings, UserPin,
 )
 from netbox_user_pin.policy import is_weak_pin
 
@@ -42,11 +42,12 @@ def current_code(secret, offset=0):
     return totp._code_at(secret, int(time.time() // totp.STEP) + offset)
 
 
-def admin_login(client, user, pin=GOOD_PIN):
+def admin_login(client, user, pin=GOOD_PIN, secret=None):
     """Log in, set PIN + 2FA, unlock the admin area and perform a step-up."""
     if not service.has_pin(user):
         service.set_pin(user, pin)
-    secret = enable_2fa(user) if not service.has_2fa(user) else None
+    if secret is None:
+        secret = enable_2fa(user)
     client.force_login(user)
     client.post(reverse('plugins:netbox_user_pin:unlock'), {'pin': pin, 'scope': 'user-pin-admin'})
     response = client.post(reverse('plugins:netbox_user_pin:step_up'), {'pin': pin, 'otp': current_code(secret)})
@@ -306,7 +307,7 @@ class ViewTest(PinTestCase):
             'access_mode': 'all', 'pin_length': 8, 'block_weak_pins': 'on', 'blocked_pins': '', 'max_age_days': 180,
             'warn_days': 14, 'unlock_minutes': 10, 'sliding_unlock': 'on', 'scope_mode': 'global',
             'max_attempts': 5, 'lockout_minutes': 30, 'require_2fa_admin': 'on', 'step_up_minutes': 5,
-            'reset_valid_hours': 24,
+            'reset_valid_hours': 24, 'approval_valid_minutes': 1440,
         }
         self.client.post(reverse('plugins:netbox_user_pin:settings'), data)
         self.assertEqual(PinSettings.load().pin_length, 8)
@@ -764,3 +765,190 @@ class MailPageTest(PinTestCase):
         # not eligible recipient is rejected
         self.client.post(reverse('plugins:netbox_user_pin:mail'), {'action': 'test-mail', 'recipient': self.gmail.pk})
         self.assertEqual(len(mail.outbox), 1)
+
+
+
+@override_settings(EMAIL={'SERVER': 'localhost', 'FROM_EMAIL': 'netbox@firma.sk'})
+class BackupCodesViewTest(PinTestCase):
+
+    def setUp(self):
+        super().setUp()
+        settings = PinSettings.load()
+        settings.allowed_email_domains = 'firma.sk'
+        settings.save()
+        self.user = User.objects.create_user('ivan', password='pw', email='ivan@firma.sk')
+        service.set_pin(self.user, GOOD_PIN)
+        self.client.force_login(self.user)
+        # enroll through the service so the codes are stored encrypted
+        self.client.get(reverse('plugins:netbox_user_pin:totp_setup'))
+        self.secret = self.client.session[service.ENROLL_SESSION_KEY]['secret']
+        response = self.client.post(reverse('plugins:netbox_user_pin:totp_setup'), {'otp': current_code(self.secret)})
+        self.codes = response.context['codes']
+        mail.outbox.clear()
+
+    def test_codes_stored_encrypted(self):
+        stored = UserPin.objects.get(user=self.user).backup_codes_encrypted
+        self.assertTrue(stored)
+        for code in self.codes:
+            self.assertNotIn(code, stored)
+
+    def test_show_with_pin_and_email_code(self):
+        url = reverse('plugins:netbox_user_pin:backup_codes')
+        self.client.post(url, {'action': 'send-email'})
+        email_code = next(w for w in mail.outbox[-1].body.split() if w.isdigit() and len(w) == 8)
+        self.assertNotIn(self.codes[0], mail.outbox[-1].body)   # codes are never e-mailed
+        service.verify_second_factor(self.user, self.codes[0])   # use one code
+        response = self.client.post(url, {'action': 'show', 'pin': GOOD_PIN, 'email_code': email_code})
+        shown = response.context['codes']
+        self.assertEqual([c for c, _ in shown], self.codes)
+        self.assertEqual([used for _, used in shown].count(True), 1)
+        self.assertTrue(PinEvent.objects.filter(action=PinEventAction.BACKUP_CODES_VIEWED).exists())
+        self.assertIn('viewed', mail.outbox[-1].subject)
+        # the e-mail code is single use
+        response = self.client.post(url, {'action': 'show', 'pin': GOOD_PIN, 'email_code': email_code})
+        self.assertIsNone(response.context['codes'])
+
+    def test_show_with_pin_and_2fa_and_wrong_pin(self):
+        url = reverse('plugins:netbox_user_pin:backup_codes')
+        response = self.client.post(url, {'action': 'show', 'pin': '000001', 'otp': current_code(self.secret)})
+        self.assertIsNone(response.context['codes'])
+        response = self.client.post(url, {'action': 'show', 'pin': GOOD_PIN, 'otp': current_code(self.secret, 1)})
+        self.assertEqual(len(response.context['codes']), 10)
+        # regenerate within the verified window
+        response = self.client.post(url, {'action': 'regenerate'})
+        self.assertTrue(response.context['renewed'])
+        self.assertNotEqual([c for c, _ in response.context['codes']], self.codes)
+
+    def test_legacy_user_gets_new_codes(self):
+        UserPin.objects.filter(user=self.user).update(backup_codes_encrypted='')
+        codes, renewed = service.show_backup_codes(self.user, GOOD_PIN, otp=current_code(self.secret, 1))
+        self.assertTrue(renewed)
+        self.assertEqual(len(codes), 10)
+
+
+class FourEyesTest(PinTestCase):
+
+    def setUp(self):
+        super().setUp()
+        self.peter = User.objects.create_superuser('peter', password='pw')
+        self.martin = User.objects.create_superuser('martin', password='pw')
+        self.plain = User.objects.create_user('plain2', password='pw')
+        self.secrets = {}
+        for user in (self.peter, self.martin):
+            service.set_pin(user, GOOD_PIN)
+            self.secrets[user.pk] = enable_2fa(user)
+        settings = PinSettings.load()
+        settings.four_eyes = True
+        settings.save()
+
+    def _vote(self, client, req, user, action='confirm', offset=0, reason=''):
+        return client.post(reverse('plugins:netbox_user_pin:approval', kwargs={'pk': req.pk}), {
+            'action': action, 'pin': GOOD_PIN, 'otp': current_code(self.secrets[user.pk], offset), 'reason': reason,
+        })
+
+    def test_enable_needs_two_approvers(self):
+        from netbox_user_pin.forms import PinSettingsForm
+        settings = PinSettings.load()
+        settings.four_eyes = False
+        settings.save()
+        UserPin.objects.filter(user=self.martin).update(totp_secret='')
+        form = PinSettingsForm({**{f: getattr(settings, f) for f in PinSettingsForm.Meta.fields}, 'four_eyes': True},
+                               instance=settings)
+        self.assertFalse(form.is_valid())
+        self.assertIn('four_eyes', form.errors)
+
+    def test_live_flow_add_delegate(self):
+        from django.test import Client
+        peter_client, martin_client = Client(), Client()
+        admin_login(peter_client, self.peter, secret=self.secrets[self.peter.pk])
+        response = peter_client.post(reverse('plugins:netbox_user_pin:delegates'), {'user': self.plain.pk})
+        req = ApprovalRequest.objects.get()
+        self.assertRedirects(response, req.get_absolute_url(), fetch_redirect_response=False)
+        self.assertFalse(PinDelegate.objects.exists())
+
+        self._vote(peter_client, req, self.peter, offset=1, reason='new colleague')
+        req.refresh_from_db()
+        self.assertEqual(req.status, ApprovalStatus.PENDING)
+        self.assertEqual(req.reason, 'new colleague')
+        # peter cannot confirm twice
+        self.assertFalse(approvals.can_vote(req, self.peter))
+
+        # martin sees it live (status partial) and confirms in his own session
+        martin_client.force_login(self.martin)
+        martin_client.post(reverse('plugins:netbox_user_pin:unlock'), {'pin': GOOD_PIN, 'scope': 'user-pin-admin'})
+        status_url = reverse('plugins:netbox_user_pin:approval_status', kwargs={'pk': req.pk}) + '?open=1'
+        self.assertContains(martin_client.get(status_url), 'confirmed')
+        self._vote(martin_client, req, self.martin)
+        req.refresh_from_db()
+        self.assertEqual(req.status, ApprovalStatus.EXECUTED)
+        self.assertTrue(PinDelegate.objects.filter(user=self.plain).exists())
+        self.assertEqual(martin_client.get(status_url)['HX-Refresh'], 'true')
+        self.assertTrue(PinEvent.objects.filter(action=PinEventAction.APPROVAL_EXECUTED).exists())
+
+    def test_notification_for_second_person(self):
+        from extras.models import Notification
+        req = approvals.create('delegate_add', {'user_id': self.plain.pk, 'group_id': None, 'can_edit': False},
+                               'Add delegate plain2', self.peter)
+        self.assertTrue(Notification.objects.filter(user=self.martin, object_id=req.pk).exists())
+        self.assertFalse(Notification.objects.filter(user=self.peter, object_id=req.pk).exists())
+
+    def test_reject_and_wrong_codes(self):
+        req = approvals.create('access', {'user_id': self.plain.pk, 'access': 'allowed'}, 'Allow plain2', self.peter)
+        with self.assertRaises(ValidationError):
+            approvals.vote(req, self.martin, True, '000001', current_code(self.secrets[self.martin.pk]))
+        approvals.vote(req, self.martin, False, GOOD_PIN, current_code(self.secrets[self.martin.pk], 1))
+        req.refresh_from_db()
+        self.assertEqual(req.status, ApprovalStatus.REJECTED)
+        self.assertFalse(service.is_allowed(self.plain) and UserPin.objects.filter(
+            user=self.plain, access='allowed').exists())
+
+    def test_settings_change_needs_approval(self):
+        admin_login(self.client, self.peter, secret=self.secrets[self.peter.pk])
+        data = {f: getattr(PinSettings.load(), f) for f in (
+            'access_mode', 'pin_length', 'blocked_pins', 'max_age_days', 'warn_days', 'unlock_minutes', 'scope_mode',
+            'max_attempts', 'lockout_minutes', 'step_up_minutes', 'reset_valid_hours', 'approval_valid_minutes')}
+        data.update({'pin_length': 8, 'block_weak_pins': 'on', 'sliding_unlock': 'on', 'require_2fa_admin': 'on',
+                     'four_eyes': 'on', 'four_eyes_delegates': 'on', 'four_eyes_settings': 'on'})
+        self.client.post(reverse('plugins:netbox_user_pin:settings'), data)
+        self.assertEqual(PinSettings.load().pin_length, 6)
+        req = ApprovalRequest.objects.get()
+        approvals.vote(req, self.peter, True, GOOD_PIN, current_code(self.secrets[self.peter.pk], 1))
+        approvals.vote(req, self.martin, True, GOOD_PIN, current_code(self.secrets[self.martin.pk]))
+        self.assertEqual(PinSettings.load().pin_length, 8)
+
+    def test_expired_request(self):
+        req = approvals.create('access', {'user_id': self.plain.pk, 'access': 'allowed'}, 'Allow plain2', self.peter)
+        ApprovalRequest.objects.filter(pk=req.pk).update(expires=timezone.now() - timedelta(seconds=1))
+        req.refresh_from_db()
+        with self.assertRaises(ValidationError):
+            approvals.vote(req, self.martin, True, GOOD_PIN, current_code(self.secrets[self.martin.pk]))
+        self.assertEqual(req.status, ApprovalStatus.EXPIRED)
+
+    @override_settings(EMAIL={'SERVER': 'localhost', 'FROM_EMAIL': 'netbox@firma.sk'})
+    def test_break_glass(self):
+        req = approvals.create('access', {'user_id': self.plain.pk, 'access': 'allowed'}, 'Allow plain2', self.peter)
+        with self.assertRaises(ValidationError):   # off by default
+            approvals.break_glass(req, self.peter, 'urgent', GOOD_PIN, current_code(self.secrets[self.peter.pk]))
+        settings = PinSettings.load()
+        settings.break_glass = True
+        settings.save()
+        with self.assertRaises(ValidationError):   # reason required
+            approvals.break_glass(req, self.peter, '', GOOD_PIN, current_code(self.secrets[self.peter.pk]))
+        approvals.break_glass(req, self.peter, 'server down', GOOD_PIN, current_code(self.secrets[self.peter.pk], 1))
+        req.refresh_from_db()
+        self.assertEqual(req.status, ApprovalStatus.EXECUTED)
+        self.assertTrue(req.break_glass)
+        self.assertTrue(PinEvent.objects.filter(action=PinEventAction.BREAK_GLASS).exists())
+
+
+class CliCommandTest(PinTestCase):
+
+    def test_command_shown(self):
+        user = User.objects.create_user("o'hara", password='pw')
+        service.set_pin(user, GOOD_PIN)
+        enable_2fa(user)
+        command = service.cli_reset_2fa_command(user)
+        self.assertIn('userpin_reset_2fa', command)
+        self.assertTrue(command.startswith("sudo bash -c '"))
+        self.client.force_login(user)
+        self.assertContains(self.client.get(reverse('plugins:netbox_user_pin:my_pin')), 'userpin_reset_2fa')

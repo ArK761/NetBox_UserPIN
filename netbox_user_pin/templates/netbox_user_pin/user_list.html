@@ -84,6 +84,10 @@
                       {% include 'netbox_user_pin/inc/user_action.html' with action='reset' label='Reset PIN (user confirms with 2FA)' icon='restore' confirm=True %}
                       {% include 'netbox_user_pin/inc/user_action.html' with action='reset-2fa' label='Reset 2FA (user confirms with PIN)' icon='cellphone-remove' confirm=True %}
                     {% else %}<span class="dropdown-item text-secondary small">Reset needs the user's 2FA</span>{% endif %}
+                    {% if row.has_2fa %}
+                      <div class="dropdown-divider"></div>
+                      <button type="button" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#cli-{{ row.user.pk }}"><i class="mdi mdi-console me-2"></i>Emergency: server command (2FA)</button>
+                    {% endif %}
                     {% endwith %}
                   </div>
                 </div>
@@ -99,4 +103,15 @@
   </div>
 </div>
 {% include 'netbox_user_pin/inc/pager.html' %}
+{% for row in rows %}{% if row.has_2fa and row.manageable %}
+  <div class="modal fade" id="cli-{{ row.user.pk }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg"><div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">Emergency 2FA reset – {{ row.user.username }}</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <p class="text-secondary">Only if the normal way is not possible (<em>Reset 2FA</em> confirmed by the user with the PIN). Run as root on the NetBox server – the 2FA is removed immediately and the action is recorded in the audit log.</p>
+        {% include 'netbox_user_pin/inc/cli_command.html' with command=row.cli_reset_2fa id=row.user.pk %}
+      </div>
+    </div></div>
+  </div>
+{% endif %}{% endfor %}
 {% endblock %}

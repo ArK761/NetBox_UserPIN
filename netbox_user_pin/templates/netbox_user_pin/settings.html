@@ -35,6 +35,15 @@
         {% render_field form.step_up_minutes %}
         {% render_field form.reset_valid_hours %}
       </div>
+      <div class="field-group mb-4">
+        <h2 class="mb-3">Four-eyes approval</h2>
+        {% render_field form.four_eyes %}
+        {% render_field form.four_eyes_delegates %}
+        {% render_field form.four_eyes_settings %}
+        {% render_field form.four_eyes_access %}
+        {% render_field form.approval_valid_minutes %}
+        {% render_field form.break_glass %}
+      </div>
       <p class="text-secondary small">E-mail, notifications and self-service recovery are configured under <a href="{% url 'plugins:netbox_user_pin:mail' %}">Mail</a>.</p>
       {% if can_edit %}<div class="text-end"><button type="submit" class="btn btn-primary">Save</button></div>{% endif %}
     </form>

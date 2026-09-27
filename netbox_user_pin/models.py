@@ -5,6 +5,10 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 __all__ = (
+    'ApprovalAction',
+    'ApprovalRequest',
+    'ApprovalStatus',
+    'ApprovalVote',
     'PinEvent',
     'PinAccess',
     'PinAccessMode',
@@ -134,6 +138,28 @@ class PinSettings(models.Model):
         validators=[MinValueValidator(1), MaxValueValidator(24 * 14)],
         help_text=_('How long the user has to confirm a reset started by an administrator.'),
     )
+    four_eyes = models.BooleanField(
+        verbose_name=_('Four-eyes approval'),
+        default=False,
+        help_text=_('Selected administrative changes need a second administrator or delegate who confirms with '
+                    'their own PIN + 2FA. Needs at least two administrators / delegates with PIN and 2FA.'),
+    )
+    four_eyes_delegates = models.BooleanField(verbose_name=_('… for delegates (add / remove / change)'),
+                                              default=True)
+    four_eyes_settings = models.BooleanField(verbose_name=_('… for settings and mail settings'), default=True)
+    four_eyes_access = models.BooleanField(verbose_name=_('… for allowing / denying PIN use'), default=False)
+    approval_valid_minutes = models.PositiveIntegerField(
+        verbose_name=_('Approval request valid (minutes)'),
+        default=24 * 60,
+        validators=[MinValueValidator(5), MaxValueValidator(7 * 24 * 60)],
+        help_text=_('Both can confirm live at the same time or the second one later, until the request expires.'),
+    )
+    break_glass = models.BooleanField(
+        verbose_name=_('Allow break-glass for the master'),
+        default=False,
+        help_text=_('In an emergency a superuser may execute a request alone with a reason; all administrators '
+                    'and delegates are informed by e-mail.'),
+    )
     notify_email = models.BooleanField(
         verbose_name=_('Security notifications by e-mail'),
         default=True,
@@ -198,7 +224,11 @@ class UserPin(models.Model):
     totp_secret = models.TextField(blank=True, help_text='AES-256-GCM encrypted TOTP secret; empty = 2FA off.')
     totp_enabled = models.DateTimeField(null=True, blank=True)
     totp_last_step = models.BigIntegerField(default=0, help_text='Last accepted TOTP time step (replay protection).')
-    backup_codes = models.JSONField(default=list, blank=True, help_text='Keyed digests of unused backup codes.')
+    backup_codes = models.JSONField(default=list, blank=True, help_text='Digests of unused backup codes.')
+    backup_codes_encrypted = models.TextField(
+        blank=True, help_text='AES-256-GCM encrypted list of the issued backup codes (for "show backup codes").',
+    )
+    email_code_purpose = models.CharField(max_length=30, blank=True)
     recovery_code = models.CharField(max_length=128, blank=True)
     recovery_expires = models.DateTimeField(null=True, blank=True)
     recovery_attempts = models.PositiveSmallIntegerField(default=0)
@@ -269,6 +299,14 @@ class PinEventAction(models.TextChoices):
     DELEGATE_ADDED = 'delegate_added', _('Delegate added')
     DELEGATE_REMOVED = 'delegate_removed', _('Delegate removed')
     DELEGATE_CHANGED = 'delegate_changed', _('Delegate changed')
+    BACKUP_CODES_VIEWED = 'backup_codes_viewed', _('Backup codes viewed')
+    EMAIL_CODE_SENT = 'email_code_sent', _('Verification code e-mailed')
+    APPROVAL_REQUESTED = 'approval_requested', _('Four-eyes request created')
+    APPROVAL_CONFIRMED = 'approval_confirmed', _('Four-eyes request confirmed')
+    APPROVAL_REJECTED = 'approval_rejected', _('Four-eyes request rejected')
+    APPROVAL_CANCELLED = 'approval_cancelled', _('Four-eyes request cancelled')
+    APPROVAL_EXECUTED = 'approval_executed', _('Four-eyes request executed')
+    BREAK_GLASS = 'break_glass', _('Break-glass: executed alone by the master')
     ACCESS_CHANGED = 'access_changed', _('PIN access changed by administrator')
     SUSPENDED = 'suspended', _('PIN suspended by administrator')
     UNSUSPENDED = 'unsuspended', _('PIN suspension lifted by administrator')
@@ -359,3 +397,77 @@ class PinDelegate(models.Model):
 
     def __str__(self):
         return f'user {self.user}' if self.user_id else f'group {self.group}'
+
+
+class ApprovalAction(models.TextChoices):
+    DELEGATE_ADD = 'delegate_add', _('Add delegate')
+    DELEGATE_REMOVE = 'delegate_remove', _('Remove delegate')
+    DELEGATE_TOGGLE = 'delegate_toggle', _('Change delegate settings permission')
+    SETTINGS = 'settings', _('Change PIN settings')
+    MAIL_SETTINGS = 'mail_settings', _('Change mail settings')
+    ACCESS = 'access', _('Allow / deny PIN use')
+
+
+class ApprovalStatus(models.TextChoices):
+    PENDING = 'pending', _('Waiting')
+    EXECUTED = 'executed', _('Approved and executed')
+    REJECTED = 'rejected', _('Rejected')
+    CANCELLED = 'cancelled', _('Cancelled')
+    EXPIRED = 'expired', _('Expired')
+    FAILED = 'failed', _('Failed')
+
+
+class ApprovalRequest(models.Model):
+    """
+    A four-eyes request: an administrative change that runs only after two different people confirmed it with
+    their own PIN + 2FA (the requester and one other administrator / delegate).
+    """
+    action = models.CharField(max_length=30, choices=ApprovalAction.choices)
+    payload = models.JSONField(default=dict)
+    summary = models.CharField(max_length=500)
+    reason = models.CharField(max_length=500, blank=True)
+    requested_by = models.ForeignKey(
+        to=settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='+',
+    )
+    requested_by_name = models.CharField(max_length=150)
+    approver = models.ForeignKey(
+        to=settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='+',
+        help_text='Optional: only this person may give the second confirmation.',
+    )
+    created = models.DateTimeField(auto_now_add=True)
+    expires = models.DateTimeField()
+    status = models.CharField(max_length=20, choices=ApprovalStatus.choices, default=ApprovalStatus.PENDING)
+    finished = models.DateTimeField(null=True, blank=True)
+    result = models.TextField(blank=True)
+    break_glass = models.BooleanField(default=False)
+
+    class Meta:
+        verbose_name = _('four-eyes request')
+        verbose_name_plural = _('four-eyes requests')
+        ordering = ('-created',)
+
+    def __str__(self):
+        return f'Four-eyes #{self.pk}: {self.summary}'
+
+    def get_absolute_url(self):
+        from django.urls import reverse
+        return reverse('plugins:netbox_user_pin:approval', kwargs={'pk': self.pk})
+
+    @property
+    def is_open(self):
+        return self.status == ApprovalStatus.PENDING and self.expires > timezone.now()
+
+
+class ApprovalVote(models.Model):
+    request = models.ForeignKey(to=ApprovalRequest, on_delete=models.CASCADE, related_name='votes')
+    user = models.ForeignKey(to=settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='+')
+    username = models.CharField(max_length=150)
+    approve = models.BooleanField()
+    time = models.DateTimeField(auto_now_add=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+
+    class Meta:
+        ordering = ('time',)
+        constraints = (
+            models.UniqueConstraint(fields=('request', 'user'), name='netbox_user_pin_one_vote_per_user'),
+        )

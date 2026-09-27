@@ -22,5 +22,9 @@ urlpatterns = [
     path('events/', views.PinEventListView.as_view(), name='event_list'),
     path('settings/', views.PinSettingsView.as_view(), name='settings'),
     path('mail/', views.MailSettingsView.as_view(), name='mail'),
+    path('approvals/', views.ApprovalListView.as_view(), name='approval_list'),
+    path('approvals/<int:pk>/', views.ApprovalView.as_view(), name='approval'),
+    path('approvals/<int:pk>/status/', views.ApprovalStatusView.as_view(), name='approval_status'),
+    path('2fa-codes/', views.BackupCodesView.as_view(), name='backup_codes'),
     path('delegates/', views.DelegateListView.as_view(), name='delegates'),
 ]

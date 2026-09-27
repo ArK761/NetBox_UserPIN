@@ -1,0 +1,47 @@
+{% extends 'generic/_base.html' %}
+{% load form_helpers %}
+{% block title %}<i class="mdi mdi-key-chain"></i> Backup codes{% endblock %}
+{% block content %}
+<div class="row"><div class="col-12 col-md-8 col-lg-5">
+  {% if codes %}
+    {% if renewed %}<div class="alert alert-info"><div>New backup codes were generated; all previous codes are no longer valid.</div></div>{% endif %}
+    <div class="card">
+      <div class="card-body">
+        <pre class="mb-0 fs-3 text-center" id="backup-codes">{% for code, used in codes %}{% if used %}<s class="text-secondary">{{ code }}</s> used{% else %}{{ code }}{% endif %}
+{% endfor %}</pre>
+      </div>
+      <div class="card-footer d-flex justify-content-between">
+        <form method="post" onsubmit="return confirm('Generate new codes? All current codes stop working.');">{% csrf_token %}<input type="hidden" name="action" value="regenerate">
+          <button type="submit" class="btn btn-outline-warning"><i class="mdi mdi-refresh"></i> Generate new codes</button></form>
+        <div>
+          <button type="button" class="btn btn-outline-secondary" onclick="navigator.clipboard.writeText(document.getElementById('backup-codes').innerText)"><i class="mdi mdi-content-copy"></i> Copy</button>
+          <a href="{% url 'plugins:netbox_user_pin:my_pin' %}" class="btn btn-primary">Done</a>
+        </div>
+      </div>
+    </div>
+    <p class="small text-secondary mt-2">An e-mail notification about this view was sent to you and the view is recorded in the audit log.</p>
+  {% else %}
+    <p class="text-secondary">Confirm with your PIN and either a code from your authenticator app or a verification code sent to your e-mail. The backup codes are shown only here, never sent by e-mail.</p>
+    {% if not email_blockers %}
+      <div class="card mb-3">
+        <div class="card-body d-flex justify-content-between align-items-center">
+          <div>No phone at hand? Get a verification code by e-mail{% if email_pending %} <span class="badge text-bg-blue">code sent</span>{% endif %}</div>
+          <form method="post">{% csrf_token %}<input type="hidden" name="action" value="send-email">
+            <button type="submit" class="btn btn-outline-primary"><i class="mdi mdi-email-fast"></i> {% if email_pending %}Send again{% else %}Send code{% endif %}</button></form>
+        </div>
+      </div>
+    {% endif %}
+    <form method="post" class="object-edit" autocomplete="off">
+      {% csrf_token %}<input type="hidden" name="action" value="show">
+      {% if form.non_field_errors %}<div class="alert alert-danger"><div>{{ form.non_field_errors|join:" " }}</div></div>{% endif %}
+      {% render_field form.pin %}
+      {% render_field form.otp %}
+      {% if not email_blockers %}{% render_field form.email_code %}{% endif %}
+      <div class="text-end">
+        <a href="{% url 'plugins:netbox_user_pin:my_pin' %}" class="btn btn-outline-secondary">Cancel</a>
+        <button type="submit" class="btn btn-primary">Show codes</button>
+      </div>
+    </form>
+  {% endif %}
+</div></div>
+{% endblock %}

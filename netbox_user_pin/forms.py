@@ -7,6 +7,9 @@ from users.models import Group
 from .models import PinDelegate, PinSettings
 
 __all__ = (
+    'ApprovalForm',
+    'BackupCodesForm',
+    'BreakGlassForm',
     'ChangePinForm',
     'DelegateForm',
     'MailSettingsForm',
@@ -165,6 +168,48 @@ class ResetConfirmForm(forms.Form):
         return cleaned
 
 
+class ApprovalForm(forms.Form):
+    """Confirm / reject a four-eyes request with PIN (+ 2FA)."""
+    pin = pin_field(_('Your PIN'), autofocus=True)
+
+    def __init__(self, *args, require_otp=True, with_reason=False, **kwargs):
+        super().__init__(*args, **kwargs)
+        if require_otp:
+            self.fields['otp'] = otp_field()
+        if with_reason:
+            self.fields['reason'] = forms.CharField(
+                label=_('Reason'), required=False, max_length=500,
+                widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': _('e.g. employee left')}),
+            )
+
+
+class BreakGlassForm(ApprovalForm):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, with_reason=True, **kwargs)
+        self.fields['reason'].required = True
+
+
+class BackupCodesForm(forms.Form):
+    """PIN + (2FA code or e-mailed verification code) to show the backup codes."""
+    pin = pin_field(_('Your PIN'), autofocus=True)
+    otp = forms.CharField(
+        label=_('2FA code'), required=False, max_length=6,
+        widget=forms.TextInput(attrs={'class': 'form-control', 'autocomplete': 'one-time-code',
+                                      'inputmode': 'numeric'}),
+        help_text=_('From your authenticator app – or leave empty and use the e-mail code.'),
+    )
+    email_code = forms.CharField(
+        label=_('Code from the e-mail'), required=False, max_length=8,
+        widget=forms.TextInput(attrs={'class': 'form-control', 'autocomplete': 'off', 'inputmode': 'numeric'}),
+    )
+
+    def clean(self):
+        cleaned = super().clean()
+        if not cleaned.get('otp') and not cleaned.get('email_code'):
+            raise forms.ValidationError(_('Enter a 2FA code or the code from the e-mail.'))
+        return cleaned
+
+
 class TestMailForm(forms.Form):
     recipient = forms.ModelChoiceField(
         queryset=get_user_model().objects.none(), label=_('Send test e-mail to'),
@@ -211,7 +256,17 @@ class PinSettingsForm(_StyledModelForm):
             'access_mode', 'pin_length', 'block_weak_pins', 'blocked_pins', 'max_age_days', 'warn_days',
             'unlock_minutes', 'sliding_unlock', 'scope_mode', 'require_2fa_unlock',
             'max_attempts', 'lockout_minutes', 'require_2fa_admin', 'step_up_minutes', 'reset_valid_hours',
+            'four_eyes', 'four_eyes_delegates', 'four_eyes_settings', 'four_eyes_access', 'approval_valid_minutes',
+            'break_glass',
         )
         widgets = {
             'blocked_pins': forms.Textarea(attrs={'rows': 3, 'class': 'form-control'}),
         }
+
+    def clean(self):
+        cleaned = super().clean()
+        if cleaned.get('four_eyes') and not self.instance.four_eyes:
+            from .approvals import eligible_approvers
+            if len(eligible_approvers()) < 2:
+                self.add_error('four_eyes', _('At least two administrators / delegates with PIN and 2FA are needed.'))
+        return cleaned

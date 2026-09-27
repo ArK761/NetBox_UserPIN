@@ -1,0 +1,31 @@
+<div id="approval-status"{% if is_open %} hx-get="{% url 'plugins:netbox_user_pin:approval_status' pk=req.pk %}?open=1" hx-trigger="every 3s" hx-swap="outerHTML"{% endif %}>
+  <table class="table attr-table mb-0">
+    <tr>
+      <th scope="row"><i class="mdi mdi-account"></i> {{ req.requested_by_name }} <span class="text-secondary small">(requested)</span></th>
+      <td>
+        {% if requester_vote %}{% if requester_vote.approve %}<span class="badge text-bg-green"><i class="mdi mdi-check"></i> confirmed</span>{% else %}<span class="badge text-bg-red">rejected</span>{% endif %}
+          <span class="small text-secondary">{{ requester_vote.time|date:"H:i:s" }}{% if requester_vote.ip_address %} · {{ requester_vote.ip_address }}{% endif %}</span>
+        {% elif is_open %}<span class="badge text-bg-yellow"><i class="mdi mdi-timer-sand"></i> waiting</span>{% else %}—{% endif %}
+      </td>
+    </tr>
+    <tr>
+      <th scope="row"><i class="mdi mdi-account-outline"></i>
+        {% if other_vote %}{{ other_vote.username }}{% elif req.approver %}{{ req.approver.username }}{% else %}any other administrator / delegate{% endif %}
+        <span class="text-secondary small">(second person)</span></th>
+      <td>
+        {% if other_vote %}{% if other_vote.approve %}<span class="badge text-bg-green"><i class="mdi mdi-check"></i> confirmed</span>{% else %}<span class="badge text-bg-red">rejected</span>{% endif %}
+          <span class="small text-secondary">{{ other_vote.time|date:"H:i:s" }}{% if other_vote.ip_address %} · {{ other_vote.ip_address }}{% endif %}</span>
+        {% elif is_open %}<span class="badge text-bg-yellow"><i class="mdi mdi-timer-sand"></i> waiting</span>{% else %}—{% endif %}
+      </td>
+    </tr>
+    <tr>
+      <th scope="row">Status</th>
+      <td>
+        {% if is_open %}<span class="badge text-bg-blue">waiting</span> <span class="small text-secondary">until {{ req.expires|date:"Y-m-d H:i" }} · refreshes automatically</span>
+        {% elif req.status == 'executed' %}<span class="badge text-bg-green">approved and executed</span>{% if req.break_glass %} <span class="badge text-bg-red">BREAK-GLASS</span>{% endif %}
+        {% else %}<span class="badge text-bg-secondary">{{ req.get_status_display }}</span>{% endif %}
+        {% if req.result %}<div class="small text-secondary mt-1">{{ req.result }}</div>{% endif %}
+      </td>
+    </tr>
+  </table>
+</div>

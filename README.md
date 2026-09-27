@@ -17,6 +17,12 @@ sensitive pages ("enter your PIN to continue"), so the PIN logic exists only onc
 - **An administrator alone can only remove access** (suspend). A PIN reset is started by an administrator and
   confirmed by the user in their own session with 2FA (a 2FA reset with the PIN) – no meeting needed, the
   administrator never learns the new PIN
+- **Four-eyes approval** (optional) for delegates, settings and PIN access: the requester and a second
+  administrator / delegate confirm with their own PIN + 2FA – live in their own sessions (each sees the other's
+  confirmation) or later until the request expires; optional break-glass for the master
+- **Backup codes** stored encrypted; *Show backup codes* after PIN + 2FA or PIN + an e-mailed verification code
+  (the codes themselves are never e-mailed)
+- Emergency server command for a 2FA reset shown at each account
 - Separate **Mail** page: allowed domains, notifications, self-service recovery, test e-mail to a chosen user
 - Append-only **audit log** of every PIN event (never contains a PIN, hash or code)
 - Settings page in the UI, stable API + signals for other plugins
@@ -76,6 +82,8 @@ on the **Users** page.
 | `argon2_time_cost` | `3` | Argon2id iterations |
 | `argon2_memory_cost` | `65536` | Argon2id memory in KiB (64 MiB) |
 | `argon2_parallelism` | `4` | Argon2id lanes |
+| `cli_venv` | `/opt/netbox/venv` | shown in the emergency server command |
+| `cli_netbox_dir` | `/opt/netbox/netbox` | shown in the emergency server command |
 
 Everything else is configured in the UI: **User PIN → Settings**.
 
@@ -121,6 +129,36 @@ Delegates are stored by the plugin and synchronised into NetBox object permissio
 
 Until the user confirms, the old PIN keeps working; the administrator can cancel a pending reset. A reset
 requires the user to have 2FA.
+
+### Four-eyes approval
+
+Settings → *Four-eyes approval* (needs at least two administrators / delegates with PIN and 2FA). Choose what it
+applies to: delegates, settings (incl. mail), PIN access. Then such a change creates a request:
+
+1. The requester confirms with PIN + 2FA (and a reason).
+2. Any other administrator / delegate gets a NetBox notification (bell) and an e-mail, opens
+   *User PIN → Approvals* and confirms or rejects with their own PIN + 2FA.
+3. The request page refreshes itself every few seconds – both see live who has confirmed (time and IP).
+   After the second confirmation the change is executed. Requests expire (default 24 h).
+
+Break-glass (off by default): a superuser may execute a request alone with a reason; all administrators and
+delegates are informed and it is marked in the audit log.
+
+### Backup codes
+
+*My PIN → Show backup codes*: PIN + a 2FA code, or – without the phone – PIN + a verification code sent by
+e-mail. The codes are shown only in the browser (used ones crossed out), with *Generate new codes*. The user
+gets an e-mail notification. Users who enabled 2FA before 0.5.0 get new codes on the first view.
+
+### Emergency 2FA reset on the server
+
+Shown at each account (*Users → Actions → Emergency: server command* and in *My PIN*):
+
+```bash
+sudo bash -c 'source /opt/netbox/venv/bin/activate && cd /opt/netbox/netbox && python manage.py userpin_reset_2fa <user>'
+```
+
+The paths come from the plugin settings `cli_venv` and `cli_netbox_dir`.
 
 ### Forgotten PIN (self-service)
 

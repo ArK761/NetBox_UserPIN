@@ -38,6 +38,7 @@ __all__ = (
     'VerifyResult',
     'VerifyStatus',
     'can_manage',
+    'cli_reset_2fa_command',
     'cancel_reset',
     'complete_2fa_reset',
     'complete_pin_reset',
@@ -68,7 +69,9 @@ __all__ = (
     'request_reset',
     'reset_pin',
     'reset_totp',
+    'send_backup_codes_email_code',
     'set_access',
+    'show_backup_codes',
     'set_pin',
     'start_recovery',
     'start_totp_enrollment',
@@ -598,6 +601,7 @@ def confirm_totp_enrollment(request, code):
         user_pin.totp_enabled = timezone.now()
         user_pin.totp_last_step = step
         user_pin.backup_codes = [totp.hash_backup_code(c) for c in codes]
+        user_pin.backup_codes_encrypted = _encrypt_backup_codes(user_pin, codes)
         user_pin.save()
     request.session.pop(ENROLL_SESSION_KEY, None)
     log_event(PinEventAction.TOTP_ENABLED, user=request.user, actor=request.user, request=request)
@@ -646,12 +650,82 @@ def verify_second_factor(user, code, request=None, scope='2fa'):
     return result
 
 
+def _backup_aad(user_pin):
+    return f'netbox_user_pin:backup:{user_pin.user_id}'.encode()
+
+
+def _encrypt_backup_codes(user_pin, codes):
+    import json
+    return crypto.encrypt(json.dumps(codes), _backup_aad(user_pin))
+
+
 def new_backup_codes(user, request=None):
     """Replace the backup codes (caller must have verified the user). Returns the new codes."""
     codes = totp.generate_backup_codes()
-    UserPin.objects.filter(user=user).update(backup_codes=[totp.hash_backup_code(c) for c in codes])
+    user_pin = UserPin.objects.get(user=user)
+    UserPin.objects.filter(pk=user_pin.pk).update(
+        backup_codes=[totp.hash_backup_code(c) for c in codes],
+        backup_codes_encrypted=_encrypt_backup_codes(user_pin, codes),
+    )
     log_event(PinEventAction.BACKUP_CODES_NEW, user=user, request=request)
     return codes
+
+
+def backup_codes_email_blockers(user, settings=None):
+    """Reasons why a verification code cannot be e-mailed to ``user`` (empty = possible)."""
+    settings = settings or get_settings()
+    reasons = []
+    if not email_configured():
+        reasons.append('mail_not_configured')
+    status = email_status(user, settings)
+    if status != 'ok':
+        reasons.append(f'email_{status}')
+    return reasons
+
+
+def send_backup_codes_email_code(user, request=None):
+    if backup_codes_email_blockers(user):
+        raise ValidationError(_('No verification e-mail can be sent to your account.'), code='blocked')
+    _send_email_code(
+        user, 'backup-codes', _('Verification code'),
+        _('Your verification code for showing your 2FA backup codes is: {code}\n\nIt is valid for {minutes} '
+          'minutes. If you did not request it, contact your administrator.'),
+        request=request,
+    )
+    log_event(PinEventAction.EMAIL_CODE_SENT, user=user, request=request, detail='backup codes')
+
+
+def show_backup_codes(user, pin, otp=None, email_code=None, request=None):
+    """
+    Return [(code, used), ...] after verifying the PIN plus either a 2FA code or an e-mailed verification code.
+    Users enrolled before encrypted storage get new codes (the old ones cannot be shown).
+    Raises ValidationError (code 'pin', 'otp' or 'email_code').
+    """
+    import json
+    if not has_2fa(user):
+        raise ValidationError(_('Two-factor authentication is not set up.'), code='no_2fa')
+    result = verify_pin(user, pin, request=request, scope='backup-codes')
+    if not result:
+        raise ValidationError(_('The PIN is not correct.'), code='pin')
+    if otp:
+        if not verify_second_factor(user, otp, request=request, scope='backup-codes'):
+            raise ValidationError(_('The 2FA code is not correct.'), code='otp')
+    elif not _check_email_code(user, 'backup-codes', email_code):
+        raise ValidationError(_('The e-mail code is wrong or expired.'), code='email_code')
+    user_pin = UserPin.objects.get(user=user)
+    renewed = False
+    if user_pin.backup_codes_encrypted:
+        codes = json.loads(crypto.decrypt(user_pin.backup_codes_encrypted, _backup_aad(user_pin)))
+    else:
+        codes, renewed = new_backup_codes(user, request=request), True
+        user_pin.refresh_from_db()
+    unused = set(user_pin.backup_codes)
+    log_event(PinEventAction.BACKUP_CODES_VIEWED, user=user, request=request,
+              detail='verified with ' + ('2FA' if otp else 'e-mail code') + (', new codes issued' if renewed else ''))
+    notify(user, _('Your backup codes were viewed'),
+           _('Your 2FA backup codes were displayed in NetBox. If this was not you, contact your administrator and '
+             'generate new codes.'), request=request)
+    return [(code, totp.hash_backup_code(code) not in unused) for code in codes], renewed
 
 
 def backup_codes_left(user):
@@ -661,7 +735,7 @@ def backup_codes_left(user):
 
 def _clear_totp(user):
     UserPin.objects.filter(user=user).update(
-        totp_secret='', totp_enabled=None, totp_last_step=0, backup_codes=[],
+        totp_secret='', totp_enabled=None, totp_last_step=0, backup_codes=[], backup_codes_encrypted='',
     )
 
 
@@ -827,31 +901,68 @@ def recovery_blockers(user, settings=None):
     return reasons
 
 
-def start_recovery(user, request=None):
-    """E-mail a one-time 8 digit code. Raises ValidationError when not possible."""
-    settings = get_settings()
-    if recovery_blockers(user, settings):
-        raise ValidationError(_('Self-service recovery is not available for your account.'), code='blocked')
+def _send_email_code(user, purpose, subject, body, request=None, settings=None):
+    """
+    E-mail a one-time 8 digit code for ``purpose`` (stored only as a keyed digest; valid for the recovery code
+    validity, max 5 attempts, resend after 60 s). ``body`` may contain {code} and {minutes}.
+    """
+    settings = settings or get_settings()
     user_pin, _created = UserPin.objects.get_or_create(user=user)
     if user_pin.recovery_sent and (timezone.now() - user_pin.recovery_sent).total_seconds() < RECOVERY_RESEND_SECONDS:
         raise ValidationError(_('A code was sent a moment ago. Please wait a minute.'), code='throttled')
     code = f'{secrets.randbelow(10 ** 8):08d}'
     UserPin.objects.filter(pk=user_pin.pk).update(
-        recovery_code=crypto.keyed_digest(code, f'recovery:{user.pk}'),
+        recovery_code=crypto.keyed_digest(code, f'{purpose}:{user.pk}'),
+        email_code_purpose=purpose,
         recovery_expires=timezone.now() + timedelta(minutes=settings.recovery_minutes),
         recovery_attempts=0,
         recovery_sent=timezone.now(),
     )
-    sent = send_user_mail(
-        user, _('PIN recovery code'),
-        _('Your PIN recovery code is: {code}\n\nIt is valid for {minutes} minutes and must be entered together '
-          'with a code from your authenticator app. If you did not request it, contact your administrator.').format(
-            code=code, minutes=settings.recovery_minutes),
-        request=request, settings=settings,
-    )
+    sent = send_user_mail(user, subject, body.format(code=code, minutes=settings.recovery_minutes),
+                          request=request, settings=settings)
     if not sent:
         UserPin.objects.filter(pk=user_pin.pk).update(recovery_code='', recovery_expires=None)
         raise ValidationError(_('The e-mail could not be sent. Contact your administrator.'), code='mail')
+
+
+def _check_email_code(user, purpose, code, consume=True):
+    """Check (and with ``consume`` use up) an e-mailed code. Wrong codes count; after 5 the code is invalid."""
+    with transaction.atomic():
+        user_pin = UserPin.objects.select_for_update().get(user=user)
+        valid = bool(user_pin.recovery_code and user_pin.email_code_purpose == purpose and user_pin.recovery_expires
+                     and user_pin.recovery_expires > timezone.now() and user_pin.recovery_attempts < 5)
+        code_ok = valid and crypto.check_keyed_digest(
+            (code or '').strip(), f'{purpose}:{user.pk}', user_pin.recovery_code
+        )
+        if code_ok:
+            if consume:
+                user_pin.recovery_code = ''
+                user_pin.recovery_expires = None
+        else:
+            user_pin.recovery_attempts += 1
+            if user_pin.recovery_attempts >= 5:
+                user_pin.recovery_code = ''
+        user_pin.save()
+    return code_ok
+
+
+def email_code_pending(user, purpose):
+    user_pin = _get_pin(user)
+    return bool(user_pin and user_pin.recovery_code and user_pin.email_code_purpose == purpose
+                and user_pin.recovery_expires and user_pin.recovery_expires > timezone.now())
+
+
+def start_recovery(user, request=None):
+    """E-mail a one-time 8 digit code. Raises ValidationError when not possible."""
+    settings = get_settings()
+    if recovery_blockers(user, settings):
+        raise ValidationError(_('Self-service recovery is not available for your account.'), code='blocked')
+    _send_email_code(
+        user, 'recovery', _('PIN recovery code'),
+        _('Your PIN recovery code is: {code}\n\nIt is valid for {minutes} minutes and must be entered together '
+          'with a code from your authenticator app. If you did not request it, contact your administrator.'),
+        request=request, settings=settings,
+    )
     log_event(PinEventAction.RECOVERY_SENT, user=user, request=request)
 
 
@@ -859,19 +970,8 @@ def complete_recovery(user, email_code, otp, new_pin, request=None):
     """Both the e-mailed code and the 2FA code must be correct; then the new PIN is set."""
     settings = get_settings()
     validate_pin(new_pin, settings)
-    with transaction.atomic():
-        user_pin = UserPin.objects.select_for_update().get(user=user)
-        valid = bool(user_pin.recovery_code and user_pin.recovery_expires and
-                     user_pin.recovery_expires > timezone.now() and user_pin.recovery_attempts < 5)
-        code_ok = valid and crypto.check_keyed_digest(
-            (email_code or '').strip(), f'recovery:{user.pk}', user_pin.recovery_code
-        )
-        if not code_ok:
-            user_pin.recovery_attempts += 1
-            if user_pin.recovery_attempts >= 5:
-                user_pin.recovery_code = ''
-            user_pin.save()
-    if not code_ok:
+    # the code is used up only when the whole recovery succeeds (a mistyped 2FA code needs no new e-mail)
+    if not _check_email_code(user, 'recovery', email_code, consume=False):
         log_event(PinEventAction.RECOVERY_FAILED, user=user, request=request, detail='e-mail code')
         raise ValidationError(_('The e-mail code is wrong or expired.'), code='email_code')
     result = verify_second_factor(user, otp, request=request, scope='recovery')
@@ -1019,10 +1119,20 @@ def complete_2fa_reset(user, pin, request=None):
         raise ValidationError(_('The PIN is not correct.'), code='pin')
     by = user_pin.pending_reset_by
     UserPin.objects.filter(pk=user_pin.pk).update(
-        totp_secret='', totp_enabled=None, totp_last_step=0, backup_codes=[],
+        totp_secret='', totp_enabled=None, totp_last_step=0, backup_codes=[], backup_codes_encrypted='',
         pending_reset='', pending_reset_by='', pending_reset_expires=None,
     )
     log_event(PinEventAction.RESET_COMPLETED, user=user, actor=user, request=request,
               detail=f'2FA reset started by {by}, confirmed with PIN')
     notify(user, _('Your two-factor authentication was reset'),
            _('Set it up again under User PIN > My PIN (reset started by {by}).').format(by=by), request=request)
+
+
+def cli_reset_2fa_command(user):
+    """Emergency server command that removes the 2FA of ``user`` (shown in the UI, run as root on the server)."""
+    import shlex
+    venv = get_plugin_config('netbox_user_pin', 'cli_venv')
+    netbox_dir = get_plugin_config('netbox_user_pin', 'cli_netbox_dir')
+    inner = (f'source {shlex.quote(venv + "/bin/activate")} && cd {shlex.quote(netbox_dir)} && '
+             f'python manage.py userpin_reset_2fa {shlex.quote(user.username)}')
+    return f"sudo bash -c {shlex.quote(inner)}"

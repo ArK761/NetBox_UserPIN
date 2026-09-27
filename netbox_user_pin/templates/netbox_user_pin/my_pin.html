@@ -94,10 +94,19 @@
           <td>{% if not recovery_blockers %}<span class="badge text-bg-green">Available</span> <span class="text-secondary">(e-mail code + 2FA)</span>{% else %}<span class="badge text-bg-secondary">Not available</span> <span class="text-secondary">– an administrator can reset your PIN</span>{% endif %}</td>
         </tr>
       </table>
+      {% if has_2fa %}
+        <div class="card-body pt-0 small">
+          <details>
+            <summary class="text-secondary">Lost your phone and all backup codes? Emergency reset on the server</summary>
+            <p class="mt-2 mb-1 text-secondary">Another administrator can start <em>Reset 2FA</em> for you. If nobody can, a server administrator runs:</p>
+            {% include 'netbox_user_pin/inc/cli_command.html' with command=cli_reset_2fa id='cli-self' %}
+          </details>
+        </div>
+      {% endif %}
       {% if allowed %}
         <div class="card-footer text-end">
           {% if has_2fa %}
-            <a href="{% url 'plugins:netbox_user_pin:totp_manage' action='backup-codes' %}" class="btn btn-outline-secondary"><i class="mdi mdi-key-chain"></i> New backup codes</a>
+            <a href="{% url 'plugins:netbox_user_pin:backup_codes' %}" class="btn btn-outline-secondary"><i class="mdi mdi-key-chain"></i> Show backup codes</a>
             <a href="{% url 'plugins:netbox_user_pin:totp_manage' action='disable' %}" class="btn btn-outline-danger"><i class="mdi mdi-cellphone-remove"></i> Disable 2FA</a>
           {% else %}
             <a href="{% url 'plugins:netbox_user_pin:totp_setup' %}" class="btn btn-primary"><i class="mdi mdi-cellphone-key"></i> Set up 2FA</a>
