@@ -55,6 +55,12 @@ def admin_login(client, user, pin=GOOD_PIN, secret=None):
     return secret
 
 
+def allow_domains(*domains):
+    from netbox_user_pin.models import AllowedDomain
+    for domain in domains:
+        AllowedDomain.objects.update_or_create(domain=domain, defaults={'verified': timezone.now()})
+
+
 class PolicyTest(PinTestCase):
 
     def test_weak_pins(self):
@@ -512,9 +518,7 @@ class RotationTest(PinTestCase):
 
     @override_settings(EMAIL={'SERVER': 'localhost', 'FROM_EMAIL': 'netbox@firma.sk'})
     def test_expiry_warning_mail_once(self):
-        settings = PinSettings.load()
-        settings.allowed_email_domains = 'firma.sk'
-        settings.save()
+        allow_domains('firma.sk')
         self.user.email = 'fero@firma.sk'
         self.user.save()
         UserPin.objects.filter(user=self.user).update(changed=timezone.now() - timedelta(days=170))
@@ -530,9 +534,7 @@ class RecoveryTest(PinTestCase):
 
     def setUp(self):
         super().setUp()
-        settings = PinSettings.load()
-        settings.allowed_email_domains = 'firma.sk\nfirma.com'
-        settings.save()
+        allow_domains('firma.sk', 'firma.com')
         self.user = User.objects.create_user('gabo', password='pw', email='gabo@firma.sk')
         service.set_pin(self.user, GOOD_PIN)
         self.secret = enable_2fa(self.user)
@@ -743,9 +745,7 @@ class MailPageTest(PinTestCase):
 
     def setUp(self):
         super().setUp()
-        settings = PinSettings.load()
-        settings.allowed_email_domains = 'firma.sk'
-        settings.save()
+        allow_domains('firma.sk')
         self.admin = User.objects.create_superuser('mailadmin', password='pw', email='mailadmin@firma.sk')
         self.ok_user = User.objects.create_user('okuser', password='pw', email='ok@firma.sk')
         self.gmail = User.objects.create_user('gmail', password='pw', email='x@gmail.com')
@@ -773,9 +773,7 @@ class BackupCodesViewTest(PinTestCase):
 
     def setUp(self):
         super().setUp()
-        settings = PinSettings.load()
-        settings.allowed_email_domains = 'firma.sk'
-        settings.save()
+        allow_domains('firma.sk')
         self.user = User.objects.create_user('ivan', password='pw', email='ivan@firma.sk')
         service.set_pin(self.user, GOOD_PIN)
         self.client.force_login(self.user)
@@ -952,3 +950,87 @@ class CliCommandTest(PinTestCase):
         self.assertTrue(command.startswith("sudo bash -c '"))
         self.client.force_login(user)
         self.assertContains(self.client.get(reverse('plugins:netbox_user_pin:my_pin')), 'userpin_reset_2fa')
+
+
+
+@override_settings(EMAIL={})
+class SmtpAndDomainTest(PinTestCase):
+
+    def setUp(self):
+        super().setUp()
+        self.admin = User.objects.create_superuser('smtpadmin', password='pw', email='smtpadmin@firma.sk')
+        self.secret = admin_login(self.client, self.admin)
+
+    def _save_mail(self, **extra):
+        data = {'action': 'save', 'mail_from_name': 'NetBox', 'mail_from_address': 'netbox@firma.sk',
+                'smtp_server': 'mail.firma.sk', 'smtp_port': 587, 'smtp_timeout': 10, 'smtp_security': 'starttls',
+                'smtp_username': 'svc_netbox', 'new_smtp_password': 'S3cret!', 'recovery_minutes': 15,
+                'smtp_auth': 'on', 'notify_email': 'on', 'self_recovery': 'on'}
+        data.update(extra)
+        return self.client.post(reverse('plugins:netbox_user_pin:mail'), data)
+
+    def test_smtp_settings_saved_with_encrypted_password(self):
+        from netbox_user_pin import mail as pin_mail
+        self._save_mail()
+        settings = PinSettings.load()
+        self.assertEqual(settings.smtp_server, 'mail.firma.sk')
+        self.assertNotIn('S3cret!', settings.smtp_password)
+        self.assertEqual(pin_mail.decrypt_password(settings.smtp_password), 'S3cret!')
+        event = PinEvent.objects.filter(action=PinEventAction.SETTINGS_CHANGED).latest('pk')
+        self.assertNotIn('S3cret!', event.detail)
+        # leaving the password empty keeps it
+        self._save_mail(new_smtp_password='', smtp_port=25)
+        settings = PinSettings.load()
+        self.assertEqual(settings.smtp_port, 25)
+        self.assertEqual(pin_mail.decrypt_password(settings.smtp_password), 'S3cret!')
+
+    def test_sending_through_own_smtp(self):
+        from unittest import mock
+        self._save_mail()
+        allow_domains('firma.sk')
+        with mock.patch('smtplib.SMTP') as smtp:
+            connection = smtp.return_value
+            connection.has_extn.return_value = True
+            self.assertTrue(service.send_user_mail(self.admin, 'Hello', 'Body'))
+        smtp.assert_called_once_with('mail.firma.sk', 587, timeout=10)
+        connection.starttls.assert_called_once()
+        connection.login.assert_called_once_with('svc_netbox', 'S3cret!')
+        message = connection.send_message.call_args[0][0]
+        self.assertEqual(message['To'], 'smtpadmin@firma.sk')
+        self.assertIn('NetBox <netbox@firma.sk>', message['From'])
+
+    def test_domain_must_be_verified(self):
+        from unittest import mock
+        from netbox_user_pin.models import AllowedDomain
+        self._save_mail()
+        self.client.post(reverse('plugins:netbox_user_pin:mail'), {'action': 'add-domain', 'domain': '@Firma.SK'})
+        domain = AllowedDomain.objects.get(domain='firma.sk')
+        self.assertFalse(domain.is_verified)
+        self.assertEqual(service.email_status(self.admin), 'domain')   # not verified yet
+        # the address must be in the domain
+        self.client.post(reverse('plugins:netbox_user_pin:mail'), {'action': 'send-domain-code', 'pk': domain.pk,
+                                                                   'address': 'x@gmail.com'})
+        domain.refresh_from_db()
+        self.assertFalse(domain.code)
+        with mock.patch('smtplib.SMTP') as smtp:
+            self.client.post(reverse('plugins:netbox_user_pin:mail'), {
+                'action': 'send-domain-code', 'pk': domain.pk, 'address': 'peter@firma.sk'})
+        body = smtp.return_value.send_message.call_args[0][0].get_content()
+        code = next(w.strip('.') for w in body.split() if w.strip('.').isdigit() and len(w.strip('.')) == 8)
+        self.client.post(reverse('plugins:netbox_user_pin:mail'), {'action': 'verify-domain', 'pk': domain.pk,
+                                                                   'code': '00000000'})
+        self.assertFalse(AllowedDomain.objects.get(pk=domain.pk).is_verified)
+        self.client.post(reverse('plugins:netbox_user_pin:mail'), {'action': 'verify-domain', 'pk': domain.pk,
+                                                                   'code': code})
+        domain.refresh_from_db()
+        self.assertTrue(domain.is_verified)
+        self.assertEqual(domain.verified_email, 'peter@firma.sk')
+        self.assertEqual(service.email_status(self.admin), 'ok')
+
+    def test_test_connection_reports_errors(self):
+        from unittest import mock
+        self._save_mail()
+        with mock.patch('smtplib.SMTP', side_effect=OSError('connection refused')):
+            response = self.client.post(reverse('plugins:netbox_user_pin:mail'), {'action': 'test-connection'},
+                                        follow=True)
+        self.assertContains(response, 'connection refused')

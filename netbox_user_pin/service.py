@@ -19,17 +19,17 @@ from datetime import timedelta
 
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
-from django.conf import settings as django_settings
 from django.core.exceptions import ValidationError
-from django.core.mail import send_mail
 from django.db import transaction
 from django.utils import timezone
 from django.utils.translation import gettext as _
 from netbox.plugins import get_plugin_config
 from utilities.request import get_client_ip
 
-from . import crypto, signals, totp
-from .models import PinAccess, PinAccessMode, PinEvent, PinEventAction, PinScopeMode, PinSettings, UserPin
+from . import crypto, mail, signals, totp
+from .models import (
+    AllowedDomain, PinAccess, PinAccessMode, PinEvent, PinEventAction, PinScopeMode, PinSettings, UserPin,
+)
 from .policy import validate_pin
 
 __all__ = (
@@ -813,21 +813,21 @@ def end_step_up(request):
 # E-mail
 #
 
-def email_configured():
-    email = getattr(django_settings, 'EMAIL', {}) or {}
-    return bool(email.get('SERVER') and email.get('FROM_EMAIL'))
+def email_configured(settings=None):
+    return mail.configured(settings or get_settings())
 
 
 def allowed_domains(settings=None):
-    settings = settings or get_settings()
-    return {
-        d.strip().lower().lstrip('@') for d in settings.allowed_email_domains.replace(',', '\n').splitlines()
-        if d.strip()
-    }
+    """Verified allowed e-mail domains (lower case)."""
+    return set(AllowedDomain.objects.exclude(verified=None).values_list('domain', flat=True))
+
+
+def normalize_domain(domain):
+    return (domain or '').strip().lower().lstrip('@').rstrip('.')
 
 
 def email_status(user, settings=None):
-    """'ok', 'missing' (no address) or 'domain' (address outside the allowed domains)."""
+    """'ok', 'missing' (no address) or 'domain' (address outside the verified allowed domains)."""
     address = (getattr(user, 'email', '') or '').strip()
     if not address or '@' not in address:
         return 'missing'
@@ -836,24 +836,87 @@ def email_status(user, settings=None):
     return 'ok'
 
 
+def _deliver(settings, recipients, subject, body):
+    mail.send(settings, recipients, f'[NetBox PIN] {subject}',
+              f'{body}\n\n-- \nNetBox User PIN. This is an automatic message.')
+
+
 def send_user_mail(user, subject, body, request=None, settings=None):
-    """Send an e-mail to ``user`` if the address is in an allowed domain. Returns True when sent."""
+    """Send an e-mail to ``user`` if the address is in a verified allowed domain. Returns True when sent."""
     settings = settings or get_settings()
-    if email_status(user, settings) != 'ok' or not email_configured():
+    if email_status(user, settings) != 'ok' or not email_configured(settings):
         return False
     try:
-        send_mail(
-            subject=f'[NetBox PIN] {subject}',
-            message=f'{body}\n\n-- \nNetBox User PIN. This is an automatic message.',
-            from_email=django_settings.EMAIL.get('FROM_EMAIL'),
-            recipient_list=[user.email],
-        )
+        _deliver(settings, [user.email], subject, body)
     except Exception as exc:  # SMTP problems must not break the security flow
         logger.warning('Cannot send PIN e-mail to %s: %s', user, exc)
         log_event(PinEventAction.MAIL_FAILED, user=user, request=request, detail=f'{subject}: {exc}')
         return False
     log_event(PinEventAction.MAIL_SENT, user=user, request=request, detail=subject)
     return True
+
+
+#
+# Allowed e-mail domains (must be verified before use)
+#
+
+def add_domain(domain, actor, request=None):
+    domain = normalize_domain(domain)
+    if not domain or '.' not in domain or '@' in domain or ' ' in domain:
+        raise ValidationError(_('Enter a domain such as firma.sk.'), code='invalid')
+    obj, created = AllowedDomain.objects.get_or_create(
+        domain=domain, defaults={'created_by': getattr(actor, 'username', '')})
+    if created:
+        log_event(PinEventAction.DOMAIN_ADDED, actor=actor, request=request, detail=domain)
+    return obj
+
+
+def remove_domain(domain_obj, actor, request=None):
+    name = domain_obj.domain
+    domain_obj.delete()
+    log_event(PinEventAction.DOMAIN_REMOVED, actor=actor, request=request, detail=name)
+
+
+def send_domain_code(domain_obj, address, actor, request=None):
+    """Send a verification code to ``address`` which must be in the domain."""
+    settings = get_settings()
+    address = (address or '').strip()
+    if not address.lower().endswith('@' + domain_obj.domain):
+        raise ValidationError(_('The address must end with @{domain}.').format(domain=domain_obj.domain),
+                              code='address')
+    if not email_configured(settings):
+        raise ValidationError(_('No mail server is configured.'), code='mail')
+    code = f'{secrets.randbelow(10 ** 8):08d}'
+    try:
+        _deliver(settings, [address], _('Domain verification'),
+                 _('Verification code for the domain {domain}: {code}\n\nEnter it in NetBox > User PIN > Mail. '
+                   'It is valid for {minutes} minutes.').format(domain=domain_obj.domain, code=code,
+                                                               minutes=settings.recovery_minutes))
+    except Exception as exc:
+        log_event(PinEventAction.MAIL_FAILED, actor=actor, request=request, detail=f'domain verification: {exc}')
+        raise ValidationError(_('The e-mail could not be sent: {error}').format(error=exc), code='mail')
+    AllowedDomain.objects.filter(pk=domain_obj.pk).update(
+        code=crypto.keyed_digest(code, f'domain:{domain_obj.pk}:{address.lower()}'), code_email=address,
+        code_expires=timezone.now() + timedelta(minutes=settings.recovery_minutes), code_attempts=0,
+    )
+    log_event(PinEventAction.EMAIL_CODE_SENT, actor=actor, request=request,
+              detail=f'domain verification {domain_obj.domain} -> {address}')
+
+
+def verify_domain(domain_obj, code, actor, request=None):
+    domain_obj.refresh_from_db()
+    ok = (domain_obj.code_pending and domain_obj.code_attempts < 5 and crypto.check_keyed_digest(
+        (code or '').strip(), f'domain:{domain_obj.pk}:{domain_obj.code_email.lower()}', domain_obj.code))
+    if not ok:
+        AllowedDomain.objects.filter(pk=domain_obj.pk).update(code_attempts=domain_obj.code_attempts + 1)
+        log_event(PinEventAction.DOMAIN_VERIFY_FAILED, actor=actor, request=request, detail=domain_obj.domain)
+        raise ValidationError(_('The code is wrong or expired.'), code='code')
+    AllowedDomain.objects.filter(pk=domain_obj.pk).update(
+        verified=timezone.now(), verified_by=getattr(actor, 'username', ''), verified_email=domain_obj.code_email,
+        code='', code_expires=None, code_attempts=0,
+    )
+    log_event(PinEventAction.DOMAIN_VERIFIED, actor=actor, request=request,
+              detail=f'{domain_obj.domain} via {domain_obj.code_email}')
 
 
 def notify(user, subject, body, request=None):

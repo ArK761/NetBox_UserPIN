@@ -5,6 +5,7 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 __all__ = (
+    'AllowedDomain',
     'ApprovalAction',
     'ApprovalRequest',
     'ApprovalStatus',
@@ -160,6 +161,34 @@ class PinSettings(models.Model):
         help_text=_('In an emergency a superuser may execute a request alone with a reason; all administrators '
                     'and delegates are informed by e-mail.'),
     )
+    mail_from_name = models.CharField(verbose_name=_('Sender name'), max_length=100, blank=True,
+                                      default='NetBox PIN', help_text=_('e.g. NetBox PIN'))
+    mail_from_address = models.EmailField(
+        verbose_name=_('Sender e-mail address'), blank=True,
+        help_text=_('e.g. netbox@firma.sk. Together with the SMTP server; if the server is empty, the NetBox '
+                    'e-mail configuration (EMAIL in configuration.py) is used.'),
+    )
+    smtp_server = models.CharField(
+        verbose_name=_('SMTP server'), max_length=255, blank=True,
+        help_text=_('e.g. mail.firma.sk. Empty = use the NetBox e-mail configuration.'),
+    )
+    smtp_port = models.PositiveIntegerField(verbose_name=_('SMTP port'), default=25,
+                                            validators=[MinValueValidator(1), MaxValueValidator(65535)])
+    smtp_timeout = models.PositiveIntegerField(verbose_name=_('SMTP timeout (s)'), default=10,
+                                               validators=[MinValueValidator(1), MaxValueValidator(120)])
+    smtp_security = models.CharField(
+        verbose_name=_('Encryption'), max_length=10, default='none',
+        choices=(('none', _('Off (usually port 25)')), ('starttls', _('STARTTLS (usually port 587)')),
+                 ('ssl', _('SSL/TLS (usually port 465)'))),
+    )
+    smtp_auto_tls = models.BooleanField(
+        verbose_name=_('Automatic TLS'), default=True,
+        help_text=_('With encryption off, STARTTLS is used when the server offers it.'),
+    )
+    smtp_auth = models.BooleanField(verbose_name=_('SMTP authentication'), default=False)
+    smtp_username = models.CharField(verbose_name=_('SMTP user'), max_length=255, blank=True,
+                                     help_text=_('Service account the e-mails are sent from.'))
+    smtp_password = models.TextField(blank=True, help_text='AES-256-GCM encrypted SMTP password.')
     notify_email = models.BooleanField(
         verbose_name=_('Security notifications by e-mail'),
         default=True,
@@ -307,6 +336,10 @@ class PinEventAction(models.TextChoices):
     APPROVAL_CANCELLED = 'approval_cancelled', _('Four-eyes request cancelled')
     APPROVAL_EXECUTED = 'approval_executed', _('Four-eyes request executed')
     BREAK_GLASS = 'break_glass', _('Break-glass: executed alone by the master')
+    DOMAIN_ADDED = 'domain_added', _('Allowed e-mail domain added')
+    DOMAIN_VERIFIED = 'domain_verified', _('Allowed e-mail domain verified')
+    DOMAIN_VERIFY_FAILED = 'domain_verify_failed', _('Domain verification failed')
+    DOMAIN_REMOVED = 'domain_removed', _('Allowed e-mail domain removed')
     ACCESS_CHANGED = 'access_changed', _('PIN access changed by administrator')
     SUSPENDED = 'suspended', _('PIN suspended by administrator')
     UNSUSPENDED = 'unsuspended', _('PIN suspension lifted by administrator')
@@ -406,6 +439,7 @@ class ApprovalAction(models.TextChoices):
     SETTINGS = 'settings', _('Change PIN settings')
     MAIL_SETTINGS = 'mail_settings', _('Change mail settings')
     ACCESS = 'access', _('Allow / deny PIN use')
+    DOMAIN_ADD = 'domain_add', _('Add allowed e-mail domain')
 
 
 class ApprovalStatus(models.TextChoices):
@@ -471,3 +505,36 @@ class ApprovalVote(models.Model):
         constraints = (
             models.UniqueConstraint(fields=('request', 'user'), name='netbox_user_pin_one_vote_per_user'),
         )
+
+
+class AllowedDomain(models.Model):
+    """
+    E-mail domain the plugin may send to. Only verified domains are used: verification sends a code to an
+    address in the domain, which must be entered back.
+    """
+    domain = models.CharField(max_length=253, unique=True)
+    created = models.DateTimeField(auto_now_add=True)
+    created_by = models.CharField(max_length=150, blank=True)
+    verified = models.DateTimeField(null=True, blank=True)
+    verified_by = models.CharField(max_length=150, blank=True)
+    verified_email = models.CharField(max_length=254, blank=True)
+    code = models.CharField(max_length=128, blank=True)
+    code_email = models.CharField(max_length=254, blank=True)
+    code_expires = models.DateTimeField(null=True, blank=True)
+    code_attempts = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        verbose_name = _('allowed e-mail domain')
+        verbose_name_plural = _('allowed e-mail domains')
+        ordering = ('domain',)
+
+    def __str__(self):
+        return self.domain
+
+    @property
+    def is_verified(self):
+        return self.verified is not None
+
+    @property
+    def code_pending(self):
+        return bool(self.code and self.code_expires and self.code_expires > timezone.now())

@@ -12,6 +12,7 @@ __all__ = (
     'BreakGlassForm',
     'ChangePinForm',
     'DelegateForm',
+    'DomainForm',
     'MailSettingsForm',
     'ResetConfirmForm',
     'TestMailForm',
@@ -241,12 +242,33 @@ class _StyledModelForm(forms.ModelForm):
 
 
 class MailSettingsForm(_StyledModelForm):
+    new_smtp_password = forms.CharField(
+        label=_('SMTP password'), required=False, strip=False,
+        widget=forms.PasswordInput(attrs={'autocomplete': 'new-password'}, render_value=False),
+        help_text=_('Stored encrypted and never shown. Leave empty to keep the current password.'),
+    )
+
     class Meta:
         model = PinSettings
-        fields = ('allowed_email_domains', 'notify_email', 'self_recovery', 'recovery_minutes')
-        widgets = {
-            'allowed_email_domains': forms.Textarea(attrs={'rows': 4, 'class': 'form-control'}),
-        }
+        fields = (
+            'mail_from_name', 'mail_from_address', 'smtp_server', 'smtp_port', 'smtp_timeout', 'smtp_security',
+            'smtp_auto_tls', 'smtp_auth', 'smtp_username', 'notify_email', 'self_recovery', 'recovery_minutes',
+        )
+
+    def clean(self):
+        cleaned = super().clean()
+        if cleaned.get('smtp_server') and not cleaned.get('mail_from_address'):
+            self.add_error('mail_from_address', _('A sender address is needed together with the SMTP server.'))
+        if cleaned.get('smtp_auth') and not cleaned.get('smtp_username'):
+            self.add_error('smtp_username', _('Enter the SMTP user.'))
+        if cleaned.get('smtp_auth') and not cleaned.get('new_smtp_password') and not self.instance.smtp_password:
+            self.add_error('new_smtp_password', _('Enter the SMTP password.'))
+        return cleaned
+
+
+class DomainForm(forms.Form):
+    domain = forms.CharField(label=_('Domain'), max_length=253,
+                             widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'firma.sk'}))
 
 
 class PinSettingsForm(_StyledModelForm):

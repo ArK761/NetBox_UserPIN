@@ -1,4 +1,5 @@
 import segno
+from django.conf import settings as django_settings
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
@@ -11,14 +12,14 @@ from django.utils.translation import gettext as _
 from django.views import View
 from utilities.request import safe_for_redirect
 
-from . import approvals, crypto, delegation, service
+from . import approvals, crypto, delegation, mail, service
 from .forms import (
-    ApprovalForm, BackupCodesForm, BreakGlassForm, ChangePinForm, DelegateForm, MailSettingsForm, OtpForm, PinOtpForm, PinSettingsForm, RecoveryForm,
+    ApprovalForm, BackupCodesForm, BreakGlassForm, ChangePinForm, DelegateForm, DomainForm, MailSettingsForm, OtpForm, PinOtpForm, PinSettingsForm, RecoveryForm,
     ResetConfirmForm, SetPinForm, TestMailForm, UnlockForm,
 )
 from .mixins import PinRequiredMixin, not_allowed_response, step_up_gate
 from .models import (
-    ApprovalAction, ApprovalRequest, ApprovalStatus, PinAccess, PinAccessMode, PinDelegate, PinEvent,
+    AllowedDomain, ApprovalAction, ApprovalRequest, ApprovalStatus, PinAccess, PinAccessMode, PinDelegate, PinEvent,
     PinEventAction, PinSettings, UserPin,
 )
 
@@ -58,19 +59,30 @@ def _verify_error(form, result, pin_field='pin', otp_field='otp'):
         form.add_error(None, _('No PIN is set.'))
 
 
+def _describe(name, value):
+    return f'{name} = ***' if 'password' in name else f'{name} = {value!r}'
+
+
 def _save_settings(request, form, action, redirect_name):
     """Save a settings form directly, or create a four-eyes request when required."""
-    changes = {name: form.cleaned_data.get(name) for name in form.changed_data}
+    changes = {name: form.cleaned_data.get(name) for name in form.changed_data if name != 'new_smtp_password'}
+    if form.cleaned_data.get('new_smtp_password'):
+        # never kept in plain text – not even inside a waiting four-eyes request
+        changes['smtp_password'] = mail.encrypt_password(form.cleaned_data['new_smtp_password'])
     if not changes:
         messages.info(request, _('No changes.'))
         return redirect(redirect_name)
     if approvals.required_for(action):
         summary = ('Mail settings: ' if action == ApprovalAction.MAIL_SETTINGS else 'Settings: ') + ', '.join(
-            f'{name} = {value!r}' for name, value in changes.items())
+            _describe(name, value) for name, value in changes.items())
         return _four_eyes(request, action, {'changes': changes}, summary)
-    detail = '\n'.join(f'{n}: {form.initial.get(n)!r} -> {v!r}' for n, v in changes.items())
-    form.save()
-    service.log_event(PinEventAction.SETTINGS_CHANGED, actor=request.user, request=request, detail=detail)
+    settings = PinSettings.load()
+    detail = []
+    for name, value in changes.items():
+        detail.append(f'{name}: changed' if 'password' in name else f'{name}: {getattr(settings, name)!r} -> {value!r}')
+        setattr(settings, name, value)
+    settings.save()
+    service.log_event(PinEventAction.SETTINGS_CHANGED, actor=request.user, request=request, detail='\n'.join(detail))
     messages.success(request, _('Settings saved.'))
     return redirect(redirect_name)
 
@@ -671,14 +683,23 @@ class MailSettingsView(AdminViewMixin, View):
         users = get_user_model().objects.filter(is_active=True).exclude(email='').select_related('user_pin')
         return [u for u in users if service.email_status(u, settings) == 'ok' and service.is_allowed(u, settings)]
 
-    def _render(self, request, form, test_form):
+    def _render(self, request, form=None, test_form=None, domain_form=None, verify=None):
+        settings = PinSettings.load()
+        can_edit = request.user.has_perm('netbox_user_pin.change_pinsettings')
+        netbox_email = getattr(django_settings, 'EMAIL', {}) or {}
         return render(request, self.template_name, {
-            'form': form,
-            'test_form': test_form,
-            'can_edit': request.user.has_perm('netbox_user_pin.change_pinsettings'),
-            'email_configured': service.email_configured(),
-            'email_server': (getattr(service.django_settings, 'EMAIL', {}) or {}).get('SERVER', ''),
-            'from_email': (getattr(service.django_settings, 'EMAIL', {}) or {}).get('FROM_EMAIL', ''),
+            'form': form or MailSettingsForm(instance=settings, read_only=not can_edit),
+            'test_form': test_form or self._test_form(),
+            'domain_form': domain_form or DomainForm(),
+            'domains': AllowedDomain.objects.all(),
+            'verify': verify,
+            'can_edit': can_edit,
+            'settings': settings,
+            'mail_source': mail.source(settings),
+            'password_set': bool(settings.smtp_password),
+            'netbox_server': netbox_email.get('SERVER', ''),
+            'netbox_from': netbox_email.get('FROM_EMAIL', ''),
+            'sender': mail.sender(settings),
             'step_up_active': service.has_step_up(request),
             'step_up_left': service.step_up_seconds_left(request),
         })
@@ -692,35 +713,86 @@ class MailSettingsView(AdminViewMixin, View):
         return TestMailForm(data, eligible=eligible, initial=initial)
 
     def get(self, request):
-        can_edit = request.user.has_perm('netbox_user_pin.change_pinsettings')
-        form = MailSettingsForm(instance=PinSettings.load(), read_only=not can_edit)
-        return self._render(request, form, self._test_form())
+        return self._render(request)
 
     def post(self, request):
         if not request.user.has_perm('netbox_user_pin.change_pinsettings'):
             raise PermissionDenied
         if (response := step_up_gate(request)) is not None:
             return response
-        if request.POST.get('action') == 'test-mail':
-            test_form = self._test_form(request.POST)
-            if test_form.is_valid():
-                recipient = test_form.cleaned_data['recipient']
-                sent = service.send_user_mail(
-                    recipient, _('Test e-mail'),
-                    _('This is a test e-mail from NetBox User PIN, sent by {actor}.').format(actor=request.user),
-                    request=request,
-                )
-                if sent:
-                    messages.success(request, _('Test e-mail sent to {email}.').format(email=recipient.email))
-                else:
-                    messages.error(request, _('The test e-mail could not be sent. Check the mail server.'))
-                return redirect('plugins:netbox_user_pin:mail')
-            form = MailSettingsForm(instance=PinSettings.load())
-            return self._render(request, form, test_form)
+        action = request.POST.get('action', 'save')
+        handler = getattr(self, f'_post_{action.replace("-", "_")}', None)
+        if handler is None:
+            raise PermissionDenied
+        return handler(request)
+
+    def _post_save(self, request):
         form = MailSettingsForm(request.POST, instance=PinSettings.load())
         if form.is_valid():
             return _save_settings(request, form, ApprovalAction.MAIL_SETTINGS, 'plugins:netbox_user_pin:mail')
-        return self._render(request, form, self._test_form())
+        return self._render(request, form=form)
+
+    def _post_test_connection(self, request):
+        ok, text = mail.test_connection(PinSettings.load())
+        (messages.success if ok else messages.error)(request, text)
+        return redirect('plugins:netbox_user_pin:mail')
+
+    def _post_test_mail(self, request):
+        test_form = self._test_form(request.POST)
+        if not test_form.is_valid():
+            return self._render(request, test_form=test_form)
+        recipient = test_form.cleaned_data['recipient']
+        if service.send_user_mail(recipient, _('Test e-mail'),
+                                  _('This is a test e-mail from NetBox User PIN, sent by {actor}.').format(
+                                      actor=request.user), request=request):
+            messages.success(request, _('Test e-mail sent to {email}.').format(email=recipient.email))
+        else:
+            messages.error(request, _('The test e-mail could not be sent – see the audit log for the error.'))
+        return redirect('plugins:netbox_user_pin:mail')
+
+    def _post_add_domain(self, request):
+        domain_form = DomainForm(request.POST)
+        if not domain_form.is_valid():
+            return self._render(request, domain_form=domain_form)
+        domain = service.normalize_domain(domain_form.cleaned_data['domain'])
+        if approvals.required_for(ApprovalAction.DOMAIN_ADD):
+            return _four_eyes(request, ApprovalAction.DOMAIN_ADD, {'domain': domain},
+                              f'Add allowed e-mail domain {domain}')
+        try:
+            service.add_domain(domain, request.user, request=request)
+        except ValidationError as exc:
+            domain_form.add_error('domain', exc)
+            return self._render(request, domain_form=domain_form)
+        messages.success(request, _('Domain {domain} added. Verify it before e-mails are sent to it.').format(
+            domain=domain))
+        return redirect('plugins:netbox_user_pin:mail')
+
+    def _post_remove_domain(self, request):
+        domain = get_object_or_404(AllowedDomain, pk=request.POST.get('pk'))
+        service.remove_domain(domain, request.user, request=request)
+        messages.success(request, _('Domain {domain} removed.').format(domain=domain))
+        return redirect('plugins:netbox_user_pin:mail')
+
+    def _post_send_domain_code(self, request):
+        domain = get_object_or_404(AllowedDomain, pk=request.POST.get('pk'))
+        try:
+            service.send_domain_code(domain, request.POST.get('address'), request.user, request=request)
+        except ValidationError as exc:
+            messages.error(request, ' '.join(exc.messages))
+        else:
+            messages.success(request, _('A verification code was sent to {address}.').format(
+                address=request.POST.get('address')))
+        return redirect('plugins:netbox_user_pin:mail')
+
+    def _post_verify_domain(self, request):
+        domain = get_object_or_404(AllowedDomain, pk=request.POST.get('pk'))
+        try:
+            service.verify_domain(domain, request.POST.get('code'), request.user, request=request)
+        except ValidationError as exc:
+            messages.error(request, ' '.join(exc.messages))
+        else:
+            messages.success(request, _('Domain {domain} is verified.').format(domain=domain))
+        return redirect('plugins:netbox_user_pin:mail')
 
 
 class DelegateListView(AdminViewMixin, View):

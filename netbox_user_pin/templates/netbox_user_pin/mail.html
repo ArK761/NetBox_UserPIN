@@ -6,15 +6,27 @@
 <div class="row">
   <div class="col-12 col-lg-7">
     {% if not can_edit %}<div class="alert alert-info"><div>Read-only view.</div></div>{% endif %}
-    <form method="post" class="object-edit">
-      {% csrf_token %}
+    <form method="post" class="object-edit" autocomplete="off">
+      {% csrf_token %}<input type="hidden" name="action" value="save">
       <div class="field-group mb-4">
-        <h2 class="mb-3">Recipients</h2>
-        {% render_field form.allowed_email_domains %}
-        {% render_field form.notify_email %}
+        <h2 class="mb-3">E-mail settings</h2>
+        {% render_field form.mail_from_name %}
+        {% render_field form.mail_from_address %}
+        {% render_field form.smtp_server %}
+        {% render_field form.smtp_port %}
+        {% render_field form.smtp_timeout %}
+        {% render_field form.smtp_security %}
+        {% render_field form.smtp_auto_tls %}
+        {% render_field form.smtp_auth %}
+        <div id="smtp-auth-fields">
+          {% render_field form.smtp_username %}
+          {% render_field form.new_smtp_password %}
+          <div class="row mb-3"><div class="offset-sm-3 col small text-secondary">Password: {% if password_set %}<span class="badge text-bg-green">set</span>{% else %}<span class="badge text-bg-secondary">not set</span>{% endif %}</div></div>
+        </div>
       </div>
       <div class="field-group mb-4">
-        <h2 class="mb-3">Forgotten PIN (self-service)</h2>
+        <h2 class="mb-3">Notifications &amp; forgotten PIN</h2>
+        {% render_field form.notify_email %}
         {% render_field form.self_recovery %}
         {% render_field form.recovery_minutes %}
       </div>
@@ -23,13 +35,68 @@
   </div>
   <div class="col-12 col-lg-5">
     <div class="card">
-      <h2 class="card-header">Mail server (NetBox configuration)</h2>
+      <h2 class="card-header">Status</h2>
       <table class="table attr-table">
-        <tr><th scope="row">Status</th><td>{% if email_configured %}<span class="badge text-bg-green">configured</span>{% else %}<span class="badge text-bg-red">not configured</span>{% endif %}</td></tr>
-        <tr><th scope="row">Server</th><td>{{ email_server|default:"—" }}</td></tr>
-        <tr><th scope="row">From</th><td>{{ from_email|default:"—" }}</td></tr>
+        <tr><th scope="row">Used</th><td>
+          {% if mail_source == 'plugin' %}<span class="badge text-bg-green">SMTP from this page</span>
+          {% elif mail_source == 'netbox' %}<span class="badge text-bg-blue">NetBox configuration</span>
+          {% else %}<span class="badge text-bg-red">not configured</span>{% endif %}</td></tr>
+        {% if mail_source == 'plugin' %}
+          <tr><th scope="row">Server</th><td>{{ settings.smtp_server }}:{{ settings.smtp_port }} ({{ settings.get_smtp_security_display }})</td></tr>
+          <tr><th scope="row">Account</th><td>{% if settings.smtp_auth %}{{ settings.smtp_username }}{% else %}no authentication{% endif %}</td></tr>
+        {% else %}
+          <tr><th scope="row">NetBox server</th><td>{{ netbox_server|default:"—" }}</td></tr>
+        {% endif %}
+        <tr><th scope="row">Sender</th><td>{{ sender|default:"—" }}</td></tr>
       </table>
-      <div class="card-body small text-secondary">Set in <code>configuration.py</code> → <code>EMAIL = {'SERVER': ..., 'FROM_EMAIL': ...}</code>.</div>
+      {% if can_edit and mail_source == 'plugin' %}
+        <div class="card-footer text-end">
+          <form method="post">{% csrf_token %}<input type="hidden" name="action" value="test-connection">
+            <button type="submit" class="btn btn-outline-primary"><i class="mdi mdi-lan-connect"></i> Test connection</button></form>
+        </div>
+      {% endif %}
+    </div>
+    <div class="card">
+      <h2 class="card-header">Allowed e-mail domains</h2>
+      <table class="table">
+        {% for d in domains %}
+          <tr>
+            <td><strong>{{ d.domain }}</strong><br>
+              {% if d.is_verified %}<span class="badge text-bg-green">verified</span> <span class="small text-secondary">{{ d.verified|date:"Y-m-d" }} by {{ d.verified_by }} via {{ d.verified_email }}</span>
+              {% else %}<span class="badge text-bg-yellow">not verified – no e-mails yet</span>{% endif %}
+            </td>
+            <td class="text-end">
+              {% if can_edit %}
+                <form method="post" class="d-inline" onsubmit="return confirm('Remove {{ d.domain|escapejs }}?');">{% csrf_token %}<input type="hidden" name="action" value="remove-domain"><input type="hidden" name="pk" value="{{ d.pk }}">
+                  <button type="submit" class="btn btn-sm btn-outline-danger"><i class="mdi mdi-delete"></i></button></form>
+              {% endif %}
+            </td>
+          </tr>
+          {% if can_edit and not d.is_verified %}
+            <tr><td colspan="2" class="pt-0">
+              <form method="post" class="input-group input-group-sm mb-2">{% csrf_token %}<input type="hidden" name="action" value="send-domain-code"><input type="hidden" name="pk" value="{{ d.pk }}">
+                <input type="email" name="address" class="form-control" placeholder="someone@{{ d.domain }}" required>
+                <button type="submit" class="btn btn-outline-primary">{% if d.code_pending %}Send again{% else %}Send code{% endif %}</button></form>
+              {% if d.code_pending %}
+                <form method="post" class="input-group input-group-sm">{% csrf_token %}<input type="hidden" name="action" value="verify-domain"><input type="hidden" name="pk" value="{{ d.pk }}">
+                  <input type="text" name="code" class="form-control" placeholder="Code sent to {{ d.code_email }}" inputmode="numeric" autocomplete="off" required>
+                  <button type="submit" class="btn btn-primary">Verify</button></form>
+              {% endif %}
+            </td></tr>
+          {% endif %}
+        {% empty %}
+          <tr><td class="text-secondary">No domain – no e-mails are sent.</td></tr>
+        {% endfor %}
+      </table>
+      {% if can_edit %}
+        <div class="card-footer">
+          <form method="post" class="input-group">{% csrf_token %}<input type="hidden" name="action" value="add-domain">
+            {{ domain_form.domain }}
+            <button type="submit" class="btn btn-outline-primary"><i class="mdi mdi-plus"></i> Add</button></form>
+          {% if domain_form.errors %}<div class="text-danger small mt-1">{{ domain_form.errors.domain|join:" " }}</div>{% endif %}
+          <div class="small text-secondary mt-1">A domain is used only after a code sent to an address in it was entered.</div>
+        </div>
+      {% endif %}
     </div>
     <div class="card">
       <h2 class="card-header">Send test e-mail</h2>
@@ -41,10 +108,18 @@
             {% if can_edit %}<div class="text-end"><button type="submit" class="btn btn-outline-primary"><i class="mdi mdi-email-check"></i> Send test e-mail</button></div>{% endif %}
           </form>
         {% else %}
-          <p class="text-secondary mb-0">No eligible recipient: a user must be permitted to use a PIN and have an e-mail in an allowed domain.</p>
+          <p class="text-secondary mb-0">No eligible recipient: a user must be permitted to use a PIN and have an e-mail in a verified domain.</p>
         {% endif %}
       </div>
     </div>
   </div>
 </div>
+<script>
+(function () {
+  var auth = document.getElementById('id_smtp_auth'), box = document.getElementById('smtp-auth-fields');
+  if (!auth || !box) return;
+  function sync() { box.style.display = auth.checked ? '' : 'none'; }
+  auth.addEventListener('change', sync); sync();
+})();
+</script>
 {% endblock %}

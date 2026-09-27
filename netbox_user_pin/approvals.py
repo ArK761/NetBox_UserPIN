@@ -45,6 +45,7 @@ CATEGORY = {
     ApprovalAction.SETTINGS: 'four_eyes_settings',
     ApprovalAction.MAIL_SETTINGS: 'four_eyes_settings',
     ApprovalAction.ACCESS: 'four_eyes_access',
+    ApprovalAction.DOMAIN_ADD: 'four_eyes_settings',
 }
 
 
@@ -261,7 +262,7 @@ def _settings(payload, actor, request):
     for name, value in payload['changes'].items():
         old = getattr(settings, name)
         setattr(settings, name, value)
-        changes.append(f'{name}: {old!r} -> {value!r}')
+        changes.append(f'{name}: changed' if 'password' in name else f'{name}: {old!r} -> {value!r}')
     settings.full_clean()
     settings.save()
     service.log_event(PinEventAction.SETTINGS_CHANGED, actor=actor, request=request, detail='\n'.join(changes))
@@ -274,7 +275,13 @@ def _access(payload, actor, request):
     return f'{user}: {PinAccess(payload["access"]).label}'
 
 
+def _domain_add(payload, actor, request):
+    domain = service.add_domain(payload['domain'], actor, request=request)
+    return f'{domain} added (must be verified before use)'
+
+
 EXECUTORS = {
+    ApprovalAction.DOMAIN_ADD: _domain_add,
     ApprovalAction.DELEGATE_ADD: _delegate_add,
     ApprovalAction.DELEGATE_REMOVE: _delegate_remove,
     ApprovalAction.DELEGATE_TOGGLE: _delegate_toggle,

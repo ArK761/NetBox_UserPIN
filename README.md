@@ -23,6 +23,9 @@ sensitive pages ("enter your PIN to continue"), so the PIN logic exists only onc
 - **Backup codes** stored encrypted; *Show backup codes* after PIN + 2FA or PIN + an e-mailed verification code
   (the codes themselves are never e-mailed)
 - Emergency server command for a 2FA reset shown at each account
+- **Mail** page: own SMTP server (server, port, encryption off / STARTTLS / SSL, automatic TLS, SMTP
+  authentication with a service account; password encrypted, never shown), connection test; **allowed e-mail
+  domains must be verified** with a code sent to an address in the domain before any e-mail goes there
 - Separate **Mail** page: allowed domains, notifications, self-service recovery, test e-mail to a chosen user
 - Append-only **audit log** of every PIN event (never contains a PIN, hash or code)
 - Settings page in the UI, stable API + signals for other plugins
@@ -60,7 +63,9 @@ PLUGINS_CONFIG = {
 > Keep an **offline backup** of the key and never put it into the same backup as the database.
 > If the key is lost no other data is lost – users simply set new PINs.
 
-For e-mails (recovery codes, notifications) NetBox's own `EMAIL` setting must be configured.
+E-mails (recovery codes, notifications) are sent through the SMTP server configured on the **Mail** page
+(service account set by the administrator, password stored encrypted). If no server is set there, NetBox's own
+`EMAIL` setting is used.
 
 Then:
 
@@ -116,7 +121,7 @@ Delegates are stored by the plugin and synchronised into NetBox object permissio
 | Max failed attempts / lockout | 5 / 30 min (PIN and 2FA failures count together) |
 | PIN + 2FA for administrative actions / window | on / 5 min |
 | Self-service recovery (e-mail code + 2FA) / code validity | on / 15 min |
-| Allowed e-mail domains | empty (= no e-mails until set) |
+| Allowed e-mail domains (Mail page) | none – add and **verify** each domain (code sent to an address in it) |
 | Security notifications by e-mail | on |
 
 ### Administrator resets (no meeting needed)
