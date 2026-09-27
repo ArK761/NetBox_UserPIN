@@ -20,12 +20,13 @@ source /opt/netbox/venv/bin/activate
 pip install git+https://github.com/ArK761/NetBox_UserPIN.git
 ```
 
-Generate an encryption key:
+Generate an encryption key (the plugin is not active yet, so use plain Python):
 
 ```bash
-cd /opt/netbox/netbox
-python manage.py userpin_generate_key
+python3 -c "import base64,os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"
 ```
+
+(Once the plugin is running, `python manage.py userpin_generate_key` does the same.)
 
 Add to `configuration.py`:
 
