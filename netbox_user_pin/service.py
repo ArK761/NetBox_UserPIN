@@ -25,7 +25,7 @@ from netbox.plugins import get_plugin_config
 from utilities.request import get_client_ip
 
 from . import crypto, signals
-from .models import PinEvent, PinEventAction, PinScopeMode, PinSettings, UserPin
+from .models import PinAccess, PinAccessMode, PinEvent, PinEventAction, PinScopeMode, PinSettings, UserPin
 from .policy import validate_pin
 
 __all__ = (
@@ -36,11 +36,13 @@ __all__ = (
     'clear_lockout',
     'get_settings',
     'has_pin',
+    'is_allowed',
     'is_unlocked',
     'lock',
     'log_event',
     'pin_expired',
     'reset_pin',
+    'set_access',
     'set_pin',
     'unlock',
     'unlocked_scopes',
@@ -59,6 +61,7 @@ class VerifyStatus(enum.Enum):
     WRONG = 'wrong'
     LOCKED_OUT = 'locked_out'
     NO_PIN = 'no_pin'
+    NOT_ALLOWED = 'not_allowed'
 
 
 @dataclass(frozen=True)
@@ -149,6 +152,24 @@ def has_pin(user):
     return bool(user_pin and user_pin.is_set)
 
 
+def is_allowed(user, settings=None):
+    """True if the administrator permits ``user`` to use a PIN (see PinSettings.access_mode)."""
+    if _user_or_none(user) is None:
+        return False
+    settings = settings or get_settings()
+    user_pin = _get_pin(user)
+    access = user_pin.access if user_pin else PinAccess.DEFAULT
+    if access == PinAccess.DENIED:
+        return False
+    if access == PinAccess.ALLOWED:
+        return True
+    return settings.access_mode == PinAccessMode.ALL
+
+
+def _not_allowed_error():
+    return ValidationError(_('You are not permitted to use a PIN. Ask an administrator.'), code='not_allowed')
+
+
 def pin_expired(user, settings=None):
     """True when the PIN is older than the configured maximum age and must be changed."""
     settings = settings or get_settings()
@@ -163,6 +184,9 @@ def set_pin(user, pin, request=None):
     Set the PIN of a user who has none (first time or after an admin reset). Raises ValidationError.
     """
     settings = get_settings()
+    if not is_allowed(user, settings):
+        log_event(PinEventAction.NOT_ALLOWED, user=user, request=request, detail='set PIN')
+        raise _not_allowed_error()
     validate_pin(pin, settings)
     with transaction.atomic():
         user_pin, _created = UserPin.objects.select_for_update().get_or_create(user=user)
@@ -189,6 +213,8 @@ def change_pin(user, current_pin, new_pin, request=None):
     settings = get_settings()
     result = verify_pin(user, current_pin, request=request, scope='change-pin')
     if not result:
+        if result.status is VerifyStatus.NOT_ALLOWED:
+            raise _not_allowed_error()
         if result.status is VerifyStatus.LOCKED_OUT:
             raise ValidationError(_('Too many failed attempts. Try again later.'), code='locked_out')
         raise ValidationError(_('The current PIN is not correct.'), code='wrong')
@@ -215,6 +241,9 @@ def verify_pin(user, pin, request=None, scope=''):
     settings = get_settings()
     if _user_or_none(user) is None:
         return VerifyResult(VerifyStatus.NO_PIN)
+    if not is_allowed(user, settings):
+        log_event(PinEventAction.NOT_ALLOWED, user=user, request=request, scope=scope)
+        return VerifyResult(VerifyStatus.NOT_ALLOWED)
     decryption_error = None
     with transaction.atomic():
         user_pin = UserPin.objects.select_for_update().filter(user=user).first()
@@ -323,7 +352,7 @@ def is_unlocked(request, scope=None, touch=True):
     user_pin = _get_pin(user)
     if not user_pin or not user_pin.is_set or data.get('v') != user_pin.version:
         return False
-    if pin_expired(user, settings):
+    if pin_expired(user, settings) or not is_allowed(user, settings):
         return False
     key = _session_key_for(scope, settings)
     expires = data.get('unlocks', {}).get(key)
@@ -380,6 +409,18 @@ def reset_pin(user, actor, request=None):
         user_pin.save()
     log_event(PinEventAction.RESET, user=user, actor=actor, request=request)
     signals.pin_reset.send(sender=UserPin, user=user, actor=actor, request=request, scope='')
+
+
+def set_access(user, access, actor, request=None):
+    """Allow / deny / reset to default whether ``user`` may use a PIN."""
+    if access not in PinAccess.values:
+        raise ValueError(f'Invalid access value: {access}')
+    with transaction.atomic():
+        user_pin, _created = UserPin.objects.select_for_update().get_or_create(user=user)
+        old = user_pin.access
+        user_pin.access = access
+        user_pin.save()
+    log_event(PinEventAction.ACCESS_CHANGED, user=user, actor=actor, request=request, detail=f'{old} -> {access}')
 
 
 def clear_lockout(user, actor, request=None):

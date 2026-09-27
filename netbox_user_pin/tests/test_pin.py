@@ -7,7 +7,9 @@ from django.urls import reverse
 from django.utils import timezone
 
 from netbox_user_pin import crypto, service
-from netbox_user_pin.models import PinEvent, PinEventAction, PinScopeMode, PinSettings, UserPin
+from netbox_user_pin.models import (
+    PinAccess, PinAccessMode, PinEvent, PinEventAction, PinScopeMode, PinSettings, UserPin,
+)
 from netbox_user_pin.policy import is_weak_pin
 
 User = get_user_model()
@@ -260,7 +262,7 @@ class ViewTest(TestCase):
         self.assertFalse(service.has_pin(self.user))
 
         data = {
-            'pin_length': 8, 'block_weak_pins': 'on', 'blocked_pins': '', 'max_age_days': 0,
+            'access_mode': 'all', 'pin_length': 8, 'block_weak_pins': 'on', 'blocked_pins': '', 'max_age_days': 0,
             'unlock_minutes': 10, 'sliding_unlock': 'on', 'scope_mode': 'global',
             'max_attempts': 5, 'lockout_minutes': 30,
         }
@@ -317,3 +319,43 @@ class KeyFormatTest(TestCase):
                 else:
                     with self.assertRaises(ImproperlyConfigured):
                         crypto.validate_configuration()
+
+
+class AccessTest(TestCase):
+
+    def setUp(self):
+        self.user = User.objects.create_user('dave', password='pw')
+        self.admin = User.objects.create_superuser('boss', password='pw')
+
+    def test_denied_user(self):
+        service.set_pin(self.user, GOOD_PIN)
+        service.set_access(self.user, PinAccess.DENIED, actor=self.admin)
+        self.assertFalse(service.is_allowed(self.user))
+        self.assertEqual(service.verify_pin(self.user, GOOD_PIN).status, service.VerifyStatus.NOT_ALLOWED)
+        self.client.force_login(self.user)
+        self.assertEqual(self.client.get(reverse('plugins:netbox_user_pin:test')).status_code, 403)
+        self.assertEqual(self.client.get(reverse('plugins:netbox_user_pin:unlock')).status_code, 403)
+        event = PinEvent.objects.get(action=PinEventAction.ACCESS_CHANGED)
+        self.assertEqual((event.username, event.actor_username, event.detail), ('dave', 'boss', 'default -> denied'))
+
+    def test_allowed_only_mode(self):
+        settings = PinSettings.load()
+        settings.access_mode = PinAccessMode.ALLOWED_ONLY
+        settings.save()
+        with self.assertRaises(ValidationError):
+            service.set_pin(self.user, GOOD_PIN)
+        service.set_access(self.user, PinAccess.ALLOWED, actor=self.admin)
+        service.set_pin(self.user, GOOD_PIN)
+        self.assertTrue(service.verify_pin(self.user, GOOD_PIN))
+
+    def test_admin_actions_and_list(self):
+        self.client.force_login(self.admin)
+        url = reverse('plugins:netbox_user_pin:user_action', kwargs={'pk': self.user.pk, 'action': 'deny'})
+        self.client.post(url)
+        self.assertFalse(service.is_allowed(self.user))
+        response = self.client.get(reverse('plugins:netbox_user_pin:user_list') + '?status=not_allowed')
+        self.assertContains(response, 'dave')
+        self.assertEqual(response.context['summary']['not_allowed'], 1)
+        url = reverse('plugins:netbox_user_pin:user_action', kwargs={'pk': self.user.pk, 'action': 'default'})
+        self.client.post(url)
+        self.assertTrue(service.is_allowed(self.user))

@@ -69,7 +69,7 @@ Everything else is configured in the UI: **User PIN → Settings**.
 |---|---|---|
 | My PIN | every user | status, set / change PIN, lock now, own recent activity |
 | Test unlock | every user | a protected page to try the flow |
-| Users | `view_userpin` / `change_userpin` | PIN status of all users, reset PIN, clear lockout |
+| Users | `view_userpin` / `change_userpin` | summary + PIN status of all users, allow / deny PIN use, reset PIN, clear lockout |
 | Audit log | `view_pinevent` | all PIN events, filter by user and event |
 | Settings | `change_pinsettings` | PIN policy, unlock time, scope mode, lockout, key fingerprint |
 
@@ -79,6 +79,7 @@ Grant the permissions with regular NetBox object permissions (superusers have al
 
 | Setting | Default |
 |---|---|
+| Who may use a PIN | all users except denied (or: only explicitly allowed users) |
 | PIN length | 6 digits |
 | Block weak PINs / additional blocked PINs | on / empty |
 | PIN max age | 0 (never expires) |

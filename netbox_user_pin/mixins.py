@@ -19,12 +19,14 @@ from functools import wraps
 from urllib.parse import urlencode
 
 from django.http import HttpResponse, HttpResponseRedirect
+from django.shortcuts import render
 from django.urls import reverse
 
 from . import service
 
 __all__ = (
     'PinRequiredMixin',
+    'not_allowed_response',
     'pin_gate',
     'pin_required',
 )
@@ -38,6 +40,10 @@ def _redirect(request, url):
     return HttpResponseRedirect(url)
 
 
+def not_allowed_response(request):
+    return render(request, 'netbox_user_pin/not_allowed.html', status=403)
+
+
 def pin_gate(request, scope=None):
     """
     Return a redirect response when the PIN still has to be set, changed or entered for ``scope``;
@@ -46,6 +52,8 @@ def pin_gate(request, scope=None):
     user = getattr(request, 'user', None)
     if user is None or not user.is_authenticated:
         return None  # let the regular login handling deal with it
+    if not service.is_allowed(user):
+        return not_allowed_response(request)
     params = {'next': request.get_full_path()}
     if scope:
         params['scope'] = scope

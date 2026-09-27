@@ -6,6 +6,8 @@ from django.utils.translation import gettext_lazy as _
 
 __all__ = (
     'PinEvent',
+    'PinAccess',
+    'PinAccessMode',
     'PinEventAction',
     'PinScopeMode',
     'PinSettings',
@@ -18,10 +20,28 @@ class PinScopeMode(models.TextChoices):
     PER_SCOPE = 'per_scope', _('Separate unlock per scope (plugin / area)')
 
 
+class PinAccessMode(models.TextChoices):
+    ALL = 'all', _('All users may use a PIN (except denied users)')
+    ALLOWED_ONLY = 'allowed_only', _('Only explicitly allowed users may use a PIN')
+
+
+class PinAccess(models.TextChoices):
+    DEFAULT = 'default', _('Default')
+    ALLOWED = 'allowed', _('Allowed')
+    DENIED = 'denied', _('Denied')
+
+
 class PinSettings(models.Model):
     """
     Singleton holding the PIN policy. Edited in the UI by users with the change_pinsettings permission.
     """
+    access_mode = models.CharField(
+        verbose_name=_('Who may use a PIN'),
+        max_length=20,
+        choices=PinAccessMode.choices,
+        default=PinAccessMode.ALL,
+        help_text=_('Per-user Allow / Deny is set on the Users page.'),
+    )
     pin_length = models.PositiveSmallIntegerField(
         verbose_name=_('PIN length'),
         default=6,
@@ -107,6 +127,12 @@ class UserPin(models.Model):
         default=0,
         help_text='Incremented on every change/reset; invalidates existing unlocks.',
     )
+    access = models.CharField(
+        max_length=20,
+        choices=PinAccess.choices,
+        default=PinAccess.DEFAULT,
+        help_text='Administrator decision whether this user may use a PIN.',
+    )
     failed_attempts = models.PositiveSmallIntegerField(default=0)
     locked_until = models.DateTimeField(null=True, blank=True)
     changed = models.DateTimeField(null=True, blank=True)
@@ -144,6 +170,8 @@ class PinEventAction(models.TextChoices):
     LOCKED_OUT = 'locked_out', _('Locked out after failed attempts')
     REJECTED_LOCKED = 'rejected_locked', _('Attempt while locked out')
     LOCKOUT_CLEARED = 'lockout_cleared', _('Lockout cleared by administrator')
+    ACCESS_CHANGED = 'access_changed', _('PIN access changed by administrator')
+    NOT_ALLOWED = 'not_allowed', _('Attempt by a user not allowed to use a PIN')
     LOCKED = 'locked', _('Locked manually')
     SETTINGS_CHANGED = 'settings_changed', _('Settings changed')
     KEY_ROTATED = 'key_rotated', _('Encryption key rotated')

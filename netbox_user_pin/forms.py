@@ -62,7 +62,7 @@ class PinSettingsForm(forms.ModelForm):
     class Meta:
         model = PinSettings
         fields = (
-            'pin_length', 'block_weak_pins', 'blocked_pins', 'max_age_days',
+            'access_mode', 'pin_length', 'block_weak_pins', 'blocked_pins', 'max_age_days',
             'unlock_minutes', 'sliding_unlock', 'scope_mode',
             'max_attempts', 'lockout_minutes',
         )

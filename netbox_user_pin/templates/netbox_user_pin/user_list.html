@@ -1,41 +1,77 @@
 {% extends 'generic/_base.html' %}
 {% block title %}User PINs{% endblock %}
 {% block content %}
+<div class="row row-cards mb-3">
+  <div class="col-6 col-lg"><a class="card card-link text-reset" href="?"><div class="card-body"><div class="text-secondary">Users</div><div class="h2 mb-0">{{ summary.total }}</div></div></a></div>
+  <div class="col-6 col-lg"><a class="card card-link text-reset" href="?status=with_pin"><div class="card-body"><div class="text-secondary">PIN active</div><div class="h2 mb-0 text-green">{{ summary.with_pin }}</div></div></a></div>
+  <div class="col-6 col-lg"><a class="card card-link text-reset" href="?status=without_pin"><div class="card-body"><div class="text-secondary">No PIN yet</div><div class="h2 mb-0 text-orange">{{ summary.without_pin }}</div></div></a></div>
+  <div class="col-6 col-lg"><a class="card card-link text-reset" href="?status=locked"><div class="card-body"><div class="text-secondary">Locked out</div><div class="h2 mb-0 text-red">{{ summary.locked }}</div></div></a></div>
+  <div class="col-6 col-lg"><a class="card card-link text-reset" href="?status=not_allowed"><div class="card-body"><div class="text-secondary">Not permitted</div><div class="h2 mb-0 text-secondary">{{ summary.not_allowed }}</div></div></a></div>
+</div>
 <form method="get" class="row g-2 mb-3">
   <div class="col-auto"><input type="text" name="q" value="{{ q }}" class="form-control" placeholder="Username"></div>
+  <div class="col-auto">
+    <select name="status" class="form-select">
+      <option value="">All users</option>
+      <option value="with_pin"{% if status == 'with_pin' %} selected{% endif %}>PIN active</option>
+      <option value="without_pin"{% if status == 'without_pin' %} selected{% endif %}>No PIN yet</option>
+      <option value="locked"{% if status == 'locked' %} selected{% endif %}>Locked out</option>
+      <option value="not_allowed"{% if status == 'not_allowed' %} selected{% endif %}>Not permitted</option>
+    </select>
+  </div>
   <div class="col-auto"><button class="btn btn-primary" type="submit"><i class="mdi mdi-magnify"></i> Search</button></div>
+  <div class="col text-end text-secondary small align-self-center">
+    Mode: <strong>{{ settings.get_access_mode_display }}</strong>
+  </div>
 </form>
 <div class="card">
   <table class="table table-hover">
-    <thead><tr><th>User</th><th>PIN</th><th>Last changed</th><th>Last used</th><th>Failed attempts</th><th>Lockout</th>{% if can_change %}<th></th>{% endif %}</tr></thead>
+    <thead><tr><th>User</th><th>Permitted</th><th>PIN</th><th>Last changed</th><th>Last used</th><th>Failed attempts</th><th>Lockout</th>{% if can_change %}<th></th>{% endif %}</tr></thead>
     <tbody>
       {% for row in rows %}
         <tr>
-          <td>{{ row.user.username }}{% if not row.user.is_active %} <span class="badge text-bg-secondary">inactive</span>{% endif %}</td>
-          <td>{% if row.pin.is_set %}<span class="badge text-bg-green">Set</span>{% else %}<span class="badge text-bg-orange">Not set</span>{% endif %}</td>
+          <td>{{ row.user.username }}{% if row.user == request.user %} <span class="badge text-bg-blue">you</span>{% endif %}{% if not row.user.is_active %} <span class="badge text-bg-secondary">inactive</span>{% endif %}</td>
+          <td>
+            {% if row.allowed %}<span class="badge text-bg-green">Yes</span>{% else %}<span class="badge text-bg-red">No</span>{% endif %}
+            {% if row.access != 'default' %}<span class="text-secondary small">({{ row.access }})</span>{% endif %}
+          </td>
+          <td>{% if row.is_set %}<span class="badge text-bg-green">Active</span>{% else %}<span class="badge text-bg-orange">Not set</span>{% endif %}</td>
           <td>{{ row.pin.changed|date:"Y-m-d H:i"|default:"—" }}</td>
           <td>{{ row.pin.last_verified|date:"Y-m-d H:i"|default:"—" }}</td>
           <td>{{ row.pin.failed_attempts|default:"0" }} / {{ settings.max_attempts }}</td>
-          <td>{% if row.pin.is_locked_out %}<span class="badge text-bg-red">until {{ row.pin.locked_until|date:"Y-m-d H:i" }}</span>{% else %}—{% endif %}</td>
+          <td>{% if row.locked %}<span class="badge text-bg-red">until {{ row.pin.locked_until|date:"Y-m-d H:i" }}</span>{% else %}—{% endif %}</td>
           {% if can_change %}
             <td class="text-end text-nowrap">
-              {% if row.pin.is_locked_out %}
-                <form method="post" action="{% url 'plugins:netbox_user_pin:user_action' pk=row.user.pk action='clear-lockout' %}" class="d-inline">
-                  {% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
-                  <button class="btn btn-sm btn-warning" type="submit"><i class="mdi mdi-lock-open"></i> Clear lockout</button>
-                </form>
+              {% url 'plugins:netbox_user_pin:user_action' pk=row.user.pk action='allow' as allow_url %}
+              {% url 'plugins:netbox_user_pin:user_action' pk=row.user.pk action='deny' as deny_url %}
+              {% url 'plugins:netbox_user_pin:user_action' pk=row.user.pk action='default' as default_url %}
+              {% url 'plugins:netbox_user_pin:user_action' pk=row.user.pk action='clear-lockout' as clear_url %}
+              {% url 'plugins:netbox_user_pin:user_action' pk=row.user.pk action='reset' as reset_url %}
+              {% if row.access != 'allowed' %}
+                <form method="post" action="{{ allow_url }}" class="d-inline">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
+                  <button class="btn btn-sm btn-outline-success" type="submit" title="Allow PIN"><i class="mdi mdi-check"></i> Allow</button></form>
               {% endif %}
-              {% if row.pin.is_set %}
-                <form method="post" action="{% url 'plugins:netbox_user_pin:user_action' pk=row.user.pk action='reset' %}" class="d-inline" onsubmit="return confirm('Reset the PIN of {{ row.user.username|escapejs }}? The user will have to set a new PIN.');">
-                  {% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
-                  <button class="btn btn-sm btn-danger" type="submit"><i class="mdi mdi-restore"></i> Reset PIN</button>
-                </form>
+              {% if row.access != 'denied' %}
+                <form method="post" action="{{ deny_url }}" class="d-inline">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
+                  <button class="btn btn-sm btn-outline-danger" type="submit" title="Deny PIN"><i class="mdi mdi-cancel"></i> Deny</button></form>
+              {% endif %}
+              {% if row.access != 'default' %}
+                <form method="post" action="{{ default_url }}" class="d-inline">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
+                  <button class="btn btn-sm btn-outline-secondary" type="submit" title="Back to default"><i class="mdi mdi-undo"></i></button></form>
+              {% endif %}
+              {% if row.locked %}
+                <form method="post" action="{{ clear_url }}" class="d-inline">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
+                  <button class="btn btn-sm btn-warning" type="submit"><i class="mdi mdi-lock-open"></i> Clear lockout</button></form>
+              {% endif %}
+              {% if row.is_set %}
+                <form method="post" action="{{ reset_url }}" class="d-inline" onsubmit="return confirm('Reset the PIN of {{ row.user.username|escapejs }}? The user will have to set a new PIN.');">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
+                  <button class="btn btn-sm btn-danger" type="submit"><i class="mdi mdi-restore"></i> Reset PIN</button></form>
               {% endif %}
             </td>
           {% endif %}
         </tr>
       {% empty %}
-        <tr><td colspan="7" class="text-secondary">No users.</td></tr>
+        <tr><td colspan="8" class="text-secondary">No users.</td></tr>
       {% endfor %}
     </tbody>
   </table>

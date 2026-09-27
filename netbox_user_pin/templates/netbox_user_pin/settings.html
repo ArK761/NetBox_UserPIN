@@ -8,6 +8,7 @@
       {% csrf_token %}
       <div class="field-group mb-4">
         <h2 class="mb-3">PIN policy</h2>
+        {% render_field form.access_mode %}
         {% render_field form.pin_length %}
         {% render_field form.block_weak_pins %}
         {% render_field form.blocked_pins %}

@@ -12,8 +12,8 @@ from utilities.request import safe_for_redirect
 
 from . import crypto, service
 from .forms import ChangePinForm, PinSettingsForm, SetPinForm, UnlockForm
-from .mixins import PinRequiredMixin
-from .models import PinEvent, PinEventAction, PinSettings, UserPin
+from .mixins import PinRequiredMixin, not_allowed_response
+from .models import PinAccess, PinAccessMode, PinEvent, PinEventAction, PinSettings, UserPin
 
 
 def _next_url(request, default='plugins:netbox_user_pin:my_pin'):
@@ -42,6 +42,7 @@ class MyPinView(LoginRequiredMixin, View):
             'settings': settings,
             'user_pin': user_pin,
             'has_pin': bool(user_pin and user_pin.is_set),
+            'allowed': service.is_allowed(request.user, settings),
             'expired': service.pin_expired(request.user, settings),
             'unlocked_scopes': service.unlocked_scopes(request),
             'recent_events': PinEvent.objects.filter(user=request.user)[:10],
@@ -53,6 +54,8 @@ class SetPinView(LoginRequiredMixin, View):
     template_name = 'netbox_user_pin/set_pin.html'
 
     def dispatch(self, request, *args, **kwargs):
+        if request.user.is_authenticated and not service.is_allowed(request.user):
+            return not_allowed_response(request)
         if request.user.is_authenticated and service.has_pin(request.user):
             return redirect(f"{reverse('plugins:netbox_user_pin:change_pin')}?{request.GET.urlencode()}")
         return super().dispatch(request, *args, **kwargs)
@@ -85,6 +88,8 @@ class ChangePinView(LoginRequiredMixin, View):
     template_name = 'netbox_user_pin/change_pin.html'
 
     def dispatch(self, request, *args, **kwargs):
+        if request.user.is_authenticated and not service.is_allowed(request.user):
+            return not_allowed_response(request)
         if request.user.is_authenticated and not service.has_pin(request.user):
             return redirect(f"{reverse('plugins:netbox_user_pin:set_pin')}?{request.GET.urlencode()}")
         return super().dispatch(request, *args, **kwargs)
@@ -118,6 +123,11 @@ class ChangePinView(LoginRequiredMixin, View):
 
 class UnlockView(LoginRequiredMixin, View):
     template_name = 'netbox_user_pin/unlock.html'
+
+    def dispatch(self, request, *args, **kwargs):
+        if request.user.is_authenticated and not service.is_allowed(request.user):
+            return not_allowed_response(request)
+        return super().dispatch(request, *args, **kwargs)
 
     def _context(self, request, form, **extra):
         user_pin = UserPin.objects.filter(user=request.user).first()
@@ -178,21 +188,52 @@ class UserPinListView(LoginRequiredMixin, PermissionRequiredMixin, View):
     raise_exception = True
 
     def get(self, request):
-        users = get_user_model().objects.select_related('user_pin').order_by('username')
-        q = request.GET.get('q', '').strip()
-        if q:
-            users = users.filter(username__icontains=q)
-        page = Paginator(users, 50).get_page(request.GET.get('page'))
+        settings = service.get_settings()
+        users = list(get_user_model().objects.select_related('user_pin').order_by('username'))
+        now = timezone.now()
         rows = []
-        for user in page:
+        for user in users:
             user_pin = getattr(user, 'user_pin', None)
-            rows.append({'user': user, 'pin': user_pin})
+            access = user_pin.access if user_pin else PinAccess.DEFAULT
+            allowed = access == PinAccess.ALLOWED or (
+                access == PinAccess.DEFAULT and settings.access_mode == PinAccessMode.ALL
+            )
+            rows.append({
+                'user': user,
+                'pin': user_pin,
+                'access': access,
+                'allowed': allowed,
+                'is_set': bool(user_pin and user_pin.is_set),
+                'locked': bool(user_pin and user_pin.locked_until and user_pin.locked_until > now),
+            })
+        summary = {
+            'total': len(rows),
+            'with_pin': sum(r['is_set'] for r in rows),
+            'without_pin': sum(not r['is_set'] and r['allowed'] for r in rows),
+            'locked': sum(r['locked'] for r in rows),
+            'not_allowed': sum(not r['allowed'] for r in rows),
+        }
+        q = request.GET.get('q', '').strip().lower()
+        status = request.GET.get('status', '')
+        filters = {
+            'with_pin': lambda r: r['is_set'],
+            'without_pin': lambda r: not r['is_set'] and r['allowed'],
+            'locked': lambda r: r['locked'],
+            'not_allowed': lambda r: not r['allowed'],
+        }
+        if q:
+            rows = [r for r in rows if q in r['user'].username.lower()]
+        if status in filters:
+            rows = [r for r in rows if filters[status](r)]
+        page = Paginator(rows, 50).get_page(request.GET.get('page'))
         return render(request, 'netbox_user_pin/user_list.html', {
             'page': page,
-            'rows': rows,
-            'q': q,
+            'rows': page.object_list,
+            'q': request.GET.get('q', ''),
+            'status': status,
+            'summary': summary,
             'can_change': request.user.has_perm('netbox_user_pin.change_userpin'),
-            'settings': service.get_settings(),
+            'settings': settings,
         })
 
 
@@ -206,6 +247,11 @@ class UserPinActionView(LoginRequiredMixin, PermissionRequiredMixin, View):
             service.reset_pin(user, actor=request.user, request=request)
             messages.success(request, _('PIN of {user} has been reset. The user must set a new PIN.').format(
                 user=user))
+        elif action in ('allow', 'deny', 'default'):
+            access = {'allow': PinAccess.ALLOWED, 'deny': PinAccess.DENIED, 'default': PinAccess.DEFAULT}[action]
+            service.set_access(user, access, actor=request.user, request=request)
+            messages.success(request, _('PIN access of {user} set to {access}.').format(
+                user=user, access=PinAccess(access).label))
         elif action == 'clear-lockout':
             service.clear_lockout(user, actor=request.user, request=request)
             messages.success(request, _('Lockout of {user} has been cleared.').format(user=user))
