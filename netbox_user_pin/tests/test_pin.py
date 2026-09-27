@@ -298,3 +298,22 @@ class KeyRotationTest(TestCase):
             self.assertTrue(service.verify_pin(user, GOOD_PIN))
             call_command('userpin_check', stdout=open('/dev/null', 'w'))
         self.assertTrue(PinEvent.objects.filter(action=PinEventAction.KEY_ROTATED).exists())
+
+
+class KeyFormatTest(TestCase):
+
+    def test_passphrase_and_base64_keys(self):
+        from django.conf import settings as dj_settings
+        from django.core.exceptions import ImproperlyConfigured
+
+        base = dict(dj_settings.PLUGINS_CONFIG['netbox_user_pin'])
+        passphrase = ')0)+jM*!7#(1KsRywI+MonRTHpfzPx^w*aTkGD^3JkgFOD@pbtHtlVu9(+1aA^GP'
+        for keys, ok in (({'k1': passphrase}, True), ({'k1': crypto.generate_key()}, True),
+                         ({'k1': 'too-short'}, False)):
+            config = {**base, 'encryption_keys': keys, 'active_key_id': 'k1'}
+            with override_settings(PLUGINS_CONFIG={**dj_settings.PLUGINS_CONFIG, 'netbox_user_pin': config}):
+                if ok:
+                    self.assertEqual(crypto.decrypt(crypto.encrypt('x', b'a'), b'a'), 'x')
+                else:
+                    with self.assertRaises(ImproperlyConfigured):
+                        crypto.validate_configuration()

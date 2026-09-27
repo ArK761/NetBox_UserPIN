@@ -35,7 +35,7 @@ PLUGINS = ['netbox_user_pin']
 
 PLUGINS_CONFIG = {
     'netbox_user_pin': {
-        'encryption_keys': {'k1': '<generated key>'},
+        'encryption_keys': {'k1': '<generated key or any secret of 32+ characters>'},
         'active_key_id': 'k1',
     },
 }
@@ -55,7 +55,7 @@ sudo systemctl restart netbox
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `encryption_keys` | – (required) | `{key_id: urlsafe base64 32-byte key}` |
+| `encryption_keys` | – (required) | `{key_id: key}` – urlsafe base64 32-byte key, or any secret of 32+ characters |
 | `active_key_id` | the only key | key used for new encryptions |
 | `argon2_time_cost` | `3` | Argon2id iterations |
 | `argon2_memory_cost` | `65536` | Argon2id memory in KiB (64 MiB) |

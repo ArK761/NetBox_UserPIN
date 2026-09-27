@@ -13,7 +13,9 @@ import os
 import secrets
 
 from cryptography.exceptions import InvalidTag
+from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from django.core.exceptions import ImproperlyConfigured
 from netbox.plugins import get_plugin_config
 
@@ -31,6 +33,7 @@ __all__ = (
 PLUGIN_NAME = 'netbox_user_pin'
 NONCE_SIZE = 12
 KEY_SIZE = 32
+MIN_SECRET_LENGTH = 32
 
 
 class DecryptionError(Exception):
@@ -38,15 +41,26 @@ class DecryptionError(Exception):
 
 
 def _decode_key(key_id, value):
+    """
+    Accept either a urlsafe-base64 encoded 32 byte key (``userpin_generate_key``) or any secret string of at least
+    32 characters (like NetBox's SECRET_KEY), from which a 32 byte key is derived with HKDF-SHA256.
+    """
+    if not isinstance(value, str) or not value:
+        raise ImproperlyConfigured(f"netbox_user_pin: encryption key '{key_id}' must be a non-empty string.")
     try:
-        raw = base64.urlsafe_b64decode(value.encode() if isinstance(value, str) else value)
+        raw = base64.urlsafe_b64decode(value.encode())
+        if len(raw) == KEY_SIZE:
+            return raw
     except (ValueError, TypeError):
-        raise ImproperlyConfigured(f"netbox_user_pin: encryption key '{key_id}' is not valid base64.")
-    if len(raw) != KEY_SIZE:
+        pass
+    if len(value) < MIN_SECRET_LENGTH:
         raise ImproperlyConfigured(
-            f"netbox_user_pin: encryption key '{key_id}' must be {KEY_SIZE} bytes, got {len(raw)}."
+            f"netbox_user_pin: encryption key '{key_id}' must be a base64 32 byte key or a secret of at least "
+            f"{MIN_SECRET_LENGTH} characters."
         )
-    return raw
+    return HKDF(algorithm=hashes.SHA256(), length=KEY_SIZE, salt=None, info=b'netbox_user_pin:key').derive(
+        value.encode()
+    )
 
 
 def _keys():
