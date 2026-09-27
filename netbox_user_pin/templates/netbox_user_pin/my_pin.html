@@ -1,0 +1,68 @@
+{% extends 'generic/_base.html' %}
+{% block title %}My PIN{% endblock %}
+{% block content %}
+<div class="row">
+  <div class="col-12 col-lg-6">
+    <div class="card">
+      <h2 class="card-header">Status</h2>
+      <table class="table table-hover attr-table">
+        <tr>
+          <th scope="row">PIN</th>
+          <td>
+            {% if has_pin %}<span class="badge text-bg-green">Set</span>{% else %}<span class="badge text-bg-orange">Not set</span>{% endif %}
+            {% if expired %}<span class="badge text-bg-red">Expired – change required</span>{% endif %}
+          </td>
+        </tr>
+        <tr><th scope="row">Last changed</th><td>{{ user_pin.changed|default:"—" }}</td></tr>
+        <tr><th scope="row">Last successful use</th><td>{{ user_pin.last_verified|default:"—" }}</td></tr>
+        <tr>
+          <th scope="row">Lockout</th>
+          <td>{% if user_pin.is_locked_out %}<span class="badge text-bg-red">Locked until {{ user_pin.locked_until }}</span>{% else %}—{% endif %}</td>
+        </tr>
+        <tr>
+          <th scope="row">Unlocked now</th>
+          <td>
+            {% for scope, seconds in unlocked_scopes.items %}
+              <span class="badge text-bg-blue">{% if scope == '*' %}everything{% else %}{{ scope }}{% endif %} · {% widthratio seconds 60 1 %} min</span>
+            {% empty %}—{% endfor %}
+          </td>
+        </tr>
+        <tr><th scope="row">Required length</th><td>{{ settings.pin_length }} digits</td></tr>
+      </table>
+      <div class="card-footer text-end">
+        {% if unlocked_scopes %}
+          <form method="post" action="{% url 'plugins:netbox_user_pin:lock' %}" class="d-inline">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-outline-secondary"><i class="mdi mdi-lock"></i> Lock now</button>
+          </form>
+        {% endif %}
+        {% if has_pin %}
+          <a href="{% url 'plugins:netbox_user_pin:change_pin' %}" class="btn btn-primary"><i class="mdi mdi-pencil"></i> Change PIN</a>
+        {% else %}
+          <a href="{% url 'plugins:netbox_user_pin:set_pin' %}" class="btn btn-primary"><i class="mdi mdi-plus"></i> Set PIN</a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="col-12 col-lg-6">
+    <div class="card">
+      <h2 class="card-header">Recent activity</h2>
+      <table class="table table-hover">
+        <thead><tr><th>Time</th><th>Event</th><th>Scope</th><th>IP</th></tr></thead>
+        <tbody>
+          {% for event in recent_events %}
+            <tr>
+              <td>{{ event.time|date:"Y-m-d H:i:s" }}</td>
+              <td>{{ event.get_action_display }}{% if event.actor_username and event.actor_username != event.username %} <span class="text-secondary">(by {{ event.actor_username }})</span>{% endif %}</td>
+              <td>{{ event.scope|default:"—" }}</td>
+              <td>{{ event.ip_address|default:"—" }}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="4" class="text-secondary">No activity yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

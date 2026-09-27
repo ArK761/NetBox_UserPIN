@@ -1,0 +1,10 @@
+{% extends 'generic/_base.html' %}
+{% block title %}Test unlock{% endblock %}
+{% block content %}
+<div class="alert alert-success"><div><i class="mdi mdi-lock-open-variant"></i> This page is protected by your PIN (scope <code>test</code>) and you have unlocked it.</div></div>
+<form method="post" action="{% url 'plugins:netbox_user_pin:lock' %}">
+  {% csrf_token %}
+  <input type="hidden" name="next" value="{% url 'plugins:netbox_user_pin:my_pin' %}">
+  <button type="submit" class="btn btn-outline-secondary"><i class="mdi mdi-lock"></i> Lock now</button>
+</form>
+{% endblock %}

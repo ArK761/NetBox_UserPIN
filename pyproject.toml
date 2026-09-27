@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "netbox-user-pin"
+version = "0.1.0"
+description = "Reusable personal PIN (second factor / unlock) for NetBox and NetBox plugins"
+readme = "README.md"
+requires-python = ">=3.12"
+authors = [{ name = "Peter Knotek" }]
+classifiers = [
+    "Framework :: Django",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+dependencies = [
+    "argon2-cffi>=23.1",
+    "cryptography>=42",
+]
+
+[project.urls]
+Source = "https://github.com/ArK761/NetBox_UserPIN"
+
+[tool.setuptools.packages.find]
+include = ["netbox_user_pin*"]
+
+[tool.setuptools.package-data]
+netbox_user_pin = ["templates/**/*"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"

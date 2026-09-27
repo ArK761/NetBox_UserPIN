@@ -1,0 +1,12 @@
+{% extends 'generic/_base.html' %}
+{% block title %}Change your PIN{% endblock %}
+{% block content %}
+<div class="row"><div class="col-12 col-md-8 col-lg-5">
+  {% if expired %}
+    <div class="alert alert-warning"><div>Your PIN has expired. Please choose a new one to continue.</div></div>
+  {% endif %}
+  <div class="alert alert-info"><div>The new PIN must have <strong>{{ settings.pin_length }} digits</strong>.</div></div>
+  {% url 'plugins:netbox_user_pin:my_pin' as cancel_url %}
+  {% include 'netbox_user_pin/inc/pin_form.html' with submit_label="Change PIN" %}
+</div></div>
+{% endblock %}

@@ -1,0 +1,15 @@
+{% load form_helpers %}
+<form method="post" class="object-edit" autocomplete="off">
+  {% csrf_token %}
+  <input type="hidden" name="next" value="{{ next }}">
+  {% if scope %}<input type="hidden" name="scope" value="{{ scope }}">{% endif %}
+  <div class="field-group mb-4">
+    {% for field in form %}
+      {% render_field field %}
+    {% endfor %}
+  </div>
+  <div class="text-end">
+    {% if cancel_url %}<a href="{{ cancel_url }}" class="btn btn-outline-secondary">Cancel</a>{% endif %}
+    <button type="submit" class="btn btn-primary">{{ submit_label|default:"Save" }}</button>
+  </div>
+</form>

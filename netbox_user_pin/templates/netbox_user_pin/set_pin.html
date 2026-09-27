@@ -1,0 +1,11 @@
+{% extends 'generic/_base.html' %}
+{% block title %}Set your PIN{% endblock %}
+{% block content %}
+<div class="row"><div class="col-12 col-md-8 col-lg-5">
+  <div class="alert alert-info"><div>Choose a personal PIN of <strong>{{ settings.pin_length }} digits</strong>. It protects sensitive areas of NetBox.
+    {% if settings.block_weak_pins %}Repeated digits, sequences and simple patterns are not allowed.{% endif %}
+    Nobody – not even an administrator – can read your PIN; an administrator can only reset it.</div></div>
+  {% url 'plugins:netbox_user_pin:my_pin' as cancel_url %}
+  {% include 'netbox_user_pin/inc/pin_form.html' with submit_label="Set PIN" %}
+</div></div>
+{% endblock %}

@@ -1,0 +1,35 @@
+{% extends 'generic/_base.html' %}
+{% block title %}PIN audit log{% endblock %}
+{% block content %}
+<form method="get" class="row g-2 mb-3">
+  <div class="col-auto"><input type="text" name="user" value="{{ user_filter }}" class="form-control" placeholder="User / actor"></div>
+  <div class="col-auto">
+    <select name="action" class="form-select">
+      <option value="">All events</option>
+      {% for value, label in actions %}<option value="{{ value }}"{% if value == action_filter %} selected{% endif %}>{{ label }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="col-auto"><button class="btn btn-primary" type="submit"><i class="mdi mdi-filter"></i> Filter</button></div>
+</form>
+<div class="card">
+  <table class="table table-hover">
+    <thead><tr><th>Time</th><th>User</th><th>Event</th><th>By</th><th>Scope</th><th>IP</th><th>Detail</th></tr></thead>
+    <tbody>
+      {% for event in page %}
+        <tr>
+          <td class="text-nowrap">{{ event.time|date:"Y-m-d H:i:s" }}</td>
+          <td>{{ event.username|default:"—" }}</td>
+          <td>{{ event.get_action_display }}</td>
+          <td>{{ event.actor_username|default:"—" }}</td>
+          <td>{{ event.scope|default:"—" }}</td>
+          <td>{{ event.ip_address|default:"—" }}</td>
+          <td class="small" style="white-space: pre-line">{{ event.detail }}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="7" class="text-secondary">No events.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% include 'netbox_user_pin/inc/pager.html' %}
+{% endblock %}

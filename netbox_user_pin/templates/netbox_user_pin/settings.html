@@ -1,0 +1,50 @@
+{% extends 'generic/_base.html' %}
+{% load form_helpers %}
+{% block title %}PIN settings{% endblock %}
+{% block content %}
+<div class="row">
+  <div class="col-12 col-lg-7">
+    <form method="post" class="object-edit">
+      {% csrf_token %}
+      <div class="field-group mb-4">
+        <h2 class="mb-3">PIN policy</h2>
+        {% render_field form.pin_length %}
+        {% render_field form.block_weak_pins %}
+        {% render_field form.blocked_pins %}
+        {% render_field form.max_age_days %}
+      </div>
+      <div class="field-group mb-4">
+        <h2 class="mb-3">Unlock</h2>
+        {% render_field form.unlock_minutes %}
+        {% render_field form.sliding_unlock %}
+        {% render_field form.scope_mode %}
+      </div>
+      <div class="field-group mb-4">
+        <h2 class="mb-3">Brute-force protection</h2>
+        {% render_field form.max_attempts %}
+        {% render_field form.lockout_minutes %}
+      </div>
+      <div class="text-end"><button type="submit" class="btn btn-primary">Save</button></div>
+    </form>
+  </div>
+  <div class="col-12 col-lg-5">
+    <div class="card">
+      <h2 class="card-header">Encryption key</h2>
+      {% if key_info.error %}
+        <div class="card-body"><div class="alert alert-danger mb-0"><div>{{ key_info.error }}</div></div></div>
+      {% else %}
+        <table class="table attr-table">
+          <tr><th scope="row">Active key</th><td><code>{{ key_info.active }}</code></td></tr>
+          <tr><th scope="row">Fingerprint</th><td><code>{{ key_info.fingerprint }}</code></td></tr>
+          <tr><th scope="row">Configured keys</th><td>{% for k in key_info.configured %}<code>{{ k }}</code> {% endfor %}</td></tr>
+        </table>
+        <div class="card-body small text-secondary">
+          The key is stored only in the NetBox configuration (<code>PLUGINS_CONFIG</code>), never in the database.
+          Compare the fingerprint with your offline backup. Rotate with
+          <code>manage.py userpin_rotate_key</code>. A lost key does not lose data – users just set new PINs.
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
