@@ -2,7 +2,12 @@
 {% block title %}<i class="mdi mdi-lock"></i> Enter your PIN{% endblock %}
 {% block content %}
 <div class="row"><div class="col-12 col-md-8 col-lg-4">
-  {% if locked_until %}
+  {% if reset_pending %}
+    <div class="alert alert-warning"><div>An administrator started a reset of your {% if reset_pending == 'pin' %}PIN{% else %}2FA{% endif %}. <a href="{% url 'plugins:netbox_user_pin:reset_confirm' %}">Confirm it here</a>.</div></div>
+  {% endif %}
+  {% if suspended %}
+    <div class="alert alert-danger"><div>Your PIN is suspended. Contact your administrator.</div></div>
+  {% elif locked_until %}
     <div class="alert alert-danger"><div>Too many failed attempts. Try again after {{ locked_until }} or ask an administrator.</div></div>
   {% else %}
     <p class="text-secondary">This area is protected. Enter your personal PIN to continue.</p>

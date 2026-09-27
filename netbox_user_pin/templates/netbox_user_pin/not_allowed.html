@@ -1,10 +1,14 @@
 {% extends 'generic/_base.html' %}
-{% block title %}<i class="mdi mdi-lock"></i> PIN not permitted{% endblock %}
+{% block title %}<i class="mdi mdi-lock"></i> {% if suspended %}PIN suspended{% else %}PIN not permitted{% endif %}{% endblock %}
 {% block content %}
 <div class="row"><div class="col-12 col-md-8 col-lg-5">
   <div class="alert alert-warning"><div>
-    You are not permitted to use a PIN, so this protected area is not available to you.
-    Ask an administrator to allow PIN use for your account.
+    {% if suspended %}
+      Your PIN was suspended by an administrator, so protected areas are not available. Contact your administrator.
+    {% else %}
+      You are not permitted to use a PIN, so this protected area is not available to you.
+      Ask an administrator to allow PIN use for your account.
+    {% endif %}
   </div></div>
 </div></div>
 {% endblock %}

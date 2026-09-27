@@ -15,10 +15,12 @@ urlpatterns = [
     path('2fa/setup/', views.TotpSetupView.as_view(), name='totp_setup'),
     path('2fa/<str:action>/', views.TotpManageView.as_view(), name='totp_manage'),
     path('recover/', views.RecoverView.as_view(), name='recover'),
+    path('reset/', views.ResetConfirmView.as_view(), name='reset_confirm'),
     path('confirm/', views.StepUpView.as_view(), name='step_up'),
     path('users/', views.UserPinListView.as_view(), name='user_list'),
     path('users/<int:pk>/<str:action>/', views.UserPinActionView.as_view(), name='user_action'),
     path('events/', views.PinEventListView.as_view(), name='event_list'),
     path('settings/', views.PinSettingsView.as_view(), name='settings'),
+    path('mail/', views.MailSettingsView.as_view(), name='mail'),
     path('delegates/', views.DelegateListView.as_view(), name='delegates'),
 ]

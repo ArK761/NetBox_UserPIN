@@ -14,7 +14,10 @@ sensitive pages ("enter your PIN to continue"), so the PIN logic exists only onc
 - **Forgotten PIN**: self-service recovery needs an e-mailed code **and** a 2FA code together
 - E-mails only to allowed company domains; security notifications (changed, reset, locked, expiring)
 - **Delegation**: the master names users / groups who manage PINs (separation of duties)
-- Administrator can **reset** a PIN or 2FA or clear a lockout, but can never read a PIN
+- **An administrator alone can only remove access** (suspend). A PIN reset is started by an administrator and
+  confirmed by the user in their own session with 2FA (a 2FA reset with the PIN) – no meeting needed, the
+  administrator never learns the new PIN
+- Separate **Mail** page: allowed domains, notifications, self-service recovery, test e-mail to a chosen user
 - Append-only **audit log** of every PIN event (never contains a PIN, hash or code)
 - Settings page in the UI, stable API + signals for other plugins
 
@@ -82,9 +85,9 @@ Everything else is configured in the UI: **User PIN → Settings**.
 |---|---|---|---|
 | My PIN – PIN, 2FA, backup codes, recovery, test rotation, own activity | ✅ | ✅ | ✅ |
 | Users – summary, PIN / 2FA / e-mail / expiry status of everybody | ✅ | ✅ | – |
-| Users – allow / deny, reset PIN, reset 2FA, force change, clear lockout | ✅ | ✅ except master, other delegates, self | – |
+| Users – allow / deny, suspend, start PIN / 2FA reset, force change, clear lockout | ✅ except self | ✅ except master, other delegates, self | – |
 | Audit log | ✅ | ✅ | – |
-| Settings | ✅ edit | view (edit only if allowed by the master) | – |
+| Settings, Mail | ✅ edit | view (edit only if allowed by the master) | – |
 | Delegates | ✅ | – | – |
 
 All changes on Users, Settings and Delegates require a **step-up** (PIN + 2FA). Administration pages also
@@ -108,7 +111,18 @@ Delegates are stored by the plugin and synchronised into NetBox object permissio
 | Allowed e-mail domains | empty (= no e-mails until set) |
 | Security notifications by e-mail | on |
 
-### Forgotten PIN
+### Administrator resets (no meeting needed)
+
+| Action | Administrator | User (own session) |
+|---|---|---|
+| **Suspend PIN** (suspected leak, user absent) | blocks immediately, alone | – |
+| **Reset PIN** (forgotten PIN) | starts the reset (valid 24 h by default) | confirms with a **2FA code** and sets a new PIN |
+| **Reset 2FA** (lost phone) | starts the reset | confirms with the **PIN** and enrolls the new phone |
+
+Until the user confirms, the old PIN keeps working; the administrator can cancel a pending reset. A reset
+requires the user to have 2FA.
+
+### Forgotten PIN (self-service)
 
 1. *My PIN → Forgot PIN* (or the link on the unlock page) → **Send code** – an 8 digit code is e-mailed
    (only to an allowed domain, valid 15 min, max 5 attempts, resend after 60 s).

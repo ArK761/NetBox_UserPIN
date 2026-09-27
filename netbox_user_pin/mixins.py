@@ -54,6 +54,10 @@ def not_allowed_response(request):
     return render(request, 'netbox_user_pin/not_allowed.html', status=403)
 
 
+def suspended_response(request):
+    return render(request, 'netbox_user_pin/not_allowed.html', {'suspended': True}, status=403)
+
+
 def pin_gate(request, scope=None):
     """
     Return a redirect response when the PIN still has to be set, changed or entered for ``scope``;
@@ -64,6 +68,8 @@ def pin_gate(request, scope=None):
         return None  # let the regular login handling deal with it
     if not service.is_allowed(user):
         return not_allowed_response(request)
+    if service.is_suspended(user):
+        return suspended_response(request)
     params = {'next': request.get_full_path()}
     if scope:
         params['scope'] = scope

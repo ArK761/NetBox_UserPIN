@@ -1,0 +1,50 @@
+{% extends 'generic/_base.html' %}
+{% load form_helpers %}
+{% block title %}Mail{% endblock %}
+{% block content %}
+{% if can_edit %}{% include 'netbox_user_pin/inc/step_up_bar.html' %}{% endif %}
+<div class="row">
+  <div class="col-12 col-lg-7">
+    {% if not can_edit %}<div class="alert alert-info"><div>Read-only view.</div></div>{% endif %}
+    <form method="post" class="object-edit">
+      {% csrf_token %}
+      <div class="field-group mb-4">
+        <h2 class="mb-3">Recipients</h2>
+        {% render_field form.allowed_email_domains %}
+        {% render_field form.notify_email %}
+      </div>
+      <div class="field-group mb-4">
+        <h2 class="mb-3">Forgotten PIN (self-service)</h2>
+        {% render_field form.self_recovery %}
+        {% render_field form.recovery_minutes %}
+      </div>
+      {% if can_edit %}<div class="text-end"><button type="submit" class="btn btn-primary">Save</button></div>{% endif %}
+    </form>
+  </div>
+  <div class="col-12 col-lg-5">
+    <div class="card">
+      <h2 class="card-header">Mail server (NetBox configuration)</h2>
+      <table class="table attr-table">
+        <tr><th scope="row">Status</th><td>{% if email_configured %}<span class="badge text-bg-green">configured</span>{% else %}<span class="badge text-bg-red">not configured</span>{% endif %}</td></tr>
+        <tr><th scope="row">Server</th><td>{{ email_server|default:"—" }}</td></tr>
+        <tr><th scope="row">From</th><td>{{ from_email|default:"—" }}</td></tr>
+      </table>
+      <div class="card-body small text-secondary">Set in <code>configuration.py</code> → <code>EMAIL = {'SERVER': ..., 'FROM_EMAIL': ...}</code>.</div>
+    </div>
+    <div class="card">
+      <h2 class="card-header">Send test e-mail</h2>
+      <div class="card-body">
+        {% if test_form.fields.recipient.queryset.exists %}
+          <form method="post" class="object-edit">
+            {% csrf_token %}<input type="hidden" name="action" value="test-mail">
+            {% render_field test_form.recipient %}
+            {% if can_edit %}<div class="text-end"><button type="submit" class="btn btn-outline-primary"><i class="mdi mdi-email-check"></i> Send test e-mail</button></div>{% endif %}
+          </form>
+        {% else %}
+          <p class="text-secondary mb-0">No eligible recipient: a user must be permitted to use a PIN and have an e-mail in an allowed domain.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

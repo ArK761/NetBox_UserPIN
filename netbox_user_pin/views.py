@@ -13,7 +13,8 @@ from utilities.request import safe_for_redirect
 
 from . import crypto, delegation, service
 from .forms import (
-    ChangePinForm, DelegateForm, OtpForm, PinOtpForm, PinSettingsForm, RecoveryForm, SetPinForm, UnlockForm,
+    ChangePinForm, DelegateForm, MailSettingsForm, OtpForm, PinOtpForm, PinSettingsForm, RecoveryForm,
+    ResetConfirmForm, SetPinForm, TestMailForm, UnlockForm,
 )
 from .mixins import PinRequiredMixin, not_allowed_response, step_up_gate
 from .models import PinAccess, PinAccessMode, PinDelegate, PinEvent, PinEventAction, PinSettings, UserPin
@@ -46,6 +47,8 @@ def _verify_error(form, result, pin_field='pin', otp_field='otp'):
         form.add_error(pin_field, _('Wrong PIN. Remaining attempts: {n}.').format(n=result.remaining_attempts))
     elif status is service.VerifyStatus.NEED_2FA:
         form.add_error(None, _('Two-factor authentication must be set up first (My PIN > Two-factor).'))
+    elif status is service.VerifyStatus.SUSPENDED:
+        form.add_error(None, _('Your PIN is suspended. Contact your administrator.'))
     elif status is service.VerifyStatus.NOT_ALLOWED:
         form.add_error(None, _('You are not permitted to use a PIN.'))
     else:
@@ -86,6 +89,7 @@ class MyPinView(LoginRequiredMixin, View):
             'backup_codes_left': len(user_pin.backup_codes) if user_pin else 0,
             'email_status': service.email_status(request.user, settings),
             'recovery_blockers': service.recovery_blockers(request.user, settings),
+            'reset_pending': user_pin.reset_pending if user_pin else '',
             'unlocked_scopes': service.unlocked_scopes(request),
             'recent_events': PinEvent.objects.filter(user=request.user)[:10],
         })
@@ -173,6 +177,8 @@ class UnlockView(AllowedUserMixin, View):
             'next': request.POST.get('next') or request.GET.get('next', ''),
             'locked_until': user_pin.locked_until if user_pin and user_pin.is_locked_out else None,
             'can_recover': not service.recovery_blockers(request.user),
+            'reset_pending': user_pin.reset_pending if user_pin else '',
+            'suspended': bool(user_pin and user_pin.suspended),
         }
 
     def get(self, request):
@@ -350,6 +356,50 @@ class RecoverView(AllowedUserMixin, View):
         return self._render(request, form)
 
 
+class ResetConfirmView(AllowedUserMixin, View):
+    """The user confirms a reset an administrator started (PIN reset: 2FA + new PIN; 2FA reset: PIN)."""
+    template_name = 'netbox_user_pin/reset_confirm.html'
+
+    def _pending(self, request):
+        user_pin = UserPin.objects.filter(user=request.user).first()
+        return (user_pin.reset_pending, user_pin) if user_pin else ('', None)
+
+    def _render(self, request, form, kind, user_pin):
+        return render(request, self.template_name, {
+            'form': form, 'kind': kind, 'user_pin': user_pin, 'settings': service.get_settings(),
+        })
+
+    def get(self, request):
+        kind, user_pin = self._pending(request)
+        if not kind:
+            messages.info(request, _('There is no reset waiting for you.'))
+            return redirect('plugins:netbox_user_pin:my_pin')
+        return self._render(request, ResetConfirmForm(kind=kind), kind, user_pin)
+
+    def post(self, request):
+        kind, user_pin = self._pending(request)
+        if not kind:
+            return redirect('plugins:netbox_user_pin:my_pin')
+        form = ResetConfirmForm(request.POST, kind=kind)
+        if form.is_valid():
+            try:
+                if kind == 'pin':
+                    service.complete_pin_reset(request.user, form.cleaned_data['otp'], form.cleaned_data['new_pin'],
+                                               request=request)
+                else:
+                    service.complete_2fa_reset(request.user, form.cleaned_data['pin'], request=request)
+            except ValidationError as exc:
+                field = {'otp': 'otp', 'pin': 'pin'}.get(exc.code, 'new_pin' if kind == 'pin' else 'pin')
+                _apply_form_errors(form, exc, field if field in form.fields else None)
+            else:
+                if kind == 'pin':
+                    messages.success(request, _('Your new PIN has been set.'))
+                    return redirect('plugins:netbox_user_pin:my_pin')
+                messages.success(request, _('Your old 2FA was removed. Set it up again now.'))
+                return redirect('plugins:netbox_user_pin:totp_setup')
+        return self._render(request, form, kind, user_pin)
+
+
 #
 # Step-up confirmation
 #
@@ -417,6 +467,8 @@ class UserPinListView(AdminViewMixin, View):
                 'expires': expires,
                 'days_left': (expires - now).days if expires else None,
                 'must_change': bool(user_pin and user_pin.must_change),
+                'suspended': bool(user_pin and user_pin.suspended),
+                'reset_pending': user_pin.reset_pending if user_pin else '',
                 'role': 'master' if user.is_superuser else ('delegate' if service.is_pin_admin(user) else ''),
                 'manageable': can_change and service.can_manage(request.user, user),
             })
@@ -428,6 +480,7 @@ class UserPinListView(AdminViewMixin, View):
             'not_allowed': sum(not r['allowed'] for r in rows),
             'no_email': sum(r['email_status'] != 'ok' for r in rows),
             'no_2fa': sum(r['allowed'] and not r['has_2fa'] for r in rows),
+            'suspended': sum(r['suspended'] for r in rows),
         }
         filters = {
             'with_pin': lambda r: r['is_set'],
@@ -436,6 +489,7 @@ class UserPinListView(AdminViewMixin, View):
             'not_allowed': lambda r: not r['allowed'],
             'no_email': lambda r: r['email_status'] != 'ok',
             'no_2fa': lambda r: r['allowed'] and not r['has_2fa'],
+            'suspended': lambda r: r['suspended'],
         }
         q = request.GET.get('q', '').strip().lower()
         status = request.GET.get('status', '')
@@ -459,7 +513,10 @@ class UserPinListView(AdminViewMixin, View):
 
 class UserPinActionView(AdminViewMixin, View):
     permission_required = 'netbox_user_pin.change_userpin'
-    actions = ('allow', 'deny', 'default', 'reset', 'clear-lockout', 'force-change', 'reset-2fa')
+    actions = (
+        'allow', 'deny', 'default', 'reset', 'reset-2fa', 'cancel-reset', 'suspend', 'unsuspend',
+        'clear-lockout', 'force-change',
+    )
 
     def post(self, request, pk, action):
         if (response := step_up_gate(request)) is not None:
@@ -469,25 +526,43 @@ class UserPinActionView(AdminViewMixin, View):
             raise PermissionDenied
         if not service.can_manage(request.user, user):
             raise PermissionDenied(_('Delegates cannot manage the master, other delegates or themselves.'))
+        try:
+            self._do(request, user, action)
+        except ValidationError as exc:
+            for message in exc.messages:
+                messages.error(request, message)
+        return redirect(_next_url(request, 'plugins:netbox_user_pin:user_list'))
+
+    def _do(self, request, user, action):
+        actor = request.user
         if action in ('allow', 'deny', 'default'):
             access = {'allow': PinAccess.ALLOWED, 'deny': PinAccess.DENIED, 'default': PinAccess.DEFAULT}[action]
-            service.set_access(user, access, actor=request.user, request=request)
+            service.set_access(user, access, actor=actor, request=request)
             messages.success(request, _('PIN access of {user} set to {access}.').format(
                 user=user, access=PinAccess(access).label))
         elif action == 'reset':
-            service.reset_pin(user, actor=request.user, request=request)
-            messages.success(request, _('PIN of {user} has been reset. The user must set a new PIN.').format(
-                user=user))
+            service.request_reset(user, 'pin', actor=actor, request=request)
+            messages.success(request, _('PIN reset of {user} started. The user confirms it with 2FA in their own '
+                                        'session and chooses a new PIN.').format(user=user))
+        elif action == 'reset-2fa':
+            service.request_reset(user, '2fa', actor=actor, request=request)
+            messages.success(request, _('2FA reset of {user} started. The user confirms it with the PIN and sets up '
+                                        '2FA again.').format(user=user))
+        elif action == 'cancel-reset':
+            service.cancel_reset(user, actor=actor, request=request)
+            messages.success(request, _('Reset of {user} cancelled.').format(user=user))
+        elif action == 'suspend':
+            service.suspend(user, actor=actor, request=request)
+            messages.success(request, _('PIN of {user} suspended.').format(user=user))
+        elif action == 'unsuspend':
+            service.unsuspend(user, actor=actor, request=request)
+            messages.success(request, _('Suspension of {user} lifted.').format(user=user))
         elif action == 'clear-lockout':
-            service.clear_lockout(user, actor=request.user, request=request)
+            service.clear_lockout(user, actor=actor, request=request)
             messages.success(request, _('Lockout of {user} has been cleared.').format(user=user))
         elif action == 'force-change':
-            if service.force_change(user, actor=request.user, request=request):
+            if service.force_change(user, actor=actor, request=request):
                 messages.success(request, _('{user} must change the PIN at next use.').format(user=user))
-        elif action == 'reset-2fa':
-            service.reset_totp(user, actor=request.user, request=request)
-            messages.success(request, _('2FA of {user} has been reset.').format(user=user))
-        return redirect(_next_url(request, 'plugins:netbox_user_pin:user_list'))
 
 
 class PinEventListView(AdminViewMixin, View):
@@ -527,10 +602,8 @@ class PinSettingsView(AdminViewMixin, View):
             'form': form,
             'key_info': key_info,
             'can_edit': request.user.has_perm('netbox_user_pin.change_pinsettings'),
-            'email_configured': service.email_configured(),
             'step_up_active': service.has_step_up(request),
             'step_up_left': service.step_up_seconds_left(request),
-            'my_email_status': service.email_status(request.user),
         }
 
     def get(self, request):
@@ -543,13 +616,6 @@ class PinSettingsView(AdminViewMixin, View):
             raise PermissionDenied
         if (response := step_up_gate(request)) is not None:
             return response
-        if request.POST.get('action') == 'test-mail':
-            if service.send_user_mail(request.user, _('Test e-mail'), _('The NetBox PIN e-mail works.'),
-                                      request=request):
-                messages.success(request, _('Test e-mail sent to {email}.').format(email=request.user.email))
-            else:
-                messages.error(request, _('Test e-mail could not be sent (mail server, address or domain).'))
-            return redirect('plugins:netbox_user_pin:settings')
         instance = PinSettings.load()
         form = PinSettingsForm(request.POST, instance=instance)
         if form.is_valid():
@@ -564,6 +630,75 @@ class PinSettingsView(AdminViewMixin, View):
             messages.success(request, _('PIN settings saved.'))
             return redirect('plugins:netbox_user_pin:settings')
         return render(request, self.template_name, self._context(request, form))
+
+
+class MailSettingsView(AdminViewMixin, View):
+    permission_required = 'netbox_user_pin.view_pinsettings'
+    template_name = 'netbox_user_pin/mail.html'
+
+    @staticmethod
+    def eligible_recipients():
+        settings = service.get_settings()
+        users = get_user_model().objects.filter(is_active=True).exclude(email='').select_related('user_pin')
+        return [u for u in users if service.email_status(u, settings) == 'ok' and service.is_allowed(u, settings)]
+
+    def _render(self, request, form, test_form):
+        return render(request, self.template_name, {
+            'form': form,
+            'test_form': test_form,
+            'can_edit': request.user.has_perm('netbox_user_pin.change_pinsettings'),
+            'email_configured': service.email_configured(),
+            'email_server': (getattr(service.django_settings, 'EMAIL', {}) or {}).get('SERVER', ''),
+            'from_email': (getattr(service.django_settings, 'EMAIL', {}) or {}).get('FROM_EMAIL', ''),
+            'step_up_active': service.has_step_up(request),
+            'step_up_left': service.step_up_seconds_left(request),
+        })
+
+    def _test_form(self, data=None):
+        eligible = self.eligible_recipients()
+        initial = {}
+        default = next((u for u in eligible if u.pk == self.request.user.pk), None)
+        if default:
+            initial['recipient'] = default.pk
+        return TestMailForm(data, eligible=eligible, initial=initial)
+
+    def get(self, request):
+        can_edit = request.user.has_perm('netbox_user_pin.change_pinsettings')
+        form = MailSettingsForm(instance=PinSettings.load(), read_only=not can_edit)
+        return self._render(request, form, self._test_form())
+
+    def post(self, request):
+        if not request.user.has_perm('netbox_user_pin.change_pinsettings'):
+            raise PermissionDenied
+        if (response := step_up_gate(request)) is not None:
+            return response
+        if request.POST.get('action') == 'test-mail':
+            test_form = self._test_form(request.POST)
+            if test_form.is_valid():
+                recipient = test_form.cleaned_data['recipient']
+                sent = service.send_user_mail(
+                    recipient, _('Test e-mail'),
+                    _('This is a test e-mail from NetBox User PIN, sent by {actor}.').format(actor=request.user),
+                    request=request,
+                )
+                if sent:
+                    messages.success(request, _('Test e-mail sent to {email}.').format(email=recipient.email))
+                else:
+                    messages.error(request, _('The test e-mail could not be sent. Check the mail server.'))
+                return redirect('plugins:netbox_user_pin:mail')
+            form = MailSettingsForm(instance=PinSettings.load())
+            return self._render(request, form, test_form)
+        form = MailSettingsForm(request.POST, instance=PinSettings.load())
+        if form.is_valid():
+            changes = [f'{n}: {form.initial.get(n)!r} -> {form.cleaned_data.get(n)!r}' for n in form.changed_data]
+            form.save()
+            if changes:
+                service.log_event(
+                    PinEventAction.SETTINGS_CHANGED, actor=request.user, request=request, detail='\n'.join(changes)
+                )
+            messages.success(request, _('Mail settings saved.'))
+            return redirect('plugins:netbox_user_pin:mail')
+        return self._render(request, form, self._test_form())
 
 
 class DelegateListView(AdminViewMixin, View):

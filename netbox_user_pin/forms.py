@@ -9,6 +9,9 @@ from .models import PinDelegate, PinSettings
 __all__ = (
     'ChangePinForm',
     'DelegateForm',
+    'MailSettingsForm',
+    'ResetConfirmForm',
+    'TestMailForm',
     'OtpForm',
     'PinOtpForm',
     'RecoveryForm',
@@ -143,19 +146,40 @@ class ChangePinForm(SetPinForm):
         self.fields['new_pin'].widget.attrs.pop('autofocus', None)
 
 
-class PinSettingsForm(forms.ModelForm):
-    class Meta:
-        model = PinSettings
-        fields = (
-            'access_mode', 'pin_length', 'block_weak_pins', 'blocked_pins', 'max_age_days', 'warn_days',
-            'unlock_minutes', 'sliding_unlock', 'scope_mode', 'require_2fa_unlock',
-            'max_attempts', 'lockout_minutes', 'require_2fa_admin', 'step_up_minutes',
-            'self_recovery', 'recovery_minutes', 'allowed_email_domains', 'notify_email',
-        )
-        widgets = {
-            'blocked_pins': forms.Textarea(attrs={'rows': 3, 'class': 'form-control'}),
-            'allowed_email_domains': forms.Textarea(attrs={'rows': 3, 'class': 'form-control'}),
-        }
+class ResetConfirmForm(forms.Form):
+    """Confirmation of an administrator-initiated reset: 2FA + new PIN (PIN reset) or PIN (2FA reset)."""
+
+    def __init__(self, *args, kind='pin', **kwargs):
+        super().__init__(*args, **kwargs)
+        if kind == 'pin':
+            self.fields['otp'] = otp_field(autofocus=True)
+            self.fields['new_pin'] = pin_field(_('New PIN'))
+            self.fields['confirm_pin'] = pin_field(_('Confirm new PIN'))
+        else:
+            self.fields['pin'] = pin_field(_('Your PIN'), autofocus=True)
+
+    def clean(self):
+        cleaned = super().clean()
+        if cleaned.get('new_pin') and cleaned.get('new_pin') != cleaned.get('confirm_pin'):
+            self.add_error('confirm_pin', _('The PINs do not match.'))
+        return cleaned
+
+
+class TestMailForm(forms.Form):
+    recipient = forms.ModelChoiceField(
+        queryset=get_user_model().objects.none(), label=_('Send test e-mail to'),
+        widget=forms.Select(attrs={'class': 'form-select'}),
+        help_text=_('Users permitted to use a PIN with an e-mail address in an allowed domain.'),
+    )
+
+    def __init__(self, *args, eligible=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['recipient'].queryset = get_user_model().objects.filter(
+            pk__in=[u.pk for u in (eligible or [])]
+        ).order_by('username')
+
+
+class _StyledModelForm(forms.ModelForm):
 
     def __init__(self, *args, read_only=False, **kwargs):
         super().__init__(*args, **kwargs)
@@ -169,3 +193,25 @@ class PinSettingsForm(forms.ModelForm):
                 widget.attrs.setdefault('class', 'form-select')
             else:
                 widget.attrs.setdefault('class', 'form-control')
+
+
+class MailSettingsForm(_StyledModelForm):
+    class Meta:
+        model = PinSettings
+        fields = ('allowed_email_domains', 'notify_email', 'self_recovery', 'recovery_minutes')
+        widgets = {
+            'allowed_email_domains': forms.Textarea(attrs={'rows': 4, 'class': 'form-control'}),
+        }
+
+
+class PinSettingsForm(_StyledModelForm):
+    class Meta:
+        model = PinSettings
+        fields = (
+            'access_mode', 'pin_length', 'block_weak_pins', 'blocked_pins', 'max_age_days', 'warn_days',
+            'unlock_minutes', 'sliding_unlock', 'scope_mode', 'require_2fa_unlock',
+            'max_attempts', 'lockout_minutes', 'require_2fa_admin', 'step_up_minutes', 'reset_valid_hours',
+        )
+        widgets = {
+            'blocked_pins': forms.Textarea(attrs={'rows': 3, 'class': 'form-control'}),
+        }

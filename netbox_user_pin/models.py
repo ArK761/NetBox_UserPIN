@@ -128,6 +128,12 @@ class PinSettings(models.Model):
         blank=True,
         help_text=_('E-mails are only sent to these domains, one per line (e.g. firma.sk). Empty = no e-mails.'),
     )
+    reset_valid_hours = models.PositiveIntegerField(
+        verbose_name=_('Administrator reset valid (hours)'),
+        default=24,
+        validators=[MinValueValidator(1), MaxValueValidator(24 * 14)],
+        help_text=_('How long the user has to confirm a reset started by an administrator.'),
+    )
     notify_email = models.BooleanField(
         verbose_name=_('Security notifications by e-mail'),
         default=True,
@@ -177,6 +183,14 @@ class UserPin(models.Model):
         default=PinAccess.DEFAULT,
         help_text='Administrator decision whether this user may use a PIN.',
     )
+    suspended = models.BooleanField(default=False, help_text='Blocked by an administrator (e.g. suspected leak).')
+    suspended_by = models.CharField(max_length=150, blank=True)
+    pending_reset = models.CharField(
+        max_length=10, blank=True, choices=(('pin', 'PIN'), ('2fa', '2FA')),
+        help_text='Reset started by an administrator, waiting for the user to confirm.',
+    )
+    pending_reset_by = models.CharField(max_length=150, blank=True)
+    pending_reset_expires = models.DateTimeField(null=True, blank=True)
     must_change = models.BooleanField(
         default=False,
         help_text='Forced PIN change at next use (administrator or test).',
@@ -207,6 +221,13 @@ class UserPin(models.Model):
     @property
     def is_set(self):
         return bool(self.pin_hash)
+
+    @property
+    def reset_pending(self):
+        """'pin', '2fa' or '' – only while not expired."""
+        if self.pending_reset and self.pending_reset_expires and self.pending_reset_expires > timezone.now():
+            return self.pending_reset
+        return ''
 
     @property
     def has_2fa(self):
@@ -249,6 +270,11 @@ class PinEventAction(models.TextChoices):
     DELEGATE_REMOVED = 'delegate_removed', _('Delegate removed')
     DELEGATE_CHANGED = 'delegate_changed', _('Delegate changed')
     ACCESS_CHANGED = 'access_changed', _('PIN access changed by administrator')
+    SUSPENDED = 'suspended', _('PIN suspended by administrator')
+    UNSUSPENDED = 'unsuspended', _('PIN suspension lifted by administrator')
+    RESET_REQUESTED = 'reset_requested', _('Reset started by administrator')
+    RESET_COMPLETED = 'reset_completed', _('Reset confirmed by the user')
+    RESET_CANCELLED = 'reset_cancelled', _('Reset cancelled')
     NOT_ALLOWED = 'not_allowed', _('Attempt by a user not allowed to use a PIN')
     LOCKED = 'locked', _('Locked manually')
     SETTINGS_CHANGED = 'settings_changed', _('Settings changed')

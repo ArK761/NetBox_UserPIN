@@ -297,14 +297,16 @@ class ViewTest(PinTestCase):
         admin_login(self.client, admin)
         for name in ('user_list', 'event_list', 'settings', 'delegates'):
             self.assertEqual(self.client.get(reverse(f'plugins:netbox_user_pin:{name}')).status_code, 200, name)
+        # a PIN reset needs the user's 2FA, the administrator cannot reset alone
         self.client.post(reverse('plugins:netbox_user_pin:user_action', kwargs={'pk': self.user.pk, 'action': 'reset'}))
-        self.assertFalse(service.has_pin(self.user))
+        self.assertTrue(service.has_pin(self.user))
+        self.assertEqual(UserPin.objects.get(user=self.user).reset_pending, '')
 
         data = {
             'access_mode': 'all', 'pin_length': 8, 'block_weak_pins': 'on', 'blocked_pins': '', 'max_age_days': 180,
             'warn_days': 14, 'unlock_minutes': 10, 'sliding_unlock': 'on', 'scope_mode': 'global',
             'max_attempts': 5, 'lockout_minutes': 30, 'require_2fa_admin': 'on', 'step_up_minutes': 5,
-            'self_recovery': 'on', 'recovery_minutes': 15, 'allowed_email_domains': 'firma.sk', 'notify_email': 'on',
+            'reset_valid_hours': 24,
         }
         self.client.post(reverse('plugins:netbox_user_pin:settings'), data)
         self.assertEqual(PinSettings.load().pin_length, 8)
@@ -630,6 +632,7 @@ class DelegationTest(PinTestCase):
         self.assertFalse(service.can_manage(delegate, self.other_delegate))
         self.assertFalse(service.can_manage(delegate, delegate))
         self.assertTrue(service.can_manage(self.master, delegate))
+        self.assertFalse(service.can_manage(self.master, self.master))
         self.assertFalse(service.can_manage(self.user, self.user))
 
     def test_delegate_views(self):
@@ -654,3 +657,110 @@ class DelegationTest(PinTestCase):
         for name in ('user_list', 'event_list', 'settings', 'delegates'):
             self.assertEqual(self.client.get(reverse(f'plugins:netbox_user_pin:{name}')).status_code, 403, name)
         self.assertEqual(self.client.get(reverse('plugins:netbox_user_pin:my_pin')).status_code, 200)
+
+
+class AdminResetTest(PinTestCase):
+    """An administrator alone can only suspend; resets are confirmed by the user in their own session."""
+
+    def setUp(self):
+        super().setUp()
+        self.admin = User.objects.create_superuser('boss2', password='pw')
+        self.user = User.objects.create_user('hana', password='pw')
+        service.set_pin(self.user, GOOD_PIN)
+        self.secret = enable_2fa(self.user)
+
+    def _action(self, action):
+        return self.client.post(
+            reverse('plugins:netbox_user_pin:user_action', kwargs={'pk': self.user.pk, 'action': action})
+        )
+
+    def test_suspend_blocks_immediately(self):
+        from django.contrib.sessions.backends.db import SessionStore
+        request = RequestFactory().get('/')
+        request.user, request.session = self.user, SessionStore()
+        service.unlock(request, GOOD_PIN)
+        self.assertTrue(service.is_unlocked(request))
+        admin_login(self.client, self.admin)
+        self._action('suspend')
+        self.assertFalse(service.is_unlocked(request))
+        self.assertEqual(service.verify_pin(self.user, GOOD_PIN).status, service.VerifyStatus.SUSPENDED)
+        self._action('unsuspend')
+        self.assertTrue(service.verify_pin(self.user, GOOD_PIN))
+
+    def test_pin_reset_confirmed_by_user_with_2fa(self):
+        admin_login(self.client, self.admin)
+        # forgotten PIN usually means a lockout
+        UserPin.objects.filter(user=self.user).update(locked_until=timezone.now() + timedelta(minutes=30))
+        self._action('reset')
+        user_pin = UserPin.objects.get(user=self.user)
+        self.assertEqual(user_pin.reset_pending, 'pin')
+        self.assertIsNone(user_pin.locked_until)
+        self.assertTrue(service.verify_pin(self.user, GOOD_PIN))  # old PIN still valid until confirmed
+
+        self.client.force_login(self.user)
+        url = reverse('plugins:netbox_user_pin:reset_confirm')
+        self.assertContains(self.client.get(url), 'boss2')
+        self.client.post(url, {'otp': '000000', 'new_pin': OTHER_PIN, 'confirm_pin': OTHER_PIN})
+        self.assertTrue(service.verify_pin(self.user, GOOD_PIN))
+        response = self.client.post(url, {'otp': current_code(self.secret), 'new_pin': OTHER_PIN,
+                                          'confirm_pin': OTHER_PIN})
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(service.verify_pin(self.user, OTHER_PIN))
+        self.assertEqual(UserPin.objects.get(user=self.user).reset_pending, '')
+        event = PinEvent.objects.get(action=PinEventAction.RESET_COMPLETED)
+        self.assertIn('boss2', event.detail)
+
+    def test_2fa_reset_confirmed_by_user_with_pin(self):
+        admin_login(self.client, self.admin)
+        self._action('reset-2fa')
+        self.client.force_login(self.user)
+        url = reverse('plugins:netbox_user_pin:reset_confirm')
+        self.client.post(url, {'pin': '000001'})
+        self.assertTrue(service.has_2fa(self.user))
+        response = self.client.post(url, {'pin': GOOD_PIN})
+        self.assertIn(reverse('plugins:netbox_user_pin:totp_setup'), response.url)
+        self.assertFalse(service.has_2fa(self.user))
+
+    def test_reset_expires_and_cancel(self):
+        service.request_reset(self.user, 'pin', actor=self.admin)
+        UserPin.objects.filter(user=self.user).update(pending_reset_expires=timezone.now() - timedelta(seconds=1))
+        with self.assertRaises(ValidationError):
+            service.complete_pin_reset(self.user, current_code(self.secret), OTHER_PIN)
+        service.request_reset(self.user, 'pin', actor=self.admin)
+        service.cancel_reset(self.user, actor=self.admin)
+        self.assertEqual(UserPin.objects.get(user=self.user).reset_pending, '')
+
+    def test_reset_needs_user_2fa(self):
+        plain = User.objects.create_user('no2fa', password='pw')
+        service.set_pin(plain, GOOD_PIN)
+        with self.assertRaises(ValidationError):
+            service.request_reset(plain, 'pin', actor=self.admin)
+
+
+@override_settings(EMAIL={'SERVER': 'localhost', 'FROM_EMAIL': 'netbox@firma.sk'})
+class MailPageTest(PinTestCase):
+
+    def setUp(self):
+        super().setUp()
+        settings = PinSettings.load()
+        settings.allowed_email_domains = 'firma.sk'
+        settings.save()
+        self.admin = User.objects.create_superuser('mailadmin', password='pw', email='mailadmin@firma.sk')
+        self.ok_user = User.objects.create_user('okuser', password='pw', email='ok@firma.sk')
+        self.gmail = User.objects.create_user('gmail', password='pw', email='x@gmail.com')
+        self.denied = User.objects.create_user('denied', password='pw', email='d@firma.sk')
+        service.set_access(self.denied, PinAccess.DENIED, actor=self.admin)
+
+    def test_test_mail_recipients_and_default(self):
+        admin_login(self.client, self.admin)
+        response = self.client.get(reverse('plugins:netbox_user_pin:mail'))
+        recipients = set(response.context['test_form'].fields['recipient'].queryset.values_list('username', flat=True))
+        self.assertEqual(recipients, {'mailadmin', 'okuser'})
+        self.assertEqual(response.context['test_form'].initial['recipient'], self.admin.pk)
+        mail.outbox.clear()
+        self.client.post(reverse('plugins:netbox_user_pin:mail'), {'action': 'test-mail',
+                                                                   'recipient': self.ok_user.pk})
+        self.assertEqual(mail.outbox[-1].to, ['ok@firma.sk'])
+        # not eligible recipient is rejected
+        self.client.post(reverse('plugins:netbox_user_pin:mail'), {'action': 'test-mail', 'recipient': self.gmail.pk})
+        self.assertEqual(len(mail.outbox), 1)

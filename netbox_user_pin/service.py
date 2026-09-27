@@ -38,6 +38,9 @@ __all__ = (
     'VerifyResult',
     'VerifyStatus',
     'can_manage',
+    'cancel_reset',
+    'complete_2fa_reset',
+    'complete_pin_reset',
     'change_pin',
     'clear_lockout',
     'complete_recovery',
@@ -60,7 +63,9 @@ __all__ = (
     'new_backup_codes',
     'pin_expired',
     'pin_expires_at',
+    'is_suspended',
     'recovery_blockers',
+    'request_reset',
     'reset_pin',
     'reset_totp',
     'set_access',
@@ -69,6 +74,8 @@ __all__ = (
     'start_totp_enrollment',
     'step_up',
     'step_up_blockers',
+    'suspend',
+    'unsuspend',
     'unlock',
     'unlocked_scopes',
     'verify_pin',
@@ -96,6 +103,7 @@ class VerifyStatus(enum.Enum):
     LOCKED_OUT = 'locked_out'
     NO_PIN = 'no_pin'
     NOT_ALLOWED = 'not_allowed'
+    SUSPENDED = 'suspended'
     NEED_2FA = 'need_2fa'          # 2FA required but not enrolled
     WRONG_2FA = 'wrong_2fa'
 
@@ -304,6 +312,10 @@ def verify_pin(user, pin, request=None, scope=''):
         if user_pin is None or not user_pin.is_set:
             return VerifyResult(VerifyStatus.NO_PIN)
 
+        if user_pin.suspended:
+            log_event(PinEventAction.REJECTED_LOCKED, user=user, request=request, scope=scope, detail='suspended')
+            return VerifyResult(VerifyStatus.SUSPENDED)
+
         if user_pin.is_locked_out:
             log_event(PinEventAction.REJECTED_LOCKED, user=user, request=request, scope=scope)
             return VerifyResult(VerifyStatus.LOCKED_OUT, 0, user_pin.locked_until)
@@ -423,7 +435,7 @@ def is_unlocked(request, scope=None, touch=True):
         return False
     settings = get_settings()
     user_pin = _get_pin(user)
-    if not user_pin or not user_pin.is_set or data.get('v') != user_pin.version:
+    if not user_pin or not user_pin.is_set or data.get('v') != user_pin.version or user_pin.suspended:
         return False
     if pin_expired(user, settings) or not is_allowed(user, settings):
         return False
@@ -530,12 +542,14 @@ def is_pin_admin(user):
 
 def can_manage(actor, target):
     """
-    Separation of duties: the master may manage everybody; a delegate may not manage the master, other
-    delegates or themselves.
+    Separation of duties: nobody manages themselves here (own PIN only under My PIN); the master may manage
+    everybody else; a delegate may not manage the master or other delegates.
     """
+    if target.pk == actor.pk:
+        return False
     if is_master(actor):
         return True
-    if not is_pin_admin(actor) or target.pk == actor.pk:
+    if not is_pin_admin(actor):
         return False
     return not (target.is_superuser or is_pin_admin(target))
 
@@ -709,7 +723,7 @@ def has_step_up(request):
     if not data or data.get('u') != user.pk or data.get('until', 0) <= time.time():
         return False
     user_pin = _get_pin(user)
-    return bool(user_pin and user_pin.version == data.get('v') and is_allowed(user))
+    return bool(user_pin and user_pin.version == data.get('v') and not user_pin.suspended and is_allowed(user))
 
 
 def step_up_seconds_left(request):
@@ -882,3 +896,133 @@ def complete_recovery(user, email_code, otp, new_pin, request=None):
              'immediately.'), request=request)
     if request is not None:
         lock(request, send_signal=False)
+
+
+#
+# Suspension and administrator-initiated resets
+#
+# Principle: an administrator alone can only REMOVE access (suspend). Restoring access always needs the user:
+# a reset started by an administrator is confirmed by the user in their own session with a second factor
+# (PIN reset -> 2FA code, 2FA reset -> PIN). The administrator never learns the new PIN.
+#
+
+def is_suspended(user):
+    user_pin = _get_pin(user)
+    return bool(user_pin and user_pin.suspended)
+
+
+def suspend(user, actor, request=None):
+    """Block the PIN immediately (suspected leak, user absent). Existing unlocks are invalidated."""
+    with transaction.atomic():
+        user_pin, _created = UserPin.objects.select_for_update().get_or_create(user=user)
+        user_pin.suspended = True
+        user_pin.suspended_by = getattr(actor, 'username', '') or ''
+        user_pin.version += 1
+        user_pin.save()
+    log_event(PinEventAction.SUSPENDED, user=user, actor=actor, request=request)
+    notify(user, _('Your PIN was suspended'),
+           _('Your NetBox PIN was suspended by {actor}. Contact your administrator.').format(actor=actor),
+           request=request)
+
+
+def unsuspend(user, actor, request=None):
+    UserPin.objects.filter(user=user).update(suspended=False, suspended_by='')
+    log_event(PinEventAction.UNSUSPENDED, user=user, actor=actor, request=request)
+    notify(user, _('Your PIN is active again'),
+           _('The suspension of your NetBox PIN was lifted by {actor}.').format(actor=actor), request=request)
+
+
+def request_reset(user, kind, actor, request=None):
+    """
+    Start a reset that the user confirms in their own session:
+    ``kind='pin'`` (forgotten PIN) -> user confirms with a 2FA code and sets a new PIN;
+    ``kind='2fa'`` (lost phone) -> user confirms with the PIN and enrolls 2FA again.
+    """
+    settings = get_settings()
+    user_pin = _get_pin(user)
+    if kind == 'pin':
+        if not (user_pin and user_pin.has_2fa):
+            raise ValidationError(
+                _('{user} has no 2FA, so the reset cannot be confirmed by the user.').format(user=user),
+                code='no_2fa')
+    elif kind == '2fa':
+        if not (user_pin and user_pin.has_2fa and user_pin.is_set):
+            raise ValidationError(_('{user} has no 2FA or no PIN.').format(user=user), code='no_2fa')
+    else:
+        raise ValueError(kind)
+    expires = timezone.now() + timedelta(hours=settings.reset_valid_hours)
+    UserPin.objects.filter(pk=user_pin.pk).update(
+        pending_reset=kind, pending_reset_by=getattr(actor, 'username', '') or '', pending_reset_expires=expires,
+        # a forgotten PIN usually ends in a lockout; the user must be able to confirm
+        failed_attempts=0, locked_until=None,
+    )
+    log_event(PinEventAction.RESET_REQUESTED, user=user, actor=actor, request=request,
+              detail=f'{kind}, valid until {expires.isoformat()}')
+    what = _('PIN') if kind == 'pin' else _('two-factor authentication')
+    how = _('your 2FA code') if kind == 'pin' else _('your PIN')
+    notify(user, _('Reset of your {what} started').format(what=what),
+           _('{actor} started a reset of your {what}. Log in to NetBox, open User PIN > My PIN and confirm it with '
+             '{how} until {time}. If you did not ask for it, contact your administrator.').format(
+               actor=actor, what=what, how=how, time=timezone.localtime(expires).strftime('%Y-%m-%d %H:%M')),
+           request=request)
+
+
+def cancel_reset(user, actor, request=None):
+    UserPin.objects.filter(user=user).update(pending_reset='', pending_reset_by='', pending_reset_expires=None)
+    log_event(PinEventAction.RESET_CANCELLED, user=user, actor=actor, request=request)
+
+
+def _clear_pending(user_pin):
+    user_pin.pending_reset = ''
+    user_pin.pending_reset_by = ''
+    user_pin.pending_reset_expires = None
+
+
+def complete_pin_reset(user, otp, new_pin, request=None):
+    """User confirms an administrator's PIN reset with a 2FA code and chooses a new PIN."""
+    settings = get_settings()
+    user_pin = _get_pin(user)
+    if not user_pin or user_pin.reset_pending != 'pin':
+        raise ValidationError(_('There is no PIN reset waiting for you.'), code='none')
+    validate_pin(new_pin, settings)
+    result = verify_second_factor(user, otp, request=request, scope='reset')
+    if not result:
+        raise ValidationError(_('The 2FA code is not correct.'), code='otp')
+    with transaction.atomic():
+        user_pin = UserPin.objects.select_for_update().get(user=user)
+        by = user_pin.pending_reset_by
+        user_pin.pin_hash = _hash_and_encrypt(user_pin, new_pin)
+        user_pin.version += 1
+        user_pin.changed = timezone.now()
+        user_pin.must_change = False
+        user_pin.expiry_warned = None
+        user_pin.failed_attempts = 0
+        user_pin.locked_until = None
+        _clear_pending(user_pin)
+        user_pin.save()
+    log_event(PinEventAction.RESET_COMPLETED, user=user, actor=user, request=request,
+              detail=f'PIN reset started by {by}, confirmed with 2FA')
+    notify(user, _('Your PIN was reset'), _('You set a new PIN (reset started by {by}).').format(by=by),
+           request=request)
+    signals.pin_reset.send(sender=UserPin, user=user, actor=user, request=request, scope='')
+    if request is not None:
+        lock(request, send_signal=False)
+
+
+def complete_2fa_reset(user, pin, request=None):
+    """User confirms an administrator's 2FA reset with the PIN; 2FA is removed and can be enrolled again."""
+    user_pin = _get_pin(user)
+    if not user_pin or user_pin.reset_pending != '2fa':
+        raise ValidationError(_('There is no 2FA reset waiting for you.'), code='none')
+    result = verify_pin(user, pin, request=request, scope='reset')
+    if not result:
+        raise ValidationError(_('The PIN is not correct.'), code='pin')
+    by = user_pin.pending_reset_by
+    UserPin.objects.filter(pk=user_pin.pk).update(
+        totp_secret='', totp_enabled=None, totp_last_step=0, backup_codes=[],
+        pending_reset='', pending_reset_by='', pending_reset_expires=None,
+    )
+    log_event(PinEventAction.RESET_COMPLETED, user=user, actor=user, request=request,
+              detail=f'2FA reset started by {by}, confirmed with PIN')
+    notify(user, _('Your two-factor authentication was reset'),
+           _('Set it up again under User PIN > My PIN (reset started by {by}).').format(by=by), request=request)

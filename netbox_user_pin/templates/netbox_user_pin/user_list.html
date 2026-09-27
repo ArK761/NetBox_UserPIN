@@ -8,6 +8,7 @@
   <div class="col-6 col-md-3 col-xl"><a class="card card-link text-reset" href="?status=no_2fa"><div class="card-body"><div class="text-secondary">No 2FA</div><div class="h2 mb-0 text-orange">{{ summary.no_2fa }}</div></div></a></div>
   <div class="col-6 col-md-3 col-xl"><a class="card card-link text-reset" href="?status=no_email"><div class="card-body"><div class="text-secondary">E-mail issue</div><div class="h2 mb-0 text-orange">{{ summary.no_email }}</div></div></a></div>
   <div class="col-6 col-md-3 col-xl"><a class="card card-link text-reset" href="?status=locked"><div class="card-body"><div class="text-secondary">Locked out</div><div class="h2 mb-0 text-red">{{ summary.locked }}</div></div></a></div>
+  <div class="col-6 col-md-3 col-xl"><a class="card card-link text-reset" href="?status=suspended"><div class="card-body"><div class="text-secondary">Suspended</div><div class="h2 mb-0 text-red">{{ summary.suspended }}</div></div></a></div>
   <div class="col-6 col-md-3 col-xl"><a class="card card-link text-reset" href="?status=not_allowed"><div class="card-body"><div class="text-secondary">Not permitted</div><div class="h2 mb-0 text-secondary">{{ summary.not_allowed }}</div></div></a></div>
 </div>
 {% if can_change %}{% include 'netbox_user_pin/inc/step_up_bar.html' %}{% endif %}
@@ -21,6 +22,7 @@
       <option value="no_2fa"{% if status == 'no_2fa' %} selected{% endif %}>No 2FA</option>
       <option value="no_email"{% if status == 'no_email' %} selected{% endif %}>E-mail issue (missing / domain)</option>
       <option value="locked"{% if status == 'locked' %} selected{% endif %}>Locked out</option>
+      <option value="suspended"{% if status == 'suspended' %} selected{% endif %}>Suspended</option>
       <option value="not_allowed"{% if status == 'not_allowed' %} selected{% endif %}>Not permitted</option>
     </select>
   </div>
@@ -47,6 +49,8 @@
           <td>
             {% if row.is_set %}<span class="badge text-bg-green">Active</span>{% else %}<span class="badge text-bg-orange">Not set</span>{% endif %}
             {% if row.must_change %}<span class="badge text-bg-yellow">must change</span>{% endif %}
+            {% if row.suspended %}<span class="badge text-bg-red">suspended</span>{% endif %}
+            {% if row.reset_pending %}<span class="badge text-bg-blue" title="waiting for the user to confirm">{{ row.reset_pending }} reset pending</span>{% endif %}
           </td>
           <td>{% if row.has_2fa %}<span class="badge text-bg-green">On</span>{% else %}<span class="badge text-bg-secondary">Off</span>{% endif %}</td>
           <td class="text-nowrap">
@@ -72,8 +76,14 @@
                     {% if row.access != 'default' %}{% include 'netbox_user_pin/inc/user_action.html' with action='default' label='Back to default' icon='undo' %}{% endif %}
                     {% if row.is_set %}{% include 'netbox_user_pin/inc/user_action.html' with action='force-change' label='Force PIN change' icon='rotate-right' %}{% endif %}
                     {% if row.locked %}{% include 'netbox_user_pin/inc/user_action.html' with action='clear-lockout' label='Clear lockout' icon='lock-open' %}{% endif %}
-                    {% if row.has_2fa %}{% include 'netbox_user_pin/inc/user_action.html' with action='reset-2fa' label='Reset 2FA' icon='cellphone-remove' confirm=True %}{% endif %}
-                    {% if row.is_set %}{% include 'netbox_user_pin/inc/user_action.html' with action='reset' label='Reset PIN' icon='restore' confirm=True %}{% endif %}
+                    <div class="dropdown-divider"></div>
+                    {% if row.suspended %}{% include 'netbox_user_pin/inc/user_action.html' with action='unsuspend' label='Lift suspension' icon='lock-open-check' %}
+                    {% elif row.is_set %}{% include 'netbox_user_pin/inc/user_action.html' with action='suspend' label='Suspend PIN (block now)' icon='cancel' confirm=True %}{% endif %}
+                    {% if row.reset_pending %}{% include 'netbox_user_pin/inc/user_action.html' with action='cancel-reset' label='Cancel pending reset' icon='close' %}
+                    {% elif row.has_2fa %}
+                      {% include 'netbox_user_pin/inc/user_action.html' with action='reset' label='Reset PIN (user confirms with 2FA)' icon='restore' confirm=True %}
+                      {% include 'netbox_user_pin/inc/user_action.html' with action='reset-2fa' label='Reset 2FA (user confirms with PIN)' icon='cellphone-remove' confirm=True %}
+                    {% else %}<span class="dropdown-item text-secondary small">Reset needs the user's 2FA</span>{% endif %}
                     {% endwith %}
                   </div>
                 </div>
