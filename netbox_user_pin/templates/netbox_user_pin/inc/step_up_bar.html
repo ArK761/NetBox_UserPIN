@@ -1,0 +1,10 @@
+{% if step_up_active %}
+  <div class="alert alert-success d-flex justify-content-between align-items-center"><div><i class="mdi mdi-shield-check"></i> Administrative actions unlocked{% if step_up_left %} for {% widthratio step_up_left 60 1 %} more minute(s){% endif %}.</div>
+    <form method="post" action="{% url 'plugins:netbox_user_pin:lock' %}" class="ms-3">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
+      <button type="submit" class="btn btn-sm btn-outline-secondary"><i class="mdi mdi-lock"></i> Lock</button></form>
+  </div>
+{% else %}
+  <div class="alert alert-info d-flex justify-content-between align-items-center"><div><i class="mdi mdi-shield-key"></i> Changes require a confirmation with your PIN and 2FA.</div>
+    <a class="btn btn-sm btn-primary ms-3" href="{% url 'plugins:netbox_user_pin:step_up' %}?next={{ request.get_full_path|urlencode }}"><i class="mdi mdi-shield-key"></i> Confirm identity</a>
+  </div>
+{% endif %}

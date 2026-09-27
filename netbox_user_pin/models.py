@@ -8,6 +8,7 @@ __all__ = (
     'PinEvent',
     'PinAccess',
     'PinAccessMode',
+    'PinDelegate',
     'PinEventAction',
     'PinScopeMode',
     'PinSettings',
@@ -39,8 +40,8 @@ class PinSettings(models.Model):
         verbose_name=_('Who may use a PIN'),
         max_length=20,
         choices=PinAccessMode.choices,
-        default=PinAccessMode.ALL,
-        help_text=_('Per-user Allow / Deny is set on the Users page.'),
+        default=PinAccessMode.ALLOWED_ONLY,
+        help_text=_('Per-user Allow / Deny is set on the Users page. Superusers are always allowed.'),
     )
     pin_length = models.PositiveSmallIntegerField(
         verbose_name=_('PIN length'),
@@ -86,8 +87,51 @@ class PinSettings(models.Model):
     )
     max_age_days = models.PositiveIntegerField(
         verbose_name=_('PIN max age (days)'),
-        default=0,
-        help_text=_('Force a PIN change after this many days. 0 = never.'),
+        default=180,
+        validators=[MinValueValidator(1), MaxValueValidator(3650)],
+        help_text=_('Users must change their PIN after this many days (company policy). Note: NIST SP 800-63B-4 '
+                    'does not recommend periodic changes, only forced changes on suspected compromise.'),
+    )
+    warn_days = models.PositiveIntegerField(
+        verbose_name=_('Warn before expiry (days)'),
+        default=14,
+        validators=[MaxValueValidator(365)],
+    )
+    require_2fa_admin = models.BooleanField(
+        verbose_name=_('Require PIN + 2FA for administrative actions'),
+        default=True,
+        help_text=_('Allow / deny, reset, force change, settings and delegates need a fresh PIN + 2FA '
+                    'confirmation (step-up). When off, the PIN alone is enough.'),
+    )
+    step_up_minutes = models.PositiveIntegerField(
+        verbose_name=_('Administrative window (minutes)'),
+        default=5,
+        validators=[MinValueValidator(1), MaxValueValidator(60)],
+        help_text=_('How long a step-up confirmation stays valid.'),
+    )
+    require_2fa_unlock = models.BooleanField(
+        verbose_name=_('Require 2FA on every unlock'),
+        default=False,
+    )
+    self_recovery = models.BooleanField(
+        verbose_name=_('Self-service recovery of a forgotten PIN'),
+        default=True,
+        help_text=_('A code sent by e-mail AND a 2FA code are required together.'),
+    )
+    recovery_minutes = models.PositiveIntegerField(
+        verbose_name=_('Recovery code validity (minutes)'),
+        default=15,
+        validators=[MinValueValidator(5), MaxValueValidator(60)],
+    )
+    allowed_email_domains = models.TextField(
+        verbose_name=_('Allowed e-mail domains'),
+        blank=True,
+        help_text=_('E-mails are only sent to these domains, one per line (e.g. firma.sk). Empty = no e-mails.'),
+    )
+    notify_email = models.BooleanField(
+        verbose_name=_('Security notifications by e-mail'),
+        default=True,
+        help_text=_('PIN set / changed / reset, lockout, upcoming expiry, 2FA changes.'),
     )
 
     class Meta:
@@ -133,6 +177,19 @@ class UserPin(models.Model):
         default=PinAccess.DEFAULT,
         help_text='Administrator decision whether this user may use a PIN.',
     )
+    must_change = models.BooleanField(
+        default=False,
+        help_text='Forced PIN change at next use (administrator or test).',
+    )
+    totp_secret = models.TextField(blank=True, help_text='AES-256-GCM encrypted TOTP secret; empty = 2FA off.')
+    totp_enabled = models.DateTimeField(null=True, blank=True)
+    totp_last_step = models.BigIntegerField(default=0, help_text='Last accepted TOTP time step (replay protection).')
+    backup_codes = models.JSONField(default=list, blank=True, help_text='Keyed digests of unused backup codes.')
+    recovery_code = models.CharField(max_length=128, blank=True)
+    recovery_expires = models.DateTimeField(null=True, blank=True)
+    recovery_attempts = models.PositiveSmallIntegerField(default=0)
+    recovery_sent = models.DateTimeField(null=True, blank=True)
+    expiry_warned = models.DateTimeField(null=True, blank=True)
     failed_attempts = models.PositiveSmallIntegerField(default=0)
     locked_until = models.DateTimeField(null=True, blank=True)
     changed = models.DateTimeField(null=True, blank=True)
@@ -150,6 +207,10 @@ class UserPin(models.Model):
     @property
     def is_set(self):
         return bool(self.pin_hash)
+
+    @property
+    def has_2fa(self):
+        return bool(self.totp_secret)
 
     @property
     def is_locked_out(self):
@@ -170,6 +231,23 @@ class PinEventAction(models.TextChoices):
     LOCKED_OUT = 'locked_out', _('Locked out after failed attempts')
     REJECTED_LOCKED = 'rejected_locked', _('Attempt while locked out')
     LOCKOUT_CLEARED = 'lockout_cleared', _('Lockout cleared by administrator')
+    FORCE_CHANGE = 'force_change', _('PIN change forced')
+    TOTP_ENABLED = 'totp_enabled', _('2FA enabled')
+    TOTP_DISABLED = 'totp_disabled', _('2FA disabled')
+    TOTP_RESET = 'totp_reset', _('2FA reset by administrator')
+    TOTP_FAILED = 'totp_failed', _('Wrong 2FA code')
+    BACKUP_CODE_USED = 'backup_code_used', _('Backup code used')
+    BACKUP_CODES_NEW = 'backup_codes_new', _('New backup codes generated')
+    STEP_UP_OK = 'step_up_ok', _('Administrative confirmation (step-up)')
+    STEP_UP_FAILED = 'step_up_failed', _('Administrative confirmation failed')
+    RECOVERY_SENT = 'recovery_sent', _('Recovery code e-mailed')
+    RECOVERY_OK = 'recovery_ok', _('PIN recovered (e-mail + 2FA)')
+    RECOVERY_FAILED = 'recovery_failed', _('PIN recovery failed')
+    MAIL_SENT = 'mail_sent', _('E-mail sent')
+    MAIL_FAILED = 'mail_failed', _('E-mail failed')
+    DELEGATE_ADDED = 'delegate_added', _('Delegate added')
+    DELEGATE_REMOVED = 'delegate_removed', _('Delegate removed')
+    DELEGATE_CHANGED = 'delegate_changed', _('Delegate changed')
     ACCESS_CHANGED = 'access_changed', _('PIN access changed by administrator')
     NOT_ALLOWED = 'not_allowed', _('Attempt by a user not allowed to use a PIN')
     LOCKED = 'locked', _('Locked manually')
@@ -224,3 +302,34 @@ class PinEvent(models.Model):
 
     def delete(self, *args, **kwargs):
         raise RuntimeError('PIN events are append-only and cannot be deleted.')
+
+
+class PinDelegate(models.Model):
+    """
+    A user or group the master (superuser) delegated PIN administration to. Synchronised into NetBox object
+    permissions so that menus and permission checks work natively.
+    """
+    user = models.OneToOneField(
+        to=settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True, related_name='+',
+    )
+    group = models.OneToOneField(
+        to='users.Group', on_delete=models.CASCADE, null=True, blank=True, related_name='+',
+    )
+    can_edit_settings = models.BooleanField(default=False)
+    created = models.DateTimeField(auto_now_add=True)
+    created_by = models.CharField(max_length=150, blank=True)
+
+    class Meta:
+        verbose_name = _('PIN delegate')
+        verbose_name_plural = _('PIN delegates')
+        constraints = (
+            models.CheckConstraint(
+                condition=(
+                    models.Q(user__isnull=False, group__isnull=True) | models.Q(user__isnull=True, group__isnull=False)
+                ),
+                name='netbox_user_pin_delegate_user_xor_group',
+            ),
+        )
+
+    def __str__(self):
+        return f'user {self.user}' if self.user_id else f'group {self.group}'

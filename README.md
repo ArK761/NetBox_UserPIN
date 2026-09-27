@@ -7,9 +7,16 @@ sensitive pages ("enter your PIN to continue"), so the PIN logic exists only onc
 - PIN stored as **Argon2id hash encrypted with AES-256-GCM** – the key lives only in the NetBox configuration
 - Unlock is kept in the session for a configurable time (optionally extended on activity)
 - Lockout after too many wrong attempts, weak PINs rejected (`111111`, `123456`, `121212`, own blocklist)
-- Administrator can **reset** a PIN or clear a lockout, but can never read it
-- Append-only **audit log** of every PIN event (never contains a PIN or hash)
-- Settings page in the UI, simple API + signals for other plugins
+- **Default deny**: only the master (superusers) and explicitly allowed users may use a PIN
+- **PIN rotation** (default every 180 days) with expiry warning, forced change and a "test rotation" button
+- **Two-factor authentication** (TOTP – Microsoft / Google Authenticator …) with one-time backup codes
+- **Step-up**: administrative actions need a fresh PIN + 2FA confirmation (valid a few minutes)
+- **Forgotten PIN**: self-service recovery needs an e-mailed code **and** a 2FA code together
+- E-mails only to allowed company domains; security notifications (changed, reset, locked, expiring)
+- **Delegation**: the master names users / groups who manage PINs (separation of duties)
+- Administrator can **reset** a PIN or 2FA or clear a lockout, but can never read a PIN
+- Append-only **audit log** of every PIN event (never contains a PIN, hash or code)
+- Settings page in the UI, stable API + signals for other plugins
 
 Requires NetBox **4.7+** (Python 3.12+).
 
@@ -44,12 +51,18 @@ PLUGINS_CONFIG = {
 > Keep an **offline backup** of the key and never put it into the same backup as the database.
 > If the key is lost no other data is lost – users simply set new PINs.
 
+For e-mails (recovery codes, notifications) NetBox's own `EMAIL` setting must be configured.
+
 Then:
 
 ```bash
 python manage.py migrate
 sudo systemctl restart netbox
 ```
+
+After the first start: log in as superuser → **User PIN → My PIN** → set your PIN and **set up 2FA**
+(needed for every administrative action), then set the allowed e-mail domains in **Settings** and allow users
+on the **Users** page.
 
 ### Optional configuration
 
@@ -63,44 +76,66 @@ sudo systemctl restart netbox
 
 Everything else is configured in the UI: **User PIN → Settings**.
 
-## UI
+## Roles and UI
 
-| Menu | Who | What |
-|---|---|---|
-| My PIN | every user | status, set / change PIN, lock now, own recent activity |
-| Test unlock | every user | a protected page to try the flow |
-| Users | `view_userpin` / `change_userpin` | summary + PIN status of all users, allow / deny PIN use, reset PIN, clear lockout |
-| Audit log | `view_pinevent` | all PIN events, filter by user and event |
-| Settings | `change_pinsettings` | PIN policy, unlock time, scope mode, lockout, key fingerprint |
+| Menu | Master (superuser) | Delegate | User |
+|---|---|---|---|
+| My PIN – PIN, 2FA, backup codes, recovery, test rotation, own activity | ✅ | ✅ | ✅ |
+| Users – summary, PIN / 2FA / e-mail / expiry status of everybody | ✅ | ✅ | – |
+| Users – allow / deny, reset PIN, reset 2FA, force change, clear lockout | ✅ | ✅ except master, other delegates, self | – |
+| Audit log | ✅ | ✅ | – |
+| Settings | ✅ edit | view (edit only if allowed by the master) | – |
+| Delegates | ✅ | – | – |
 
-Grant the permissions with regular NetBox object permissions (superusers have all of them).
+All changes on Users, Settings and Delegates require a **step-up** (PIN + 2FA). Administration pages also
+require the administrator's own unlocked PIN.
 
-### Settings
+Delegates are stored by the plugin and synchronised into NetBox object permissions named
+`User PIN: delegates …` / `User PIN: settings editors` – do not edit those by hand.
+
+### Settings (defaults)
 
 | Setting | Default |
 |---|---|
-| Who may use a PIN | all users except denied (or: only explicitly allowed users) |
-| PIN length | 6 digits |
-| Block weak PINs / additional blocked PINs | on / empty |
-| PIN max age | 0 (never expires) |
-| Unlock duration | 15 minutes |
-| Extend unlock on activity | on |
-| Unlock scope | one unlock for everything (or separate per plugin / area) |
-| Max failed attempts / lockout | 5 / 30 minutes |
+| Who may use a PIN | only explicitly allowed users (superusers always) |
+| PIN length / block weak PINs | 6 digits / on |
+| PIN max age / warn before | 180 days / 14 days (NIST SP 800-63B-4 does not recommend periodic changes – set according to your company policy) |
+| Unlock duration / extend on activity / scope | 15 min / on / one unlock for everything |
+| Require 2FA on every unlock | off |
+| Max failed attempts / lockout | 5 / 30 min (PIN and 2FA failures count together) |
+| PIN + 2FA for administrative actions / window | on / 5 min |
+| Self-service recovery (e-mail code + 2FA) / code validity | on / 15 min |
+| Allowed e-mail domains | empty (= no e-mails until set) |
+| Security notifications by e-mail | on |
+
+### Forgotten PIN
+
+1. *My PIN → Forgot PIN* (or the link on the unlock page) → **Send code** – an 8 digit code is e-mailed
+   (only to an allowed domain, valid 15 min, max 5 attempts, resend after 60 s).
+2. Enter the e-mail code **and** a 2FA code (or a backup code) and the new PIN.
+
+Without an e-mail in an allowed domain or without 2FA the recovery is not offered – an administrator resets
+the PIN. Emergency for a master without phone and backup codes: `python manage.py userpin_reset_2fa <user>`.
 
 ## Using it from another plugin
 
 Add `netbox-user-pin` to your plugin's dependencies and protect views:
 
 ```python
-from netbox_user_pin.mixins import PinRequiredMixin, pin_required
+from netbox_user_pin.mixins import PinRequiredMixin, StepUpRequiredMixin, pin_required, step_up_required
 
 class ProjectView(PinRequiredMixin, generic.ObjectView):
     pin_scope = 'projects'          # used when the scope mode is "per scope"
 
+class ProjectDeleteView(StepUpRequiredMixin, generic.ObjectDeleteView):
+    ...                             # sensitive action: fresh PIN + 2FA
+
 @pin_required(scope='projects')
 def download(request, pk): ...
 ```
+
+Check `netbox_user_pin.service.API_VERSION` (currently `2`) if you rely on newer features; the API only grows,
+existing calls keep working.
 
 The user is redirected to *set PIN* (no PIN yet), *change PIN* (expired) or *enter PIN* and then back to
 the original page. HTMX requests get an `HX-Redirect` header.
@@ -113,6 +148,8 @@ service.is_unlocked(request, scope='projects')
 service.unlock(request, pin, scope='projects')   # -> VerifyResult (.ok, .status, .remaining_attempts)
 service.verify_pin(user, pin)                    # check without unlocking (e.g. confirm a dangerous action)
 service.lock(request)                            # lock everything in this session
+service.has_step_up(request)                     # fresh PIN (+ 2FA) confirmation active?
+service.has_2fa(user), service.is_allowed(user)
 ```
 
 Signals (`netbox_user_pin.signals`) – e.g. to copy events into your own audit log:
@@ -130,6 +167,10 @@ PIN ──Argon2id + salt──► hash ──AES-256-GCM (key from configuratio
 - The ciphertext is bound to its user: a hash copied into another user's row does not decrypt.
 - Wrong attempts are counted under a row lock, so parallel guessing cannot bypass the lockout.
 - A PIN change or reset invalidates every existing unlock of that user.
+- TOTP secrets are encrypted the same way; a TOTP code is accepted only once (replay protection).
+- Backup codes (100 bits) and e-mailed recovery codes are stored only as digests, single use, short-lived.
+- Recovery never bypasses 2FA (OWASP Forgot Password / MFA cheat sheets; NIST SP 800-63B-4 allows e-mail only
+  for recovery codes, not as an authentication factor).
 - The PIN is only an authentication factor ("it is really you at this computer"); it is not used as an
   encryption key for other data.
 

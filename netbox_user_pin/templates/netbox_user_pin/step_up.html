@@ -1,0 +1,18 @@
+{% extends 'generic/_base.html' %}
+{% block title %}<i class="mdi mdi-shield-key"></i> Confirm your identity{% endblock %}
+{% block content %}
+<div class="row"><div class="col-12 col-md-8 col-lg-4">
+  {% if blockers %}
+    <div class="alert alert-warning"><div>
+      Administrative actions require {% if 'no_pin' in blockers %}a PIN{% endif %}{% if 'no_pin' in blockers and 'no_2fa' in blockers %} and {% endif %}{% if 'no_2fa' in blockers %}two-factor authentication{% endif %}.
+      {% if 'no_pin' in blockers %}<a href="{% url 'plugins:netbox_user_pin:set_pin' %}?next={{ request.get_full_path|urlencode }}">Set a PIN</a>{% else %}<a href="{% url 'plugins:netbox_user_pin:totp_setup' %}?next={{ request.get_full_path|urlencode }}">Set up 2FA</a>{% endif %}
+    </div></div>
+  {% else %}
+    <p class="text-secondary">
+      This is an administrative action. Confirm with your PIN{% if settings.require_2fa_admin %} and a code from your authenticator app{% endif %}.
+      The confirmation is valid for {{ settings.step_up_minutes }} minutes.
+    </p>
+    {% include 'netbox_user_pin/inc/pin_form.html' with submit_label="Confirm" %}
+  {% endif %}
+</div></div>
+{% endblock %}

@@ -1,23 +1,33 @@
 {% extends 'generic/_base.html' %}
 {% block title %}My PIN{% endblock %}
 {% block content %}
+{% if allowed and has_pin and expiry_warning and not expired %}
+  <div class="alert alert-warning"><div><i class="mdi mdi-clock-alert"></i> Your PIN expires in <strong>{{ days_left }} day{{ days_left|pluralize }}</strong> ({{ expires|date:"Y-m-d" }}). <a href="{% url 'plugins:netbox_user_pin:change_pin' %}">Change it now</a>.</div></div>
+{% endif %}
+{% if allowed and not has_2fa %}
+  <div class="alert alert-info"><div><i class="mdi mdi-cellphone-key"></i> Two-factor authentication is not set up. It is needed for administrative confirmations and for recovering a forgotten PIN. <a href="{% url 'plugins:netbox_user_pin:totp_setup' %}">Set it up</a>.</div></div>
+{% endif %}
 <div class="row">
   <div class="col-12 col-lg-6">
     <div class="card">
-      <h2 class="card-header">Status</h2>
+      <h2 class="card-header">PIN</h2>
       <table class="table table-hover attr-table">
-        <tr>
-          <th scope="row">PIN</th>
-          <td>
-            {% if has_pin %}<span class="badge text-bg-green">Set</span>{% else %}<span class="badge text-bg-orange">Not set</span>{% endif %}
-            {% if expired %}<span class="badge text-bg-red">Expired – change required</span>{% endif %}
-          </td>
-        </tr>
         <tr>
           <th scope="row">Permitted to use a PIN</th>
           <td>{% if allowed %}<span class="badge text-bg-green">Yes</span>{% else %}<span class="badge text-bg-red">No – ask an administrator</span>{% endif %}</td>
         </tr>
+        <tr>
+          <th scope="row">PIN</th>
+          <td>
+            {% if has_pin %}<span class="badge text-bg-green">Active</span>{% else %}<span class="badge text-bg-orange">Not set</span>{% endif %}
+            {% if expired %}<span class="badge text-bg-red">Change required</span>{% endif %}
+          </td>
+        </tr>
         <tr><th scope="row">Last changed</th><td>{{ user_pin.changed|default:"—" }}</td></tr>
+        <tr>
+          <th scope="row">Valid until</th>
+          <td>{% if expires %}{{ expires|date:"Y-m-d" }} <span class="text-secondary">({% if days_left >= 0 %}{{ days_left }} days left{% else %}expired{% endif %}, rotation every {{ settings.max_age_days }} days)</span>{% else %}—{% endif %}</td>
+        </tr>
         <tr><th scope="row">Last successful use</th><td>{{ user_pin.last_verified|default:"—" }}</td></tr>
         <tr>
           <th scope="row">Lockout</th>
@@ -33,23 +43,61 @@
         </tr>
         <tr><th scope="row">Required length</th><td>{{ settings.pin_length }} digits</td></tr>
       </table>
-      <div class="card-footer text-end">
-        {% if unlocked_scopes %}
-          <form method="post" action="{% url 'plugins:netbox_user_pin:lock' %}" class="d-inline">
-            {% csrf_token %}
-            <button type="submit" class="btn btn-outline-secondary"><i class="mdi mdi-lock"></i> Lock now</button>
-          </form>
-        {% endif %}
-        {% if not allowed %}
-        {% elif has_pin %}
-          <a href="{% url 'plugins:netbox_user_pin:change_pin' %}" class="btn btn-primary"><i class="mdi mdi-pencil"></i> Change PIN</a>
-        {% else %}
-          <a href="{% url 'plugins:netbox_user_pin:set_pin' %}" class="btn btn-primary"><i class="mdi mdi-plus"></i> Set PIN</a>
-        {% endif %}
-      </div>
+      {% if allowed %}
+        <div class="card-footer text-end">
+          {% if unlocked_scopes %}
+            <form method="post" action="{% url 'plugins:netbox_user_pin:lock' %}" class="d-inline">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-outline-secondary"><i class="mdi mdi-lock"></i> Lock now</button>
+            </form>
+          {% endif %}
+          {% if has_pin %}
+            <form method="post" action="{% url 'plugins:netbox_user_pin:test_rotation' %}" class="d-inline" onsubmit="return confirm('Simulate an expired PIN? You will have to change your PIN right away.');">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-outline-warning"><i class="mdi mdi-rotate-right"></i> Test rotation</button>
+            </form>
+            <a href="{% url 'plugins:netbox_user_pin:recover' %}" class="btn btn-outline-secondary"><i class="mdi mdi-lifebuoy"></i> Forgot PIN</a>
+            <a href="{% url 'plugins:netbox_user_pin:change_pin' %}" class="btn btn-primary"><i class="mdi mdi-pencil"></i> Change PIN</a>
+          {% else %}
+            <a href="{% url 'plugins:netbox_user_pin:set_pin' %}" class="btn btn-primary"><i class="mdi mdi-plus"></i> Set PIN</a>
+          {% endif %}
+        </div>
+      {% endif %}
     </div>
   </div>
   <div class="col-12 col-lg-6">
+    <div class="card">
+      <h2 class="card-header">Two-factor authentication &amp; recovery</h2>
+      <table class="table table-hover attr-table">
+        <tr>
+          <th scope="row">2FA (authenticator app)</th>
+          <td>{% if has_2fa %}<span class="badge text-bg-green">On</span> <span class="text-secondary">since {{ user_pin.totp_enabled|date:"Y-m-d" }}</span>{% else %}<span class="badge text-bg-orange">Off</span>{% endif %}</td>
+        </tr>
+        <tr><th scope="row">Backup codes left</th><td>{% if has_2fa %}{{ backup_codes_left }} / 10{% else %}—{% endif %}</td></tr>
+        <tr>
+          <th scope="row">E-mail</th>
+          <td>
+            {{ request.user.email|default:"—" }}
+            {% if email_status == 'missing' %}<span class="badge text-bg-orange">no e-mail</span>
+            {% elif email_status == 'domain' %}<span class="badge text-bg-orange">domain not allowed</span>{% endif %}
+          </td>
+        </tr>
+        <tr>
+          <th scope="row">Self-service recovery</th>
+          <td>{% if not recovery_blockers %}<span class="badge text-bg-green">Available</span> <span class="text-secondary">(e-mail code + 2FA)</span>{% else %}<span class="badge text-bg-secondary">Not available</span> <span class="text-secondary">– an administrator can reset your PIN</span>{% endif %}</td>
+        </tr>
+      </table>
+      {% if allowed %}
+        <div class="card-footer text-end">
+          {% if has_2fa %}
+            <a href="{% url 'plugins:netbox_user_pin:totp_manage' action='backup-codes' %}" class="btn btn-outline-secondary"><i class="mdi mdi-key-chain"></i> New backup codes</a>
+            <a href="{% url 'plugins:netbox_user_pin:totp_manage' action='disable' %}" class="btn btn-outline-danger"><i class="mdi mdi-cellphone-remove"></i> Disable 2FA</a>
+          {% else %}
+            <a href="{% url 'plugins:netbox_user_pin:totp_setup' %}" class="btn btn-primary"><i class="mdi mdi-cellphone-key"></i> Set up 2FA</a>
+          {% endif %}
+        </div>
+      {% endif %}
+    </div>
     <div class="card">
       <h2 class="card-header">Recent activity</h2>
       <table class="table table-hover">

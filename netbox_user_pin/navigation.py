@@ -19,7 +19,12 @@ menu = PluginMenu(
             ),
             PluginMenuItem(
                 link='plugins:netbox_user_pin:settings', link_text='Settings',
-                permissions=['netbox_user_pin.change_pinsettings'],
+                permissions=['netbox_user_pin.view_pinsettings'],
+            ),
+            PluginMenuItem(
+                # add_pinsettings is only ever held by superusers (the master)
+                link='plugins:netbox_user_pin:delegates', link_text='Delegates',
+                permissions=['netbox_user_pin.add_pinsettings'],
             ),
         )),
     ),

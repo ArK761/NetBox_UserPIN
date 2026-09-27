@@ -14,6 +14,13 @@ Function based views::
 
     @pin_required(scope='projects')
     def my_view(request): ...
+
+Sensitive actions (fresh PIN + 2FA confirmation, "step-up")::
+
+    class ProjectDeleteView(StepUpRequiredMixin, generic.ObjectDeleteView): ...
+
+    @step_up_required
+    def delete(request, pk): ...
 """
 from functools import wraps
 from urllib.parse import urlencode
@@ -26,9 +33,12 @@ from . import service
 
 __all__ = (
     'PinRequiredMixin',
+    'StepUpRequiredMixin',
     'not_allowed_response',
     'pin_gate',
     'pin_required',
+    'step_up_gate',
+    'step_up_required',
 )
 
 
@@ -62,6 +72,8 @@ def pin_gate(request, scope=None):
         return _redirect(request, f"{reverse('plugins:netbox_user_pin:set_pin')}?{query}")
     if service.pin_expired(user):
         return _redirect(request, f"{reverse('plugins:netbox_user_pin:change_pin')}?{query}&expired=1")
+    if service.get_settings().require_2fa_unlock and not service.has_2fa(user):
+        return _redirect(request, f"{reverse('plugins:netbox_user_pin:totp_setup')}?{query}")
     if not service.is_unlocked(request, scope=scope):
         return _redirect(request, f"{reverse('plugins:netbox_user_pin:unlock')}?{query}")
     return None
@@ -94,3 +106,35 @@ def pin_required(view_func=None, *, scope=None):
     if view_func is not None:
         return decorator(view_func)
     return decorator
+
+
+def step_up_gate(request):
+    """Return a redirect to the confirmation page unless a step-up (PIN + 2FA) is currently valid."""
+    user = getattr(request, 'user', None)
+    if user is None or not user.is_authenticated:
+        return None
+    if not service.is_allowed(user):
+        return not_allowed_response(request)
+    if service.has_step_up(request):
+        return None
+    next_url = request.get_full_path() if request.method == 'GET' else request.META.get('HTTP_REFERER', '')
+    query = urlencode({'next': next_url})
+    return _redirect(request, f"{reverse('plugins:netbox_user_pin:step_up')}?{query}")
+
+
+class StepUpRequiredMixin:
+    """View mixin requiring a fresh PIN (+ 2FA) confirmation. Place it before the NetBox/Django view class."""
+
+    def dispatch(self, request, *args, **kwargs):
+        if (response := step_up_gate(request)) is not None:
+            return response
+        return super().dispatch(request, *args, **kwargs)
+
+
+def step_up_required(view_func):
+    @wraps(view_func)
+    def wrapper(request, *args, **kwargs):
+        if (response := step_up_gate(request)) is not None:
+            return response
+        return view_func(request, *args, **kwargs)
+    return wrapper

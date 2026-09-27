@@ -1,0 +1,38 @@
+{% extends 'generic/_base.html' %}
+{% block title %}<i class="mdi mdi-lifebuoy"></i> Recover a forgotten PIN{% endblock %}
+{% block content %}
+<div class="row"><div class="col-12 col-md-8 col-lg-5">
+  {% if blockers %}
+    <div class="alert alert-warning"><div>
+      Self-service recovery is not available for your account:
+      <ul class="mb-0">
+        {% for b in blockers %}
+          <li>{% if b == 'disabled' %}Self-service recovery is turned off.
+              {% elif b == 'not_allowed' %}You are not permitted to use a PIN.
+              {% elif b == 'mail_not_configured' %}NetBox cannot send e-mails.
+              {% elif b == 'email_missing' %}Your account has no e-mail address.
+              {% elif b == 'email_domain' %}Your e-mail address is not in an allowed domain.
+              {% elif b == 'no_2fa' %}Two-factor authentication is not set up.
+              {% endif %}</li>
+        {% endfor %}
+      </ul>
+      Please ask an administrator to reset your PIN.
+    </div></div>
+  {% else %}
+    <p class="text-secondary">Both are required: a code sent to your e-mail <strong>and</strong> a code from your authenticator app.</p>
+    <div class="card mb-4">
+      <div class="card-body d-flex justify-content-between align-items-center">
+        <div><strong>1.</strong> Send a code to <code>{{ email }}</code>{% if code_pending %} <span class="badge text-bg-blue">code sent</span>{% endif %}</div>
+        <form method="post">{% csrf_token %}<input type="hidden" name="action" value="send">
+          <button type="submit" class="btn btn-outline-primary"><i class="mdi mdi-email-fast"></i> {% if code_pending %}Send again{% else %}Send code{% endif %}</button>
+        </form>
+      </div>
+    </div>
+    {% if code_pending or form.errors %}
+      <p><strong>2.</strong> Enter both codes and choose a new PIN ({{ settings.pin_length }} digits). The e-mail code is valid for {{ settings.recovery_minutes }} minutes.</p>
+      {% url 'plugins:netbox_user_pin:my_pin' as cancel_url %}
+      {% include 'netbox_user_pin/inc/pin_form.html' with submit_label="Set new PIN" %}
+    {% endif %}
+  {% endif %}
+</div></div>
+{% endblock %}

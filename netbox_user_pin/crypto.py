@@ -138,3 +138,21 @@ def decrypt(token, aad):
         return AESGCM(keys[key_id]).decrypt(blob[:NONCE_SIZE], blob[NONCE_SIZE:], aad).decode()
     except InvalidTag:
         raise DecryptionError(f"Value cannot be decrypted with key '{key_id}' (wrong key or tampered data).")
+
+
+def keyed_digest(value, purpose):
+    """HMAC-SHA256 of a short secret (e.g. an e-mailed code) with the active key; returns '<key_id>:<hex>'."""
+    import hmac
+    key_id = active_key_id()
+    mac = hmac.new(_keys()[key_id], f'{purpose}:{value}'.encode(), hashlib.sha256).hexdigest()
+    return f'{key_id}:{mac}'
+
+
+def check_keyed_digest(value, purpose, digest):
+    import hmac
+    key_id = token_key_id(digest)
+    keys = _keys()
+    if key_id not in keys:
+        return False
+    mac = hmac.new(keys[key_id], f'{purpose}:{value}'.encode(), hashlib.sha256).hexdigest()
+    return hmac.compare_digest(f'{key_id}:{mac}', digest)

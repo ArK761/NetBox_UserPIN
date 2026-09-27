@@ -8,6 +8,9 @@
     <p class="text-secondary">This area is protected. Enter your personal PIN to continue.</p>
   {% endif %}
   {% include 'netbox_user_pin/inc/pin_form.html' with submit_label="Unlock" %}
-  <p class="mt-3 small text-secondary">Forgot your PIN? Ask an administrator to reset it.</p>
+  <p class="mt-3 small text-secondary">
+    Forgot your PIN?
+    {% if can_recover %}<a href="{% url 'plugins:netbox_user_pin:recover' %}">Recover it with e-mail + 2FA</a>{% else %}Ask an administrator to reset it.{% endif %}
+  </p>
 </div></div>
 {% endblock %}

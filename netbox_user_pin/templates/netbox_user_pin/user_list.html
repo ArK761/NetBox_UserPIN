@@ -2,79 +2,91 @@
 {% block title %}User PINs{% endblock %}
 {% block content %}
 <div class="row row-cards mb-3">
-  <div class="col-6 col-lg"><a class="card card-link text-reset" href="?"><div class="card-body"><div class="text-secondary">Users</div><div class="h2 mb-0">{{ summary.total }}</div></div></a></div>
-  <div class="col-6 col-lg"><a class="card card-link text-reset" href="?status=with_pin"><div class="card-body"><div class="text-secondary">PIN active</div><div class="h2 mb-0 text-green">{{ summary.with_pin }}</div></div></a></div>
-  <div class="col-6 col-lg"><a class="card card-link text-reset" href="?status=without_pin"><div class="card-body"><div class="text-secondary">No PIN yet</div><div class="h2 mb-0 text-orange">{{ summary.without_pin }}</div></div></a></div>
-  <div class="col-6 col-lg"><a class="card card-link text-reset" href="?status=locked"><div class="card-body"><div class="text-secondary">Locked out</div><div class="h2 mb-0 text-red">{{ summary.locked }}</div></div></a></div>
-  <div class="col-6 col-lg"><a class="card card-link text-reset" href="?status=not_allowed"><div class="card-body"><div class="text-secondary">Not permitted</div><div class="h2 mb-0 text-secondary">{{ summary.not_allowed }}</div></div></a></div>
+  <div class="col-6 col-md-3 col-xl"><a class="card card-link text-reset" href="?"><div class="card-body"><div class="text-secondary">Users</div><div class="h2 mb-0">{{ summary.total }}</div></div></a></div>
+  <div class="col-6 col-md-3 col-xl"><a class="card card-link text-reset" href="?status=with_pin"><div class="card-body"><div class="text-secondary">PIN active</div><div class="h2 mb-0 text-green">{{ summary.with_pin }}</div></div></a></div>
+  <div class="col-6 col-md-3 col-xl"><a class="card card-link text-reset" href="?status=without_pin"><div class="card-body"><div class="text-secondary">No PIN yet</div><div class="h2 mb-0 text-orange">{{ summary.without_pin }}</div></div></a></div>
+  <div class="col-6 col-md-3 col-xl"><a class="card card-link text-reset" href="?status=no_2fa"><div class="card-body"><div class="text-secondary">No 2FA</div><div class="h2 mb-0 text-orange">{{ summary.no_2fa }}</div></div></a></div>
+  <div class="col-6 col-md-3 col-xl"><a class="card card-link text-reset" href="?status=no_email"><div class="card-body"><div class="text-secondary">E-mail issue</div><div class="h2 mb-0 text-orange">{{ summary.no_email }}</div></div></a></div>
+  <div class="col-6 col-md-3 col-xl"><a class="card card-link text-reset" href="?status=locked"><div class="card-body"><div class="text-secondary">Locked out</div><div class="h2 mb-0 text-red">{{ summary.locked }}</div></div></a></div>
+  <div class="col-6 col-md-3 col-xl"><a class="card card-link text-reset" href="?status=not_allowed"><div class="card-body"><div class="text-secondary">Not permitted</div><div class="h2 mb-0 text-secondary">{{ summary.not_allowed }}</div></div></a></div>
 </div>
+{% if can_change %}{% include 'netbox_user_pin/inc/step_up_bar.html' %}{% endif %}
 <form method="get" class="row g-2 mb-3">
-  <div class="col-auto"><input type="text" name="q" value="{{ q }}" class="form-control" placeholder="Username"></div>
+  <div class="col-auto"><input type="text" name="q" value="{{ q }}" class="form-control" placeholder="Username or e-mail"></div>
   <div class="col-auto">
     <select name="status" class="form-select">
       <option value="">All users</option>
       <option value="with_pin"{% if status == 'with_pin' %} selected{% endif %}>PIN active</option>
       <option value="without_pin"{% if status == 'without_pin' %} selected{% endif %}>No PIN yet</option>
+      <option value="no_2fa"{% if status == 'no_2fa' %} selected{% endif %}>No 2FA</option>
+      <option value="no_email"{% if status == 'no_email' %} selected{% endif %}>E-mail issue (missing / domain)</option>
       <option value="locked"{% if status == 'locked' %} selected{% endif %}>Locked out</option>
       <option value="not_allowed"{% if status == 'not_allowed' %} selected{% endif %}>Not permitted</option>
     </select>
   </div>
   <div class="col-auto"><button class="btn btn-primary" type="submit"><i class="mdi mdi-magnify"></i> Search</button></div>
-  <div class="col text-end text-secondary small align-self-center">
-    Mode: <strong>{{ settings.get_access_mode_display }}</strong>
-  </div>
+  <div class="col text-end text-secondary small align-self-center">Mode: <strong>{{ settings.get_access_mode_display }}</strong> · rotation every {{ settings.max_age_days }} days</div>
 </form>
 <div class="card">
+  <div class="table-responsive">
   <table class="table table-hover">
-    <thead><tr><th>User</th><th>Permitted</th><th>PIN</th><th>Last changed</th><th>Last used</th><th>Failed attempts</th><th>Lockout</th>{% if can_change %}<th></th>{% endif %}</tr></thead>
+    <thead><tr><th>User</th><th>Permitted</th><th>PIN</th><th>2FA</th><th>E-mail</th><th>Valid until</th><th>Last used</th><th>Lockout</th>{% if can_change and step_up_active %}<th></th>{% endif %}</tr></thead>
     <tbody>
       {% for row in rows %}
         <tr>
-          <td>{{ row.user.username }}{% if row.user == request.user %} <span class="badge text-bg-blue">you</span>{% endif %}{% if not row.user.is_active %} <span class="badge text-bg-secondary">inactive</span>{% endif %}</td>
+          <td class="text-nowrap">
+            {{ row.user.username }}
+            {% if row.user == request.user %}<span class="badge text-bg-blue">you</span>{% endif %}
+            {% if row.role == 'master' %}<span class="badge text-bg-purple">master</span>{% elif row.role == 'delegate' %}<span class="badge text-bg-cyan">delegate</span>{% endif %}
+            {% if not row.user.is_active %}<span class="badge text-bg-secondary">inactive</span>{% endif %}
+          </td>
           <td>
             {% if row.allowed %}<span class="badge text-bg-green">Yes</span>{% else %}<span class="badge text-bg-red">No</span>{% endif %}
             {% if row.access != 'default' %}<span class="text-secondary small">({{ row.access }})</span>{% endif %}
           </td>
-          <td>{% if row.is_set %}<span class="badge text-bg-green">Active</span>{% else %}<span class="badge text-bg-orange">Not set</span>{% endif %}</td>
-          <td>{{ row.pin.changed|date:"Y-m-d H:i"|default:"—" }}</td>
-          <td>{{ row.pin.last_verified|date:"Y-m-d H:i"|default:"—" }}</td>
-          <td>{{ row.pin.failed_attempts|default:"0" }} / {{ settings.max_attempts }}</td>
-          <td>{% if row.locked %}<span class="badge text-bg-red">until {{ row.pin.locked_until|date:"Y-m-d H:i" }}</span>{% else %}—{% endif %}</td>
-          {% if can_change %}
+          <td>
+            {% if row.is_set %}<span class="badge text-bg-green">Active</span>{% else %}<span class="badge text-bg-orange">Not set</span>{% endif %}
+            {% if row.must_change %}<span class="badge text-bg-yellow">must change</span>{% endif %}
+          </td>
+          <td>{% if row.has_2fa %}<span class="badge text-bg-green">On</span>{% else %}<span class="badge text-bg-secondary">Off</span>{% endif %}</td>
+          <td class="text-nowrap">
+            {% if row.email_status == 'missing' %}<span class="badge text-bg-orange"><i class="mdi mdi-alert"></i> no e-mail</span>
+            {% else %}{{ row.user.email }}{% if row.email_status == 'domain' %} <span class="badge text-bg-orange"><i class="mdi mdi-alert"></i> domain</span>{% endif %}{% endif %}
+          </td>
+          <td class="text-nowrap">
+            {% if row.expires %}{{ row.expires|date:"Y-m-d" }}
+              {% if row.days_left < 0 %}<span class="badge text-bg-red">expired</span>{% elif row.days_left <= settings.warn_days %}<span class="badge text-bg-yellow">{{ row.days_left }} d</span>{% endif %}
+            {% else %}—{% endif %}
+          </td>
+          <td class="text-nowrap">{{ row.pin.last_verified|date:"Y-m-d H:i"|default:"—" }}</td>
+          <td class="text-nowrap">{% if row.locked %}<span class="badge text-bg-red">until {{ row.pin.locked_until|date:"H:i" }}</span>{% else %}—{% endif %}</td>
+          {% if can_change and step_up_active %}
             <td class="text-end text-nowrap">
-              {% url 'plugins:netbox_user_pin:user_action' pk=row.user.pk action='allow' as allow_url %}
-              {% url 'plugins:netbox_user_pin:user_action' pk=row.user.pk action='deny' as deny_url %}
-              {% url 'plugins:netbox_user_pin:user_action' pk=row.user.pk action='default' as default_url %}
-              {% url 'plugins:netbox_user_pin:user_action' pk=row.user.pk action='clear-lockout' as clear_url %}
-              {% url 'plugins:netbox_user_pin:user_action' pk=row.user.pk action='reset' as reset_url %}
-              {% if row.access != 'allowed' %}
-                <form method="post" action="{{ allow_url }}" class="d-inline">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
-                  <button class="btn btn-sm btn-outline-success" type="submit" title="Allow PIN"><i class="mdi mdi-check"></i> Allow</button></form>
-              {% endif %}
-              {% if row.access != 'denied' %}
-                <form method="post" action="{{ deny_url }}" class="d-inline">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
-                  <button class="btn btn-sm btn-outline-danger" type="submit" title="Deny PIN"><i class="mdi mdi-cancel"></i> Deny</button></form>
-              {% endif %}
-              {% if row.access != 'default' %}
-                <form method="post" action="{{ default_url }}" class="d-inline">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
-                  <button class="btn btn-sm btn-outline-secondary" type="submit" title="Back to default"><i class="mdi mdi-undo"></i></button></form>
-              {% endif %}
-              {% if row.locked %}
-                <form method="post" action="{{ clear_url }}" class="d-inline">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
-                  <button class="btn btn-sm btn-warning" type="submit"><i class="mdi mdi-lock-open"></i> Clear lockout</button></form>
-              {% endif %}
-              {% if row.is_set %}
-                <form method="post" action="{{ reset_url }}" class="d-inline" onsubmit="return confirm('Reset the PIN of {{ row.user.username|escapejs }}? The user will have to set a new PIN.');">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
-                  <button class="btn btn-sm btn-danger" type="submit"><i class="mdi mdi-restore"></i> Reset PIN</button></form>
-              {% endif %}
+              {% if row.manageable %}
+                <div class="dropdown">
+                  <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">Actions</button>
+                  <div class="dropdown-menu dropdown-menu-end">
+                    {% with base=row.user.pk %}
+                    {% if row.access != 'allowed' %}{% include 'netbox_user_pin/inc/user_action.html' with action='allow' label='Allow PIN' icon='check' %}{% endif %}
+                    {% if row.access != 'denied' and not row.user.is_superuser %}{% include 'netbox_user_pin/inc/user_action.html' with action='deny' label='Deny PIN' icon='cancel' %}{% endif %}
+                    {% if row.access != 'default' %}{% include 'netbox_user_pin/inc/user_action.html' with action='default' label='Back to default' icon='undo' %}{% endif %}
+                    {% if row.is_set %}{% include 'netbox_user_pin/inc/user_action.html' with action='force-change' label='Force PIN change' icon='rotate-right' %}{% endif %}
+                    {% if row.locked %}{% include 'netbox_user_pin/inc/user_action.html' with action='clear-lockout' label='Clear lockout' icon='lock-open' %}{% endif %}
+                    {% if row.has_2fa %}{% include 'netbox_user_pin/inc/user_action.html' with action='reset-2fa' label='Reset 2FA' icon='cellphone-remove' confirm=True %}{% endif %}
+                    {% if row.is_set %}{% include 'netbox_user_pin/inc/user_action.html' with action='reset' label='Reset PIN' icon='restore' confirm=True %}{% endif %}
+                    {% endwith %}
+                  </div>
+                </div>
+              {% else %}<span class="text-secondary small" title="Delegates cannot manage the master, other delegates or themselves">—</span>{% endif %}
             </td>
           {% endif %}
         </tr>
       {% empty %}
-        <tr><td colspan="8" class="text-secondary">No users.</td></tr>
+        <tr><td colspan="9" class="text-secondary">No users.</td></tr>
       {% endfor %}
     </tbody>
   </table>
+  </div>
 </div>
 {% include 'netbox_user_pin/inc/pager.html' %}
 {% endblock %}

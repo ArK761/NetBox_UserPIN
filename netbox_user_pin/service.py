@@ -8,50 +8,84 @@ Public API of netbox_user_pin. Other plugins should only use the functions expor
     service.is_unlocked(request, scope='projects')
     service.unlock(request, pin, scope='projects')   # -> VerifyResult
     service.lock(request)                            # lock everything
+    service.has_step_up(request)                     # fresh PIN (+ 2FA) confirmation for a sensitive action
 """
 import enum
 import logging
+import secrets
 import time
 from dataclasses import dataclass
 from datetime import timedelta
 
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
+from django.conf import settings as django_settings
 from django.core.exceptions import ValidationError
+from django.core.mail import send_mail
 from django.db import transaction
 from django.utils import timezone
 from django.utils.translation import gettext as _
 from netbox.plugins import get_plugin_config
 from utilities.request import get_client_ip
 
-from . import crypto, signals
+from . import crypto, signals, totp
 from .models import PinAccess, PinAccessMode, PinEvent, PinEventAction, PinScopeMode, PinSettings, UserPin
 from .policy import validate_pin
 
 __all__ = (
+    'API_VERSION',
     'DEFAULT_SCOPE',
     'VerifyResult',
     'VerifyStatus',
+    'can_manage',
     'change_pin',
     'clear_lockout',
+    'complete_recovery',
+    'confirm_totp_enrollment',
+    'disable_totp',
+    'email_configured',
+    'email_status',
+    'force_change',
     'get_settings',
+    'has_2fa',
     'has_pin',
+    'has_step_up',
     'is_allowed',
+    'is_master',
+    'is_pin_admin',
     'is_unlocked',
     'lock',
     'log_event',
+    'maybe_warn_expiry',
+    'new_backup_codes',
     'pin_expired',
+    'pin_expires_at',
+    'recovery_blockers',
     'reset_pin',
+    'reset_totp',
     'set_access',
     'set_pin',
+    'start_recovery',
+    'start_totp_enrollment',
+    'step_up',
+    'step_up_blockers',
     'unlock',
     'unlocked_scopes',
     'verify_pin',
+    'verify_second_factor',
 )
+
+# Bumped when the public API (service, mixins, signals) gains features. Never decreases; existing calls keep working.
+#   1 = PIN, unlock, lock, signals
+#   2 = step-up (PIN + 2FA) for sensitive actions, 2FA, e-mail recovery
+API_VERSION = 2
 
 logger = logging.getLogger('netbox_user_pin')
 
 SESSION_KEY = '_netbox_user_pin'
+STEP_UP_SESSION_KEY = '_netbox_user_pin_step_up'
+ENROLL_SESSION_KEY = '_netbox_user_pin_totp_enroll'
+RECOVERY_RESEND_SECONDS = 60
 DEFAULT_SCOPE = 'default'
 GLOBAL_SCOPE_KEY = '*'
 
@@ -62,6 +96,8 @@ class VerifyStatus(enum.Enum):
     LOCKED_OUT = 'locked_out'
     NO_PIN = 'no_pin'
     NOT_ALLOWED = 'not_allowed'
+    NEED_2FA = 'need_2fa'          # 2FA required but not enrolled
+    WRONG_2FA = 'wrong_2fa'
 
 
 @dataclass(frozen=True)
@@ -156,6 +192,8 @@ def is_allowed(user, settings=None):
     """True if the administrator permits ``user`` to use a PIN (see PinSettings.access_mode)."""
     if _user_or_none(user) is None:
         return False
+    if user.is_superuser:
+        return True
     settings = settings or get_settings()
     user_pin = _get_pin(user)
     access = user_pin.access if user_pin else PinAccess.DEFAULT
@@ -170,13 +208,23 @@ def _not_allowed_error():
     return ValidationError(_('You are not permitted to use a PIN. Ask an administrator.'), code='not_allowed')
 
 
+def pin_expires_at(user_pin, settings=None):
+    settings = settings or get_settings()
+    if not user_pin or not user_pin.is_set or not user_pin.changed:
+        return None
+    return user_pin.changed + timedelta(days=settings.max_age_days)
+
+
 def pin_expired(user, settings=None):
-    """True when the PIN is older than the configured maximum age and must be changed."""
+    """True when the PIN must be changed: older than the maximum age, or a change was forced."""
     settings = settings or get_settings()
     user_pin = _get_pin(user)
-    if not settings.max_age_days or not user_pin or not user_pin.is_set or not user_pin.changed:
+    if not user_pin or not user_pin.is_set:
         return False
-    return user_pin.changed + timedelta(days=settings.max_age_days) < timezone.now()
+    if user_pin.must_change:
+        return True
+    expires = pin_expires_at(user_pin, settings)
+    return expires is not None and expires < timezone.now()
 
 
 def set_pin(user, pin, request=None):
@@ -197,8 +245,11 @@ def set_pin(user, pin, request=None):
         user_pin.failed_attempts = 0
         user_pin.locked_until = None
         user_pin.changed = timezone.now()
+        user_pin.must_change = False
+        user_pin.expiry_warned = None
         user_pin.save()
     log_event(PinEventAction.SET, user=user, actor=user, request=request)
+    notify(user, _('Your PIN was set'), _('A PIN was set for your NetBox account.'), request=request)
     signals.pin_set.send(sender=UserPin, user=user, request=request, scope='')
     if request is not None:
         lock(request, send_signal=False)
@@ -226,8 +277,11 @@ def change_pin(user, current_pin, new_pin, request=None):
         user_pin.pin_hash = _hash_and_encrypt(user_pin, new_pin)
         user_pin.version += 1
         user_pin.changed = timezone.now()
+        user_pin.must_change = False
+        user_pin.expiry_warned = None
         user_pin.save()
     log_event(PinEventAction.CHANGED, user=user, actor=user, request=request)
+    notify(user, _('Your PIN was changed'), _('The PIN of your NetBox account was changed.'), request=request)
     signals.pin_changed.send(sender=UserPin, user=user, request=request, scope='')
     if request is not None:
         lock(request, send_signal=False)
@@ -262,12 +316,7 @@ def verify_pin(user, pin, request=None, scope=''):
         if decryption_error is None:
             matched = _check_hash(user_pin, stored_hash, pin)
             if not matched:
-                user_pin.failed_attempts += 1
-                remaining = max(settings.max_attempts - user_pin.failed_attempts, 0)
-                if remaining == 0:
-                    user_pin.locked_until = timezone.now() + timedelta(minutes=settings.lockout_minutes)
-                    user_pin.failed_attempts = 0
-                user_pin.save()
+                remaining = _register_failure(user_pin, settings)
 
     if decryption_error is not None:
         logger.error('Cannot decrypt PIN of user %s: %s', user, decryption_error)
@@ -278,10 +327,22 @@ def verify_pin(user, pin, request=None, scope=''):
         log_event(PinEventAction.VERIFIED, user=user, request=request, scope=scope)
         return VerifyResult(VerifyStatus.OK)
 
-    log_event(
-        PinEventAction.FAILED, user=user, request=request, scope=scope,
-        detail=f'remaining attempts: {remaining}',
-    )
+    return _after_failure(PinEventAction.FAILED, user, user_pin, remaining, request, scope)
+
+
+def _register_failure(user_pin, settings):
+    """Count a failed PIN / 2FA attempt (caller holds the row lock). Returns the remaining attempts."""
+    user_pin.failed_attempts += 1
+    remaining = max(settings.max_attempts - user_pin.failed_attempts, 0)
+    if remaining == 0:
+        user_pin.locked_until = timezone.now() + timedelta(minutes=settings.lockout_minutes)
+        user_pin.failed_attempts = 0
+    user_pin.save()
+    return remaining
+
+
+def _after_failure(action, user, user_pin, remaining, request, scope):
+    log_event(action, user=user, request=request, scope=scope, detail=f'remaining attempts: {remaining}')
     signals.pin_failed.send(
         sender=UserPin, user=user, request=request, scope=scope, remaining_attempts=remaining
     )
@@ -292,6 +353,12 @@ def verify_pin(user, pin, request=None, scope=''):
         )
         signals.pin_locked_out.send(
             sender=UserPin, user=user, request=request, scope=scope, until=user_pin.locked_until
+        )
+        notify(
+            user, _('Your PIN is locked'),
+            _('Too many wrong PIN / 2FA attempts. Your PIN is locked until {time}. If this was not you, '
+              'contact your administrator.').format(time=timezone.localtime(user_pin.locked_until)),
+            request=request,
         )
         return VerifyResult(VerifyStatus.LOCKED_OUT, 0, user_pin.locked_until)
     return VerifyResult(VerifyStatus.WRONG, remaining)
@@ -318,13 +385,18 @@ def _check_hash(user_pin, stored_hash, pin):
 # Session unlock state
 #
 
-def unlock(request, pin, scope=None):
+def unlock(request, pin, scope=None, otp=None):
     """
-    Verify the PIN of ``request.user`` and, if correct, unlock ``scope`` in the session.
+    Verify the PIN (and the 2FA code when 'Require 2FA on every unlock' is on) of ``request.user`` and, if
+    correct, unlock ``scope`` in the session.
     """
     settings = get_settings()
     scope = scope or DEFAULT_SCOPE
+    if settings.require_2fa_unlock and not has_2fa(request.user):
+        return VerifyResult(VerifyStatus.NEED_2FA)
     result = verify_pin(request.user, pin, request=request, scope=scope)
+    if result and settings.require_2fa_unlock:
+        result = verify_second_factor(request.user, otp, request=request, scope=scope)
     if result:
         user_pin = _get_pin(request.user)
         data = request.session.get(SESSION_KEY) or {}
@@ -334,6 +406,7 @@ def unlock(request, pin, scope=None):
         request.session[SESSION_KEY] = data
         request.session.modified = True
         signals.pin_unlocked.send(sender=UserPin, user=request.user, request=request, scope=scope)
+        maybe_warn_expiry(request.user, request=request)
     return result
 
 
@@ -406,8 +479,13 @@ def reset_pin(user, actor, request=None):
         user_pin.failed_attempts = 0
         user_pin.locked_until = None
         user_pin.changed = None
+        user_pin.must_change = False
+        user_pin.expiry_warned = None
         user_pin.save()
     log_event(PinEventAction.RESET, user=user, actor=actor, request=request)
+    notify(user, _('Your PIN was reset'),
+           _('Your PIN was reset by {actor}. Set a new PIN the next time you are asked for it.').format(actor=actor),
+           request=request)
     signals.pin_reset.send(sender=UserPin, user=user, actor=actor, request=request, scope='')
 
 
@@ -426,3 +504,381 @@ def set_access(user, access, actor, request=None):
 def clear_lockout(user, actor, request=None):
     UserPin.objects.filter(user=user).update(failed_attempts=0, locked_until=None)
     log_event(PinEventAction.LOCKOUT_CLEARED, user=user, actor=actor, request=request)
+
+
+def force_change(user, actor, request=None):
+    """Require ``user`` to choose a new PIN at the next use (also used to test PIN rotation)."""
+    updated = UserPin.objects.filter(user=user).exclude(pin_hash='').update(must_change=True)
+    if updated:
+        log_event(PinEventAction.FORCE_CHANGE, user=user, actor=actor, request=request)
+    return bool(updated)
+
+
+#
+# Roles
+#
+
+def is_master(user):
+    """The master is a NetBox superuser."""
+    return bool(_user_or_none(user) and user.is_active and user.is_superuser)
+
+
+def is_pin_admin(user):
+    """Master or delegate (anyone allowed to manage other users' PINs)."""
+    return bool(_user_or_none(user) and user.is_active and user.has_perm('netbox_user_pin.change_userpin'))
+
+
+def can_manage(actor, target):
+    """
+    Separation of duties: the master may manage everybody; a delegate may not manage the master, other
+    delegates or themselves.
+    """
+    if is_master(actor):
+        return True
+    if not is_pin_admin(actor) or target.pk == actor.pk:
+        return False
+    return not (target.is_superuser or is_pin_admin(target))
+
+
+#
+# Two-factor authentication (TOTP + backup codes)
+#
+
+def has_2fa(user):
+    user_pin = _get_pin(user)
+    return bool(user_pin and user_pin.has_2fa)
+
+
+def _totp_aad(user_pin):
+    return f'netbox_user_pin:totp:{user_pin.user_id}'.encode()
+
+
+def start_totp_enrollment(request):
+    """Create a pending secret (kept in the server-side session until confirmed). Returns (secret, uri)."""
+    secret = totp.generate_secret()
+    request.session[ENROLL_SESSION_KEY] = {'u': request.user.pk, 'secret': secret, 'created': time.time()}
+    return secret, totp.provisioning_uri(secret, request.user.username)
+
+
+def pending_totp_secret(request):
+    data = request.session.get(ENROLL_SESSION_KEY) or {}
+    if data.get('u') != request.user.pk or time.time() - data.get('created', 0) > 15 * 60:
+        return None
+    return data.get('secret')
+
+
+def confirm_totp_enrollment(request, code):
+    """Activate 2FA after the first valid code. Returns the list of new backup codes (shown only once)."""
+    secret = pending_totp_secret(request)
+    if not secret:
+        raise ValidationError(_('The setup expired. Start again.'), code='expired')
+    step = totp.match_step(secret, code)
+    if step is None:
+        log_event(PinEventAction.TOTP_FAILED, user=request.user, request=request, detail='enrollment')
+        raise ValidationError(_('The code is not correct. Check the time on your phone and try again.'),
+                              code='wrong')
+    codes = totp.generate_backup_codes()
+    with transaction.atomic():
+        user_pin, _created = UserPin.objects.select_for_update().get_or_create(user=request.user)
+        user_pin.totp_secret = crypto.encrypt(secret, _totp_aad(user_pin))
+        user_pin.totp_enabled = timezone.now()
+        user_pin.totp_last_step = step
+        user_pin.backup_codes = [totp.hash_backup_code(c) for c in codes]
+        user_pin.save()
+    request.session.pop(ENROLL_SESSION_KEY, None)
+    log_event(PinEventAction.TOTP_ENABLED, user=request.user, actor=request.user, request=request)
+    notify(request.user, _('Two-factor authentication enabled'),
+           _('Two-factor authentication was enabled for your NetBox PIN.'), request=request)
+    return codes
+
+
+def verify_second_factor(user, code, request=None, scope='2fa'):
+    """
+    Check a TOTP code (a code / time step is accepted only once) or a one-time backup code.
+    Wrong codes count towards the same lockout as wrong PINs.
+    """
+    settings = get_settings()
+    code = (code or '').strip()
+    with transaction.atomic():
+        user_pin = UserPin.objects.select_for_update().filter(user=user).first()
+        if user_pin is None or not user_pin.has_2fa:
+            return VerifyResult(VerifyStatus.NEED_2FA)
+        if user_pin.is_locked_out:
+            log_event(PinEventAction.REJECTED_LOCKED, user=user, request=request, scope=scope)
+            return VerifyResult(VerifyStatus.LOCKED_OUT, 0, user_pin.locked_until)
+        secret = crypto.decrypt(user_pin.totp_secret, _totp_aad(user_pin))
+        step = totp.match_step(secret, code)
+        if step is not None and step > user_pin.totp_last_step:
+            user_pin.totp_last_step = step
+            user_pin.failed_attempts = 0
+            user_pin.save()
+            return VerifyResult(VerifyStatus.OK)
+        digest = totp.hash_backup_code(code)
+        if len(totp.normalize_backup_code(code)) == 20 and digest in user_pin.backup_codes:
+            user_pin.backup_codes = [d for d in user_pin.backup_codes if d != digest]
+            user_pin.failed_attempts = 0
+            user_pin.save()
+            used_backup = True
+        else:
+            used_backup = False
+            remaining = _register_failure(user_pin, settings)
+    if used_backup:
+        log_event(PinEventAction.BACKUP_CODE_USED, user=user, request=request, scope=scope,
+                  detail=f'{len(user_pin.backup_codes)} backup codes left')
+        return VerifyResult(VerifyStatus.OK)
+    result = _after_failure(PinEventAction.TOTP_FAILED, user, user_pin, remaining, request, scope)
+    if result.status is VerifyStatus.WRONG:
+        return VerifyResult(VerifyStatus.WRONG_2FA, result.remaining_attempts)
+    return result
+
+
+def new_backup_codes(user, request=None):
+    """Replace the backup codes (caller must have verified the user). Returns the new codes."""
+    codes = totp.generate_backup_codes()
+    UserPin.objects.filter(user=user).update(backup_codes=[totp.hash_backup_code(c) for c in codes])
+    log_event(PinEventAction.BACKUP_CODES_NEW, user=user, request=request)
+    return codes
+
+
+def backup_codes_left(user):
+    user_pin = _get_pin(user)
+    return len(user_pin.backup_codes) if user_pin else 0
+
+
+def _clear_totp(user):
+    UserPin.objects.filter(user=user).update(
+        totp_secret='', totp_enabled=None, totp_last_step=0, backup_codes=[],
+    )
+
+
+def disable_totp(user, request=None):
+    """Turn 2FA off for oneself (caller must have verified PIN + 2FA)."""
+    _clear_totp(user)
+    log_event(PinEventAction.TOTP_DISABLED, user=user, actor=user, request=request)
+    notify(user, _('Two-factor authentication disabled'),
+           _('Two-factor authentication was disabled for your NetBox PIN.'), request=request)
+
+
+def reset_totp(user, actor, request=None):
+    """Administrator removes a user's 2FA (lost phone); the user enrolls again."""
+    _clear_totp(user)
+    log_event(PinEventAction.TOTP_RESET, user=user, actor=actor, request=request)
+    notify(user, _('Two-factor authentication reset'),
+           _('Your two-factor authentication was reset by {actor}. Set it up again under My PIN.').format(
+               actor=actor), request=request)
+
+
+#
+# Step-up: fresh PIN (+ 2FA) confirmation for sensitive actions
+#
+
+def step_up_blockers(user, settings=None):
+    """Reasons why ``user`` cannot perform a step-up yet (empty list = possible)."""
+    settings = settings or get_settings()
+    reasons = []
+    if not has_pin(user):
+        reasons.append('no_pin')
+    if settings.require_2fa_admin and not has_2fa(user):
+        reasons.append('no_2fa')
+    return reasons
+
+
+def step_up(request, pin, otp=None):
+    """Confirm identity with PIN (+ 2FA) and open the administrative window."""
+    settings = get_settings()
+    if step_up_blockers(request.user, settings):
+        return VerifyResult(VerifyStatus.NEED_2FA if has_pin(request.user) else VerifyStatus.NO_PIN)
+    result = verify_pin(request.user, pin, request=request, scope='step-up')
+    if result and settings.require_2fa_admin:
+        result = verify_second_factor(request.user, otp, request=request, scope='step-up')
+    if result:
+        user_pin = _get_pin(request.user)
+        request.session[STEP_UP_SESSION_KEY] = {
+            'u': request.user.pk, 'v': user_pin.version, 'until': time.time() + settings.step_up_minutes * 60,
+        }
+        log_event(PinEventAction.STEP_UP_OK, user=request.user, request=request)
+    elif result.status in (VerifyStatus.WRONG, VerifyStatus.WRONG_2FA):
+        log_event(PinEventAction.STEP_UP_FAILED, user=request.user, request=request)
+    return result
+
+
+def has_step_up(request):
+    """True while the administrative window opened by step_up() is valid."""
+    user = _user_or_none(getattr(request, 'user', None))
+    data = request.session.get(STEP_UP_SESSION_KEY) if user else None
+    if not data or data.get('u') != user.pk or data.get('until', 0) <= time.time():
+        return False
+    user_pin = _get_pin(user)
+    return bool(user_pin and user_pin.version == data.get('v') and is_allowed(user))
+
+
+def step_up_seconds_left(request):
+    data = request.session.get(STEP_UP_SESSION_KEY) or {}
+    return max(int(data.get('until', 0) - time.time()), 0) if has_step_up(request) else 0
+
+
+def end_step_up(request):
+    request.session.pop(STEP_UP_SESSION_KEY, None)
+
+
+#
+# E-mail
+#
+
+def email_configured():
+    email = getattr(django_settings, 'EMAIL', {}) or {}
+    return bool(email.get('SERVER') and email.get('FROM_EMAIL'))
+
+
+def allowed_domains(settings=None):
+    settings = settings or get_settings()
+    return {
+        d.strip().lower().lstrip('@') for d in settings.allowed_email_domains.replace(',', '\n').splitlines()
+        if d.strip()
+    }
+
+
+def email_status(user, settings=None):
+    """'ok', 'missing' (no address) or 'domain' (address outside the allowed domains)."""
+    address = (getattr(user, 'email', '') or '').strip()
+    if not address or '@' not in address:
+        return 'missing'
+    if address.rsplit('@', 1)[1].lower() not in allowed_domains(settings):
+        return 'domain'
+    return 'ok'
+
+
+def send_user_mail(user, subject, body, request=None, settings=None):
+    """Send an e-mail to ``user`` if the address is in an allowed domain. Returns True when sent."""
+    settings = settings or get_settings()
+    if email_status(user, settings) != 'ok' or not email_configured():
+        return False
+    try:
+        send_mail(
+            subject=f'[NetBox PIN] {subject}',
+            message=f'{body}\n\n-- \nNetBox User PIN. This is an automatic message.',
+            from_email=django_settings.EMAIL.get('FROM_EMAIL'),
+            recipient_list=[user.email],
+        )
+    except Exception as exc:  # SMTP problems must not break the security flow
+        logger.warning('Cannot send PIN e-mail to %s: %s', user, exc)
+        log_event(PinEventAction.MAIL_FAILED, user=user, request=request, detail=f'{subject}: {exc}')
+        return False
+    log_event(PinEventAction.MAIL_SENT, user=user, request=request, detail=subject)
+    return True
+
+
+def notify(user, subject, body, request=None):
+    """Security notification (only when enabled in the settings)."""
+    settings = get_settings()
+    if settings.notify_email:
+        return send_user_mail(user, subject, body, request=request, settings=settings)
+    return False
+
+
+def maybe_warn_expiry(user, request=None):
+    """Send one e-mail per PIN when it enters the warning period before expiry."""
+    settings = get_settings()
+    user_pin = _get_pin(user)
+    expires = pin_expires_at(user_pin, settings)
+    if not expires or user_pin.expiry_warned or not settings.warn_days:
+        return
+    if expires - timedelta(days=settings.warn_days) > timezone.now():
+        return
+    UserPin.objects.filter(pk=user_pin.pk).update(expiry_warned=timezone.now())
+    notify(user, _('Your PIN expires soon'),
+           _('Your NetBox PIN expires on {date}. Change it under User PIN > My PIN.').format(
+               date=timezone.localtime(expires).strftime('%Y-%m-%d')), request=request)
+
+
+#
+# Self-service recovery of a forgotten PIN: e-mailed code AND 2FA code
+#
+
+def recovery_blockers(user, settings=None):
+    """Reasons why self-recovery is not possible for ``user`` (empty list = possible)."""
+    settings = settings or get_settings()
+    reasons = []
+    if not settings.self_recovery:
+        reasons.append('disabled')
+    if not is_allowed(user, settings):
+        reasons.append('not_allowed')
+    if not email_configured():
+        reasons.append('mail_not_configured')
+    status = email_status(user, settings)
+    if status != 'ok':
+        reasons.append(f'email_{status}')
+    if not has_2fa(user):
+        reasons.append('no_2fa')
+    return reasons
+
+
+def start_recovery(user, request=None):
+    """E-mail a one-time 8 digit code. Raises ValidationError when not possible."""
+    settings = get_settings()
+    if recovery_blockers(user, settings):
+        raise ValidationError(_('Self-service recovery is not available for your account.'), code='blocked')
+    user_pin, _created = UserPin.objects.get_or_create(user=user)
+    if user_pin.recovery_sent and (timezone.now() - user_pin.recovery_sent).total_seconds() < RECOVERY_RESEND_SECONDS:
+        raise ValidationError(_('A code was sent a moment ago. Please wait a minute.'), code='throttled')
+    code = f'{secrets.randbelow(10 ** 8):08d}'
+    UserPin.objects.filter(pk=user_pin.pk).update(
+        recovery_code=crypto.keyed_digest(code, f'recovery:{user.pk}'),
+        recovery_expires=timezone.now() + timedelta(minutes=settings.recovery_minutes),
+        recovery_attempts=0,
+        recovery_sent=timezone.now(),
+    )
+    sent = send_user_mail(
+        user, _('PIN recovery code'),
+        _('Your PIN recovery code is: {code}\n\nIt is valid for {minutes} minutes and must be entered together '
+          'with a code from your authenticator app. If you did not request it, contact your administrator.').format(
+            code=code, minutes=settings.recovery_minutes),
+        request=request, settings=settings,
+    )
+    if not sent:
+        UserPin.objects.filter(pk=user_pin.pk).update(recovery_code='', recovery_expires=None)
+        raise ValidationError(_('The e-mail could not be sent. Contact your administrator.'), code='mail')
+    log_event(PinEventAction.RECOVERY_SENT, user=user, request=request)
+
+
+def complete_recovery(user, email_code, otp, new_pin, request=None):
+    """Both the e-mailed code and the 2FA code must be correct; then the new PIN is set."""
+    settings = get_settings()
+    validate_pin(new_pin, settings)
+    with transaction.atomic():
+        user_pin = UserPin.objects.select_for_update().get(user=user)
+        valid = bool(user_pin.recovery_code and user_pin.recovery_expires and
+                     user_pin.recovery_expires > timezone.now() and user_pin.recovery_attempts < 5)
+        code_ok = valid and crypto.check_keyed_digest(
+            (email_code or '').strip(), f'recovery:{user.pk}', user_pin.recovery_code
+        )
+        if not code_ok:
+            user_pin.recovery_attempts += 1
+            if user_pin.recovery_attempts >= 5:
+                user_pin.recovery_code = ''
+            user_pin.save()
+    if not code_ok:
+        log_event(PinEventAction.RECOVERY_FAILED, user=user, request=request, detail='e-mail code')
+        raise ValidationError(_('The e-mail code is wrong or expired.'), code='email_code')
+    result = verify_second_factor(user, otp, request=request, scope='recovery')
+    if not result:
+        log_event(PinEventAction.RECOVERY_FAILED, user=user, request=request, detail='2FA code')
+        raise ValidationError(_('The 2FA code is not correct.'), code='otp')
+    with transaction.atomic():
+        user_pin = UserPin.objects.select_for_update().get(user=user)
+        user_pin.pin_hash = _hash_and_encrypt(user_pin, new_pin)
+        user_pin.version += 1
+        user_pin.changed = timezone.now()
+        user_pin.must_change = False
+        user_pin.expiry_warned = None
+        user_pin.failed_attempts = 0
+        user_pin.locked_until = None
+        user_pin.recovery_code = ''
+        user_pin.recovery_expires = None
+        user_pin.save()
+    log_event(PinEventAction.RECOVERY_OK, user=user, actor=user, request=request)
+    notify(user, _('Your PIN was recovered'),
+           _('A new PIN was set using the e-mail code and 2FA. If this was not you, contact your administrator '
+             'immediately.'), request=request)
+    if request is not None:
+        lock(request, send_signal=False)
