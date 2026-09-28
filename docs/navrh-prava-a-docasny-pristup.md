@@ -1,6 +1,6 @@
 # Návrh: práva k obsahu a dočasný prístup na požiadanie
 
-Stav: **NÁVRH na pripomienkovanie (verzia 1)** – zatiaľ nič z tohto nie je naprogramované.
+Stav: **NÁVRH na pripomienkovanie (verzia 2 – ID objektov)** – zatiaľ nič z tohto nie je naprogramované.
 Nadväzuje na [navrh-delegovanie-pracoviska.md](navrh-delegovanie-pracoviska.md) (CORE, oddelenia, roly).
 
 ---
@@ -79,12 +79,13 @@ neschváli, a iba na určitý čas.
 
 1. **Žiadateľ** (napr. ty z CORE) vojde do pluginu a vidí **štruktúru** (priečinky, súbory, zoznam mailov),
    ale obsah neotvorí – tlačidlá sú sivé, s ponukou **„Požiadať o prístup“**.
-2. Správca oddelenia ti zavolá: *„problém je s faktura_0925.pdf“*. Klikneš na súbor → **Požiadať o prístup**
-   a napíšeš **iba dôvod**. Akcie ani čas nevyberáš.
+2. Správca oddelenia ti zavolá: *„problém je so súborom **DOC-000482**“*. Každý objekt má v plugine jedinečné
+   **ID** – je smerodajné a vidí ho aj člen oddelenia. Vyhľadáš ID (vidíš iba ID + typ, veľkosť, dátum, nie
+   názov ani obsah) → **Požiadať o prístup** a napíšeš **iba dôvod**. Akcie ani čas nevyberáš.
 3. **Správcovi oddelenia** sa v jeho relácii zobrazí okno:
 
    > **Peter Knotek žiada prístup**
-   > Súbor: *faktura_0925.pdf* (Účtovníctvo)
+   > Súbor: **DOC-000482** – *faktura_0925.pdf* (Účtovníctvo; názov vidí iba správca)
    > Dôvod: poškodený súbor, telefonát s Evou
    >
    > Udeliť: ☐ čítať ☐ upraviť ☐ presunúť ☐ zmazať
@@ -142,7 +143,7 @@ rozoberali pri Projektoch.
 
 | # | Otázka | Môj návrh |
 |---|---|---|
-| 1 | Má CORE vidieť **názvy súborov a predmety mailov**, alebo iba „súbor #1234, PDF, 2 MB“? | iba neutrálne údaje (názov môže byť citlivý, napr. „výpoveď_Novák.pdf“); názov povie správca po telefóne |
+| 1 | Má CORE vidieť **názvy súborov a predmety mailov**? | **ROZHODNUTÉ:** každý objekt má v plugine jedinečné **ID**, ktoré je smerodajné. ID vidí aj člen oddelenia a povie ho po telefóne; žiadateľ si ID vyhľadá (vidí iba ID + neutrálne údaje: typ, veľkosť, dátum), dá žiadosť a správca ju vybaví |
 | 2 | Profily: stačia Čitateľ / Editor / Správca obsahu, alebo vlastné profily v UI? | začať s tromi, vlastné neskôr |
 | 3 | Prideľovať per oddelenie aj per konkrétny objekt, alebo zatiaľ iba per oddelenie? | oboje |
 | 4 | Udeľovať dočasný prístup môže **správca aj delegát**, alebo iba správca? | správca alebo jeden delegát |
