@@ -1,54 +1,63 @@
-# Návrh: delegovanie, pracoviská a schvaľovanie štyrmi očami
+# Návrh: delegovanie, oddelenia a schvaľovanie štyrmi očami
 
-Stav: **NÁVRH na pripomienkovanie** – zatiaľ nič z tohto nie je naprogramované.
+Stav: **NÁVRH na pripomienkovanie (verzia 2)** – zatiaľ nič z tohto nie je naprogramované.
 Pripomienky píš priamo sem (alebo mi ich pošli) a dokument upravím.
+
+Zmeny vo verzii 2: hierarchia CORE → oddelenie, štyri oči sa nevypínajú, kým existuje oddelenie alebo delegát,
+dočasné delegovanie s mailom celému oddeleniu, presun ľudí medzi oddeleniami, prezeranie po PIN + 2FA.
 
 ---
 
 ## 1. Prečo
 
 - Delegát bez PINu a 2FA nemá zmysel – nemôže nič potvrdiť.
-- Firma má oddelenia (pracoviská). Správu PINov ľudí na pracovisku má robiť ich správca, nie iba hlavný admin.
+- Firma má oddelenia. Správu PINov ľudí v oddelení robí ich správca, nie iba hlavný admin.
 - Keď niekto chýba (choroba, dovolenka, odchod z firmy), práva sa musia dať bezpečne odovzdať – vždy s pozvánkou,
-  kódom v maili a záznamom v audite.
+  kódom v maili, informovaním oddelenia a záznamom v audite.
 
-## 2. Pojmy a roly
-
-| Rola | Kto to je | Vidí | Môže |
-|---|---|---|---|
-| **Superadmin** | NetBox superuser | všetko | všetko; menuje globálnych adminov |
-| **Globálny admin** (admin skupina) | delegát menovaný superadminom | všetko | zakladať pracoviská, priraďovať ľudí, menovať / odvolávať správcov pracovísk, pozývať delegátov |
-| **Správca pracoviska** | „admin skupiny“ – určí ho superadmin alebo globálny admin | iba ľudí svojho pracoviska a ich audit | povoliť / zakázať PIN, pozvať, reset PINu / 2FA (používateľ potvrdí vo svojej relácii), pozastaviť, pozvať delegátov pracoviska, určiť zastupovanie |
-| **Zástupca správcu** | trvalý zástupca na pracovisku | ako správca | preberá práva, keď správca chýba (bez ďalšieho úkonu) |
-| **Delegát pracoviska** | určený správcom alebo adminom | iba svoje pracovisko | spolu s iným delegátom / správcom potvrdzuje zmeny (štyri oči), rieši resety |
-| **Člen** | bežný používateľ | iba seba | svoj PIN, 2FA, záložné kódy; ak má rolu – „Moja delegácia → Vzdať sa“ |
-
-**Pracovisko** (skupina / oddelenie) je vlastný záznam v plugine, **nie** NetBox skupina – NetBox skupiny nesú
-oprávnenia na celý NetBox a nechceme ich miešať. Neskôr ich môže použiť aj plugin Projekty
-(„projekt patrí pracovisku IT“).
+## 2. Hierarchia
 
 ```
-Superadmin
-└── Admin skupina (globálni admini / delegáti)          – vidia všetko
-    ├── Pracovisko „IT“
-    │   ├── Správca pracoviska
-    │   ├── Zástupca správcu (trvalý)
-    │   ├── Delegáti pracoviska
-    │   └── Členovia
-    └── Pracovisko „Účtovníctvo“
-        └── …
+CORE
+├── Admin (superuser)                 – vidí všetko, bez overenia
+└── Zástupcovia CORE                  – vidia všetko po overení PIN + 2FA
+        │
+        │  (CORE zakladá oddelenia a menuje ich správcov)
+        ▼
+Oddelenie „IT“
+├── Správca oddelenia                 – „superadmin skupiny“, core zástupca pre toto oddelenie
+├── Zástupcovia správcu               – delegáti oddelenia
+└── Používatelia                      – môžu, ale nemusia byť delegáti
+
+Oddelenie „Účtovníctvo“
+└── …
 ```
+
+| Rola | Vidí | Môže |
+|---|---|---|
+| **Admin (CORE)** | všetko **bez** overenia | všetko; menuje zástupcov CORE |
+| **Zástupca CORE** | všetko po **PIN + 2FA** | zakladať / rušiť oddelenia, menovať a odvolávať správcov oddelení, presúvať ľudí medzi oddeleniami |
+| **Správca oddelenia** (superadmin skupiny) | svoje oddelenie a jeho ľudí po **PIN + 2FA** | povoliť / zakázať PIN, pozvať, reset PINu / 2FA (používateľ potvrdí sám), pozastaviť, pozvať delegátov oddelenia, dočasne delegovať svoje práva, žiadať o presun človeka do / z iného oddelenia |
+| **Delegát oddelenia** | svoje oddelenie po **PIN + 2FA** | spolu s iným delegátom / správcom potvrdzuje zmeny (štyri oči), rieši resety; pri nedostupnom správcovi dvaja delegáti môžu presunúť práva (kap. 5) |
+| **Používateľ** | iba seba | svoj PIN, 2FA, záložné kódy; ak má rolu – „Moja delegácia → Vzdať sa“ |
+
+**Oddelenie** je vlastný záznam v plugine, **nie** NetBox skupina – NetBox skupiny nesú oprávnenia na celý NetBox
+a nechceme ich miešať. Neskôr ho môže použiť aj plugin Projekty („projekt patrí oddeleniu IT“).
+
+**Prezeranie:** správcovia a delegáti vidia oddelenia a používateľov až po potvrdení **PIN + 2FA**
+(platí okno ako pri ostatných správcovských akciách). Admin CORE (superuser) si ich pozerá bez overenia;
+na zmeny potrebuje overenie ako doteraz.
 
 ## 3. Pozvánka – spoločná pre každú rolu
 
-Každé pridelenie role (globálny admin, správca, zástupca, delegát, dočasné zastupovanie, presun práv) je **pozvánka**.
+Každé pridelenie role (zástupca CORE, správca, delegát, dočasné delegovanie, presun práv) je **pozvánka**.
 Rola začne platiť až po prijatí.
 
-1. Kto pozýva, vyberie **platnosť pozvánky: 12 / 24 / 36 / 48 hodín** (predvolené 24).
-2. Pozvať sa dá iba používateľ s **e-mailom v overenej doméne** – inak sa pozvánka nedá doručiť.
-3. Pozvanému príde **mail s odkazom a kódom** (obsah v kap. 9).
+1. Kto pozýva, vyberie **platnosť: 12 / 24 / 36 / 48 hodín** (predvolené 24).
+2. Pozvať sa dá iba používateľ s **e-mailom v overenej doméne**.
+3. Pozvanému príde **mail s odkazom, kódom, názvom oddelenia a platnosťou** (vzor v kap. 10).
 4. Po kliknutí na odkaz:
-   - musí sa **prihlásiť** do NetBoxu,
+   - **prihlási sa** do NetBoxu,
    - ak nemá PIN → najprv si ho nastaví,
    - ak nemá 2FA → nastaví si ju (QR kód + záložné kódy),
    - zadá **kód z mailu**,
@@ -56,7 +65,7 @@ Rola začne platiť až po prijatí.
    - potvrdí **PINom + 2FA**.
 5. Až potom je rola aktívna. Pozývajúci dostane mail „prijaté“.
 6. Po uplynutí platnosti pozvánka prepadne; dá sa poslať znova (nový kód).
-7. Pozvaný môže pozvánku aj **odmietnuť** – pozývajúci dostane mail.
+7. Pozvaný môže pozvánku **odmietnuť** – pozývajúci dostane mail.
 
 ### Stavy role
 
@@ -66,101 +75,109 @@ Rola začne platiť až po prijatí.
 | Prepadla | platnosť uplynula bez prijatia |
 | Odmietnutá | pozvaný odmietol |
 | Aktívna | prijatá, práva platia |
-| Dočasná do … | zastupovanie s dátumom konca |
-| Odstupuje | požiadal o vzdanie sa, čaká na odovzdanie (kap. 7) |
-| Ukončená | rola skončila (odvolanie, vzdanie, vypnutie štyroch očí) |
+| Dočasná do … | dočasné delegovanie s dátumom konca |
+| Odstupuje | požiadal o vzdanie sa, čaká na odovzdanie (kap. 8) |
+| Ukončená | rola skončila (odvolanie, vzdanie, zrušenie) |
 
-V zoznamoch uvidíš pri každom aj to, čo mu chýba: *chýba PIN / chýba 2FA / nemá e-mail*.
+V zoznamoch je pri každom aj to, čo mu chýba: *chýba PIN / chýba 2FA / nemá e-mail*.
 
 ## 4. Schvaľovanie štyrmi očami
 
-- **Zapnutie:** superadmin sám – iba ak existujú aspoň **2 aktívni globálni delegáti**
-  (spolu so superadminom min. 3 ľudia).
-- **Vypnutie:** musia potvrdiť **ľubovoľní dvaja** z admin skupiny (superadmin + niekto, alebo dvaja delegáti).
-- **Po vypnutí:**
-  - delegovanie **končí** – delegáti strácajú delegačné práva (stav „Ukončená“),
-  - všetkým delegátom príde mail: *„Schvaľovanie štyrmi očami bolo zrušené, delegovanie skončilo, ďalej spravujete
-    iba svoj PIN.“*
-- **Opätovné zapnutie:** treba znova pozvať delegátov (aspoň 2 musia prijať).
-- Pri zapnutí aj vypnutí dostanú mail všetci dotknutí.
+- **Zapnutie:** admin CORE – iba ak existujú aspoň **2 aktívni zástupcovia CORE**.
+- **Kým existuje aspoň jedno oddelenie alebo jeden delegát, štyri oči sa vypnúť nedajú.**
+- Vypnúť sa dajú až vtedy, keď **neexistuje žiadne oddelenie ani žiadny delegát**; aj vtedy potvrdia dvaja
+  (ak ešte dvaja sú), inak admin sám.
+- **Ak skončí delegovanie v CORE** (napr. zástupca CORE odíde), oddelenia fungujú ďalej normálne a štyri oči
+  ostávajú zapnuté.
+- Pri zapnutí / vypnutí dostanú mail všetci dotknutí.
 
-## 5. Presun práv a zastupovanie
+## 5. Dočasné delegovanie a presun práv
 
-### 5.1 Kto môže presunúť práva správcu pracoviska
+### 5.1 Kto môže delegovať / presunúť práva správcu oddelenia
 
-- superadmin,
-- globálny admin (delegovaný superadminom),
-- **keď správca nie je dostupný:** **dvaja delegáti toho istého pracoviska** spolu (štyri oči) – môžu
-  - presunúť práva správcu na **iného delegáta v rámci pracoviska**, alebo
-  - **pozvať ďalšieho** delegáta / zástupcu.
+- admin CORE a zástupcovia CORE,
+- správca sám (napr. pred dovolenkou),
+- **keď správca nie je dostupný:** **dvaja delegáti toho istého oddelenia** spolu (štyri oči) – môžu
+  - presunúť práva správcu na **iného delegáta v rámci oddelenia**, alebo
+  - **pozvať ďalšieho** delegáta.
 
-Admin skupina dostane o každom presune mail a môže ho vrátiť.
+### 5.2 Dočasné delegovanie (s dátumom „do“)
 
-### 5.2 Priebeh presunu
+1. Iniciátor vyberie delegáta, **dátum „do“**, dôvod a platnosť kódu (12–48 h).
+2. Delegát dostane **mail s kódom** a prijme (kap. 3).
+3. Po prijatí príde **mail každému v oddelení**:
+   *„Delegát XYZ je teraz správcom (superadminom) oddelenia IT. Jeho práva končia 15. 10. 2026 o 23:59.“*
+4. Deň pred koncom príde pripomienka delegátovi aj pôvodnému správcovi.
+5. **Po dátume sa práva automaticky vrátia pôvodnému správcovi** – mail celému oddeleniu
+   *„Správcom oddelenia IT je opäť Peter Knotek.“*
+6. Dočasný správca **nemôže** ďalej odovzdávať práva ani meniť trvalého správcu.
 
-1. Iniciátor navrhne presun (komu, dočasne do dátumu alebo trvalo, dôvod) a zvolí platnosť kódu 12–48 h.
-2. Ak ide o dvoch delegátov – obaja potvrdia PINom + 2FA (živá stránka ako pri štyroch očiach).
-3. Nový držiteľ dostane **mail s kódom** a informáciou o pracovisku a o tom, čo preberá.
-4. Prijme cez pozvánku (kap. 3). Kým neprijme, práva ostávajú pôvodnému.
-5. Pôvodný držiteľ a admin skupina dostanú mail o dokončení.
+### 5.3 Trvalý presun (pôvodný správca je zrušený / odišiel)
 
-### 5.3 Dočasné zastupovanie (choroba, dovolenka)
+1. CORE (alebo pri nedostupnosti CORE dvaja delegáti oddelenia – *otvorená otázka č. 3*) zruší pôvodného
+   správcu **spolu s určením nového**.
+2. Nový dostane mail s kódom a prijme.
+3. **Mail každému v oddelení:**
+   *„Správca Peter Knotek bol zrušený. Práva boli presunuté na XYZ, ktorý je teraz správcom (superadminom)
+   oddelenia IT.“*
+4. Kým nový neprijme, oddelenie spravuje priamo CORE – nič neostane bez správcu.
 
-- Správca (alebo 5.1) určí zástupcu z pracoviska a **dátum „do“**.
-- Deň pred koncom príde mail; po dátume sa práva **automaticky vrátia**.
-- Dočasný zástupca **nemôže** ďalej odovzdávať práva ani meniť správcu.
+## 6. Presun človeka medzi oddeleniami
 
-### 5.4 Trvalý zástupca správcu
+- Správca oddelenia X **požiada** o presun človeka do oddelenia Y (alebo požiada Y o človeka z Y do X).
+- **Správca druhého oddelenia žiadosť potvrdí** (PIN + 2FA). Správcovia si tak ľudí vedia vymeniť medzi sebou.
+- CORE môže presúvať priamo.
+- Ak je presúvaný človek delegát:
+  - v pôvodnom oddelení mu rola **končí** (ak by klesol počet pod minimum → najprv výmena, kap. 7),
+  - v novom oddelení je delegátom až po **prijatí pozvánky** (kód v maili).
+- Mail: presúvanému, obom správcom a obom oddeleniam (kto prišiel / odišiel).
 
-- Každé pracovisko môže mať stáleho zástupcu – pri chorobe netreba nič robiť, práva už má.
-
-### 5.5 Správca odíde z firmy
-
-- Odvolať ho môže superadmin / globálny admin **iba spolu s určením nového** správcu.
-- Kým nový neprijme, pracovisko spravuje priamo admin skupina – nič neostane bez správcu.
-
-## 6. Pridávanie a odoberanie delegátov
+## 7. Pridávanie a odoberanie delegátov
 
 - Pridanie = pozvánka (kap. 3).
-- **Odobratie delegáta** môže iba superadmin (alebo globálny admin), a iba ako **výmena**, ak by počet klesol pod
-  minimum – starý ostáva aktívny, kým nový neprijme; potom sa vymenia automaticky.
+- Odobratie delegáta môže správca oddelenia alebo CORE; ak by počet klesol pod minimum, iba ako **výmena** –
+  starý ostáva aktívny, kým nový neprijme; potom sa vymenia automaticky.
 - **Minimá:**
-  - admin skupina: superadmin + **2** globálni delegáti (pri zapnutých štyroch očiach),
-  - pracovisko: správca + **2** delegáti (aby mohli nastúpiť dvaja delegáti podľa 5.1) – *otvorená otázka č. 4*.
+  - CORE: admin + **2** zástupcovia CORE (pre zapnutie štyroch očí),
+  - oddelenie: správca + **2** delegáti (aby mohli nastúpiť dvaja delegáti podľa 5.1).
 
-## 7. Vzdanie sa role
+## 8. Vzdanie sa role
 
-- Každý s rolou vidí menu **„Moja delegácia“**: čo je, na ktorom pracovisku, text zodpovednosti, tlačidlo
+- Každý s rolou vidí menu **„Moja delegácia“**: čo je, v ktorom oddelení, text zodpovednosti, tlačidlo
   **„Vzdať sa“** (dôvod + PIN + 2FA).
-- Nadriadený (správca / admin skupina) dostane notifikáciu v zvončeku + mail.
+- Nadriadený (správca / CORE) dostane notifikáciu v zvončeku + mail.
 - Ak by počet klesol pod minimum → stav **„Odstupuje“**: stále potvrdzuje, kým nový neprijme. Až potom rola končí.
 
-## 8. Audit
+## 9. Audit
 
-Každý krok (pozvánka, prijatie, odmietnutie, prepadnutie, presun, zastupovanie, koniec zastupovania, vzdanie sa,
-odvolanie, zapnutie / vypnutie štyroch očí) sa zapíše do auditu – kto, komu, pracovisko, kedy, odkiaľ (IP), dôvod.
+Každý krok (pozvánka, prijatie, odmietnutie, prepadnutie, dočasné delegovanie, návrat práv, trvalý presun,
+presun medzi oddeleniami, vzdanie sa, odvolanie, zapnutie / vypnutie štyroch očí, prezeranie oddelenia
+správcom) sa zapíše do auditu – kto, komu, oddelenie, kedy, odkiaľ (IP), dôvod.
 
-## 9. Maily (EN / SK podľa nastavenia)
+## 10. Maily (EN / SK podľa nastavenia)
 
 | Udalosť | Komu |
 |---|---|
-| Pozvánka do role (s kódom a platnosťou) | pozvaný |
+| Pozvánka do role (kód, oddelenie, platnosť) | pozvaný |
 | Pozvánka prijatá / odmietnutá / prepadla | pozývajúci |
-| Presun práv – kód na prevzatie | nový držiteľ |
-| Presun práv dokončený | pôvodný držiteľ, admin skupina |
-| Zastupovanie končí zajtra / skončilo | zástupca, správca |
+| Dočasné delegovanie – „XYZ je správcom do …“ | **každý v oddelení** |
+| Delegovanie končí zajtra | dočasný a pôvodný správca |
+| Práva vrátené pôvodnému správcovi | **každý v oddelení** |
+| Správca zrušený, práva presunuté na XYZ | **každý v oddelení** |
+| Žiadosť o presun človeka medzi oddeleniami | správca druhého oddelenia |
+| Presun človeka dokončený | presúvaný, obaja správcovia, obe oddelenia |
 | Vzdanie sa role | nadriadený |
-| Štyri oči zapnuté / vypnuté (delegovanie skončilo) | všetci delegáti |
+| Štyri oči zapnuté / vypnuté | všetci dotknutí |
 
 ### Vzor pozvánky
 
-> **Predmet:** Delegovanie správy PIN – pracovisko IT
+> **Predmet:** Delegovanie správy PIN – oddelenie IT
 >
-> Peter Knotek ťa určil za **delegáta pracoviska IT** pre správu PIN v NetBoxe.
+> Peter Knotek ťa určil za **delegáta oddelenia IT** pre správu PIN v NetBoxe.
 >
 > **Čo to znamená**
-> - Spolu s ďalším delegátom alebo správcom schvaľuješ citlivé zmeny („štyri oči“) na pracovisku IT.
-> - Riešiš resety PINu a 2FA ľudí na pracovisku IT (používateľ ich vždy potvrdí sám).
+> - Spolu s ďalším delegátom alebo správcom schvaľuješ citlivé zmeny („štyri oči“) v oddelení IT.
+> - Riešiš resety PINu a 2FA ľudí v oddelení IT (používateľ ich vždy potvrdí sám).
 > - PIN chráni citlivé časti NetBoxu aj ďalších pluginov, ktoré ho vyžadujú (napr. projekty a dokumentácia) –
 >   za túto ochranu si spoluzodpovedný.
 >
@@ -175,26 +192,25 @@ odvolanie, zapnutie / vypnutie štyroch očí) sa zapíše do auditu – kto, ko
 >
 > Ak o tom nič nevieš, neprijímaj a kontaktuj administrátora.
 
-## 10. Existujúce dáta
+## 11. Existujúce dáta
 
-- Terajší delegáti, ktorí majú PIN aj 2FA → ostanú **aktívni** ako globálni delegáti.
+- Terajší delegáti s PINom aj 2FA → ostanú **aktívni** ako zástupcovia CORE.
 - Delegáti bez PINu alebo 2FA → stav **„Čaká na prijatie“** a pošle sa im pozvánka (24 h).
-- Delegovanie na NetBox skupinu → prevedie sa na jednotlivých členov (pozvánky), prípadne na pracovisko.
+- Delegovanie na NetBox skupinu → prevedie sa na jednotlivých členov (pozvánky), prípadne na oddelenie.
 
-## 11. Postup (fázy)
+## 12. Postup (fázy)
 
 1. **Fáza 1:** pozvánky s platnosťou 12–48 h, prijatie (kód + PIN + 2FA), stavy, „Moja delegácia → Vzdať sa“,
-   vypnutie štyroch očí dvomi ľuďmi (s koncom delegovania), výmena delegáta, maily.
-2. **Fáza 2:** pracoviská, správca, zástupca, delegáti pracoviska, dočasné zastupovanie, presun práv dvomi delegátmi,
-   viditeľnosť iba vlastného pracoviska.
+   zástupcovia CORE, pravidlo pre štyri oči (kap. 4), výmena delegáta, maily.
+2. **Fáza 2:** oddelenia, správca, delegáti oddelenia, dočasné delegovanie s návratom práv, trvalý presun,
+   presun ľudí medzi oddeleniami, prezeranie po PIN + 2FA, maily celému oddeleniu.
 
-## 12. Otvorené otázky
+## 13. Otvorené otázky
 
 | # | Otázka | Môj návrh |
 |---|---|---|
-| 1 | Môže byť používateľ vo **viacerých pracoviskách**? | nie, iba v jednom |
-| 2 | Trvalý **zástupca správcu** áno / nie? | áno, voliteľný |
-| 3 | Zmeny správcu pracoviska (povoliť PIN, reset) – cez štyri oči, alebo stačí správca sám? | správca sám; štyri oči iba pre zmeny rolí (delegáti, presun práv) |
-| 4 | Minimum delegátov na pracovisku | 2 (inak nefunguje 5.1) |
-| 5 | Vypnutie štyroch očí – ruší aj role na pracoviskách, alebo iba globálnych delegátov? | iba globálnych; pracoviská fungujú ďalej, ale presun práv dvomi delegátmi (5.1) nebude dostupný |
-| 6 | Trvalý presun správcu dvomi delegátmi bez admina – povoliť? | iba dočasne (max. 30 dní); trvalý presun potvrdí admin skupina |
+| 1 | „Core zástupca pre ODD“ – je **správca oddelenia** zároveň členom CORE (vidí aj ostatné oddelenia), alebo je to človek z CORE, ktorý oddelenie iba **dozoruje** a oddelenie má ešte vlastného správcu? | správca oddelenia **nie je** členom CORE, vidí iba svoje oddelenie; CORE vidí všetko |
+| 2 | Môže byť používateľ vo **viacerých oddeleniach**? | nie, iba v jednom |
+| 3 | Trvalý presun správcu dvomi delegátmi bez CORE – povoliť? | nie; dvaja delegáti môžu iba **dočasne** (max. 30 dní), trvalý presun potvrdí CORE |
+| 4 | Zmeny správcu oddelenia (povoliť PIN, reset) – cez štyri oči, alebo stačí správca sám? | správca sám; štyri oči iba pre zmeny rolí (delegáti, presun práv, presun ľudí) |
+| 5 | Dostane mail o dočasnom delegovaní naozaj **každý** v oddelení, alebo iba tí, čo majú PIN? | každý s e-mailom v overenej doméne |
