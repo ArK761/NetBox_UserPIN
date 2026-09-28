@@ -13,12 +13,15 @@ sensitive pages ("enter your PIN to continue"), so the PIN logic exists only onc
 - **Step-up**: administrative actions need a fresh PIN + 2FA confirmation (valid a few minutes)
 - **Forgotten PIN**: self-service recovery needs an e-mailed code **and** a 2FA code together
 - E-mails only to allowed company domains; security notifications (changed, reset, locked, expiring)
-- **Delegation**: the master names users / groups who manage PINs (separation of duties)
+- **Roles: CORE and departments** – the master invites CORE deputies; CORE creates departments and appoints
+  their heads; heads invite department delegates. Every role is an **invitation** (e-mail with link + code,
+  valid 12 / 24 / 36 / 48 h) accepted with the code, PIN and 2FA; resignation, replacement, temporary hand-over
+  and moves between departments are built in (see below)
 - **An administrator alone can only remove access** (suspend). A PIN reset is started by an administrator and
   confirmed by the user in their own session with 2FA (a 2FA reset with the PIN) – no meeting needed, the
   administrator never learns the new PIN
-- **Four-eyes approval** (optional) for delegates, settings and PIN access: the requester and a second
-  administrator / delegate confirm with their own PIN + 2FA – live in their own sessions (each sees the other's
+- **Four-eyes approval** (optional) for roles, settings and PIN access: the requester and a second
+  person (CORE, or the department's head / delegates) confirm with their own PIN + 2FA – live in their own sessions (each sees the other's
   confirmation) or later until the request expires; optional break-glass for the master
 - **Backup codes** stored encrypted; *Show backup codes* after PIN + 2FA or PIN + an e-mailed verification code
   (the codes themselves are never e-mailed)
@@ -34,7 +37,7 @@ sensitive pages ("enter your PIN to continue"), so the PIN logic exists only onc
   domains must be verified** with a code sent to an address in the domain before any e-mail goes there
 - Separate **Mail** page: allowed domains, notifications, self-service recovery, test e-mail to a chosen user
   (the picker shows account, name and the e-mail address it will go to)
-- First and last name shown next to the account in Users and Delegates (Settings → General, can be turned off)
+- First and last name shown next to the account in Users, CORE and Departments (Settings → General, can be turned off)
 - Append-only **audit log** of every PIN event (never contains a PIN, hash or code)
 - Settings page in the UI, stable API + signals for other plugins
 
@@ -102,20 +105,49 @@ Everything else is configured in the UI: **User PIN → Settings**.
 
 ## Roles and UI
 
-| Menu | Master (superuser) | Delegate | User |
-|---|---|---|---|
-| My PIN – PIN, 2FA, backup codes, recovery, test rotation, own activity | ✅ | ✅ | ✅ |
-| Users – summary, PIN / 2FA / e-mail / expiry status of everybody | ✅ | ✅ | – |
-| Users – allow / deny, suspend, start PIN / 2FA reset, force change, clear lockout | ✅ except self | ✅ except master, other delegates, self | – |
-| Audit log | ✅ | ✅ | – |
-| Settings, Mail | ✅ edit | view (edit only if allowed by the master) | – |
-| Delegates | ✅ | – | – |
+| Menu | Master (superuser) | CORE deputy | Department head | Department delegate | User |
+|---|---|---|---|---|---|
+| My PIN, My roles | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Users – PIN / 2FA / e-mail / expiry status | everybody | everybody | own department | own department | – |
+| Users – allow / deny, suspend, start resets, force change, clear lockout | all except self | all except master, CORE, self | members of the department except self | members without a role | – |
+| Departments | all, create / dissolve, members, heads | same | own: invite delegates, hand over, ask for moves | own: view; with a 2nd delegate invite / hand over | – |
+| Audit log, Approvals | all | all | own department | own department | – |
+| Settings, Mail | ✅ edit | view (edit if allowed) | – | – | – |
+| CORE | ✅ | – | – | – | – |
 
-All changes on Users, Settings and Delegates require a **step-up** (PIN + 2FA). Administration pages also
-require the administrator's own unlocked PIN.
+Everybody except the master sees other people's data only after confirming with **PIN + 2FA**; all changes
+require a **step-up**. Administration pages also require the administrator's own unlocked PIN.
 
-Delegates are stored by the plugin and synchronised into NetBox object permissions named
-`User PIN: delegates …` / `User PIN: settings editors` – do not edit those by hand.
+Roles are stored by the plugin and effective roles are synchronised into NetBox object permissions named
+`User PIN: delegates …`, `User PIN: settings editors` and `User PIN: departments …` – do not edit those by hand.
+
+### Roles: CORE and departments
+
+```
+CORE        master (superusers) + CORE deputies        everything
+Department  head + delegates (min. 2) + members        the PINs of the department's members
+```
+
+- **Invitation** – every role (CORE deputy, head, delegate, temporary head, replacement) is an invitation: the
+  inviter chooses the validity (12 / 24 / 36 / 48 h); the user gets an e-mail explaining the role, the
+  responsibility (the PIN also protects other plugins) and the department, with a link and a code. The role
+  starts only after the user accepts with the code, PIN and 2FA (set up first if needed). Only users with an
+  e-mail in a verified domain can be invited. Invitees may use a PIN even in "allowed only" mode.
+- **Minimum** – with four-eyes on at least 2 CORE deputies; every department a head and 2 delegates. A
+  resignation (User PIN → My roles) or removal below the minimum waits for a replacement ("resigning").
+  A head is removed only together with a new head (CORE manages the department meanwhile).
+- **Temporary hand-over** – the head (or CORE, or two delegates together for max. 30 days when the head is
+  not available) hands the head's rights to a member until a date. Everybody in the department is e-mailed
+  "X is the head until …"; a day before the end a reminder is sent and after the date the rights return
+  automatically (hourly system job `User PIN role housekeeping`, run by `netbox-rq`).
+- **Moves between departments** – a head asks, the head of the other department approves (CORE decides for
+  users without a department and may move directly). The moved user, both heads and both departments are
+  informed; a delegate needed for the minimum cannot leave before a replacement.
+- **Four-eyes** – can be switched on when 2 CORE deputies are active; it cannot be switched off while a
+  department exists; switching it off needs two people and ends the CORE delegation (the deputies are
+  e-mailed and manage only their own PIN from then on).
+- **Upgrade from ≤ 0.9** – existing delegates with PIN + 2FA become active CORE deputies; the others (and the
+  members of delegated groups) wait for an invitation – send it on the CORE page.
 
 ### Settings (defaults)
 
@@ -146,11 +178,11 @@ requires the user to have 2FA.
 
 ### Four-eyes approval
 
-Settings → *Four-eyes approval* (needs at least two administrators / delegates with PIN and 2FA). Choose what it
-applies to: delegates, settings (incl. mail), PIN access. Then such a change creates a request:
+Settings → *Four-eyes approval* (needs at least two active CORE deputies with PIN and 2FA). Choose what it
+applies to: roles, settings (incl. mail), PIN access. Then such a change creates a request:
 
 1. The requester confirms with PIN + 2FA (and a reason).
-2. Any other administrator / delegate gets a NetBox notification (bell) and an e-mail, opens
+2. Any other eligible person (CORE; for a department request also its head and delegates) gets a NetBox notification (bell) and an e-mail, opens
    *User PIN → Approvals* and confirms or rejects with their own PIN + 2FA.
 3. The request page refreshes itself every few seconds – both see live who has confirmed (time and IP).
    After the second confirmation the change is executed. Requests expire (default 24 h).

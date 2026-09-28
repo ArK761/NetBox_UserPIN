@@ -1,0 +1,57 @@
+{% extends 'generic/_base.html' %}
+{% load form_helpers i18n %}
+{% block title %}{% trans "My roles" %}{% endblock %}
+{% block content %}
+<p class="text-secondary">{% if department %}{% blocktrans with name=department.name %}You belong to the department <strong>{{ name }}</strong>.{% endblocktrans %}{% else %}{% trans "You do not belong to any department." %}{% endif %}</p>
+{% for row in rows %}{% with d=row.role %}
+<div class="card">
+  <h2 class="card-header d-flex justify-content-between align-items-center"><span><i class="mdi mdi-account-tie"></i> {{ row.title|capfirst }}</span><span>{% include 'netbox_user_pin/inc/role_status.html' with role=d %}</span></h2>
+  <div class="card-body">
+    {% if d.status == 'pending' %}
+      <p>{% blocktrans with by=d.invited_by %}<strong>{{ by }}</strong> invited you. Accept it with the code from the e-mail, your PIN and 2FA.{% endblocktrans %}</p>
+      <a class="btn btn-primary" href="{% url 'plugins:netbox_user_pin:invitation' pk=d.pk %}"><i class="mdi mdi-check"></i> {% trans "Open the invitation" %}</a>
+    {% else %}
+      {% if d.status == 'on_leave' %}<div class="alert alert-warning"><div>{% trans "Your rights are handed over temporarily; they return automatically at the end of the hand-over." %}</div></div>{% endif %}
+      {% if d.status == 'resigning' %}<div class="alert alert-warning"><div>{% trans "You asked to give the role up. It stays in force until a replacement accepts." %}</div></div>{% endif %}
+      <ul class="small">
+        {% if d.role == 'core' %}
+          <li>{% trans "Together with the administrator you see and manage the PINs of all users and departments." %}</li>
+          <li>{% trans "You confirm sensitive changes together with a second person (four eyes): roles, settings, departments." %}</li>
+        {% elif d.role == 'head' %}
+          <li>{% trans "You manage the PINs of the people in your department and invite its delegates." %}</li>
+          <li>{% trans "You can hand over your rights temporarily and approve moves of people." %}</li>
+        {% else %}
+          <li>{% trans "Together with the head or another delegate you confirm changes in your department (four eyes) and handle resets." %}</li>
+        {% endif %}
+        <li>{% trans "The PIN protects sensitive parts of NetBox and of other plugins that require it – you share responsibility for this protection." %}</li>
+        <li>{% trans "Never give your PIN, 2FA or backup codes to anybody. Every action you take is recorded in the audit log." %}</li>
+      </ul>
+      {% if d.accepted %}<p class="small text-secondary">{% blocktrans with date=d.accepted|date:"Y-m-d H:i" %}Accepted on {{ date }}.{% endblocktrans %}</p>{% endif %}
+      {% if d.status != 'resigning' %}
+      <button class="btn btn-outline-danger" type="button" data-bs-toggle="collapse" data-bs-target="#resign-{{ d.pk }}"><i class="mdi mdi-exit-run"></i> {% trans "Give up this role" %}</button>
+      <div class="collapse{% if row.form.errors %} show{% endif %} mt-3" id="resign-{{ d.pk }}">
+        {% if row.needs_replacement %}<div class="alert alert-info"><div>{% trans "Without you the minimum would not be met: the role stays in force until a replacement accepts." %}</div></div>{% endif %}
+        <form method="post" class="object-edit">{% csrf_token %}<input type="hidden" name="pk" value="{{ d.pk }}">
+          {% if row.form.non_field_errors %}<div class="alert alert-danger"><div>{{ row.form.non_field_errors|join:" " }}</div></div>{% endif %}
+          {% render_field row.form.reason %}
+          {% render_field row.form.pin %}
+          {% render_field row.form.otp %}
+          <div class="text-end"><button type="submit" class="btn btn-danger">{% trans "Give up" %}</button></div>
+        </form>
+      </div>
+      {% endif %}
+    {% endif %}
+  </div>
+</div>
+{% endwith %}{% empty %}
+<div class="alert alert-secondary"><div>{% trans "You have no role in the PIN administration." %}</div></div>
+{% endfor %}
+{% if history %}
+<div class="card">
+  <h2 class="card-header">{% trans "History" %}</h2>
+  <table class="table table-sm">
+    <tbody>{% for d in history %}<tr><td>{{ d.get_role_display }}{% if d.department %} – {{ d.department }}{% endif %}</td><td>{% include 'netbox_user_pin/inc/role_status.html' with role=d %}</td><td class="small text-secondary">{{ d.ended|date:"Y-m-d H:i"|default:"" }} {{ d.end_reason }}</td></tr>{% endfor %}</tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}

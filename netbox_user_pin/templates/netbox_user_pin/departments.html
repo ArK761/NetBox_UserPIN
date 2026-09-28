@@ -1,0 +1,79 @@
+{% extends 'generic/_base.html' %}
+{% load form_helpers i18n %}
+{% block title %}{% trans "Departments" %}{% endblock %}
+{% block content %}
+{% include 'netbox_user_pin/inc/step_up_bar.html' %}
+{% if transfers %}
+<div class="card border-warning">
+  <h2 class="card-header"><i class="mdi mdi-swap-horizontal"></i> {% trans "Moves waiting for your decision" %}</h2>
+  <table class="table table-hover">
+    <thead><tr><th>{% trans "User" %}</th><th>{% trans "From" %}</th><th>{% trans "To" %}</th><th>{% trans "Requested by" %}</th><th>{% trans "Valid until" %}</th><th></th></tr></thead>
+    <tbody>
+      {% for t in transfers %}
+        <tr>
+          <td>{{ t.user.username }}</td><td>{{ t.from_department|default:"—" }}</td><td>{{ t.to_department }}</td>
+          <td>{{ t.requested_by_name }}</td><td>{{ t.expires|date:"Y-m-d H:i" }}</td>
+          <td class="text-end text-nowrap">
+            <form method="post" class="d-inline" data-step-up>{% csrf_token %}<input type="hidden" name="pk" value="{{ t.pk }}"><input type="hidden" name="action" value="transfer-approve">
+              <button class="btn btn-sm btn-success" type="submit"><i class="mdi mdi-check"></i> {% trans "Approve" %}</button></form>
+            <form method="post" class="d-inline" data-step-up>{% csrf_token %}<input type="hidden" name="pk" value="{{ t.pk }}"><input type="hidden" name="action" value="transfer-reject">
+              <button class="btn btn-sm btn-outline-danger" type="submit">{% trans "Reject" %}</button></form>
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+<div class="row">
+  <div class="col-12 {% if is_core %}col-xl-8{% endif %}">
+    <div class="card">
+      <h2 class="card-header">{% trans "Departments" %}</h2>
+      <table class="table table-hover">
+        <thead><tr><th>{% trans "Department" %}</th><th>{% trans "Head" %}</th><th>{% trans "Delegates" %}</th><th>{% trans "Members" %}</th><th></th></tr></thead>
+        <tbody>
+          {% for row in rows %}
+            <tr>
+              <td><a href="{% url 'plugins:netbox_user_pin:department' pk=row.department.pk %}"><strong>{{ row.department.name }}</strong></a>{% if row.department.description %}<div class="small text-secondary">{{ row.department.description }}</div>{% endif %}</td>
+              <td>{% if row.head %}{{ row.head.user.username }}{% if row.head.temporary_until %} <span class="badge text-bg-purple">{% trans "until" %} {{ row.head.temporary_until|date:"Y-m-d" }}</span>{% endif %}{% else %}<span class="badge text-bg-orange">{% trans "no head – managed by CORE" %}</span>{% endif %}</td>
+              <td>{{ row.delegates }}{% if row.delegates < 2 %} <span class="badge text-bg-orange" title="{% trans 'Minimum 2 delegates' %}"><i class="mdi mdi-alert"></i></span>{% endif %}</td>
+              <td>{{ row.members }}</td>
+              <td class="text-end">{% if row.my_role == 'head' %}<span class="badge text-bg-purple">{% trans "you are the head" %}</span>{% elif row.my_role == 'delegate' %}<span class="badge text-bg-cyan">{% trans "you are a delegate" %}</span>{% endif %}
+                <a class="btn btn-sm btn-outline-primary" href="{% url 'plugins:netbox_user_pin:department' pk=row.department.pk %}">{% trans "Open" %}</a></td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="5" class="text-secondary">{% trans "No departments." %}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if is_core and unassigned %}<p class="text-secondary small">{% blocktrans with n=unassigned %}{{ n }} active users are not in any department (only CORE manages their PINs).{% endblocktrans %}</p>{% endif %}
+  </div>
+  {% if is_core %}
+  <div class="col-12 col-xl-4">
+    <div class="card">
+      <h2 class="card-header">{% trans "New department" %}</h2>
+      <div class="card-body">
+        <form method="post" class="object-edit" data-step-up>{% csrf_token %}<input type="hidden" name="action" value="create">
+          {% render_field form.name %}
+          {% render_field form.description %}
+          <div class="text-end"><button type="submit" class="btn btn-primary"><i class="mdi mdi-plus"></i> {% trans "Create" %}</button></div>
+        </form>
+      </div>
+    </div>
+    <div class="card">
+      <h2 class="card-header">{% trans "How departments work" %}</h2>
+      <div class="card-body small">
+        <ul class="mb-0">
+          <li>{% trans "CORE creates a department, adds its members and appoints its head (by invitation)." %}</li>
+          <li>{% trans "The head manages the PINs of the members, invites the delegates (at least 2) and can hand the rights over temporarily until a date – the whole department is informed by e-mail and the rights return automatically." %}</li>
+          <li>{% trans "When the head is not available, two delegates together can hand the head's rights over to another delegate (at most 30 days) or invite another delegate." %}</li>
+          <li>{% trans "Heads ask each other to move people between departments; the head of the other department approves." %}</li>
+          <li>{% trans "Heads and delegates see only their department, after confirming with their PIN + 2FA." %}</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

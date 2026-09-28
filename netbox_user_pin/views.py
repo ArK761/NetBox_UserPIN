@@ -5,6 +5,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
+from django.db.models import Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -13,15 +14,17 @@ from django.utils.translation import gettext as _
 from django.views import View
 from utilities.request import safe_for_redirect
 
-from . import approvals, crypto, delegation, mail, service
+from . import approvals, crypto, mail, roles, service
 from .forms import (
-    ApprovalForm, BackupCodesForm, BreakGlassForm, ChangePinForm, DelegateForm, DomainForm, MailSettingsForm, OtpForm, PinOtpForm, PinSettingsForm, RecoveryForm,
-    ResetConfirmForm, SetPinForm, TestMailForm, UnlockForm,
+    AcceptRoleForm, ApprovalForm, BackupCodesForm, BreakGlassForm, ChangePinForm, DepartmentForm, DomainForm,
+    HandOverForm, MailSettingsForm, MemberForm, OtpForm, PinOtpForm, PinSettingsForm, RecoveryForm, ReplaceRoleForm,
+    ResetConfirmForm, ResignForm, RoleInviteForm, SetPinForm, TestMailForm, TransferForm, UnlockForm,
 )
 from .mixins import PinRequiredMixin, not_allowed_response, step_up_gate
 from .models import (
-    AllowedDomain, ApprovalAction, ApprovalRequest, ApprovalStatus, PinAccess, PinAccessMode, PinDelegate, PinEvent,
-    PinEventAction, PinSettings, UserPin,
+    OPEN_ROLE_STATUSES, AllowedDomain, ApprovalAction, ApprovalRequest, ApprovalStatus, Department, DepartmentMember,
+    PinAccess, PinAccessMode, PinDelegate, PinEvent, PinEventAction, PinSettings, RoleKind, RoleStatus,
+    TransferRequest, TransferStatus, UserPin,
 )
 
 ADMIN_SCOPE = 'user-pin-admin'
@@ -73,25 +76,31 @@ def _save_settings(request, form, action, redirect_name):
     if not changes:
         messages.info(request, _('No changes.'))
         return redirect(redirect_name)
-    if approvals.required_for(action):
+    switching_off = changes.get('four_eyes') is False and PinSettings.load().four_eyes
+    # switching four-eyes off always needs a second person (when there is one)
+    second_person = [u for u in approvals.eligible_approvers() if u.pk != request.user.pk]
+    if approvals.required_for(action) or (switching_off and second_person):
         summary = ('Mail settings: ' if action == ApprovalAction.MAIL_SETTINGS else 'Settings: ') + ', '.join(
             _describe(name, value) for name, value in changes.items())
         return _four_eyes(request, action, {'changes': changes}, summary)
     settings = PinSettings.load()
+    four_eyes_before = settings.four_eyes
     detail = []
     for name, value in changes.items():
         detail.append(f'{name}: changed' if 'password' in name else f'{name}: {getattr(settings, name)!r} -> {value!r}')
         setattr(settings, name, value)
     settings.save()
     service.log_event(PinEventAction.SETTINGS_CHANGED, actor=request.user, request=request, detail='\n'.join(detail))
+    if settings.four_eyes != four_eyes_before:
+        roles.four_eyes_changed(settings.four_eyes, request.user, request=request)
     messages.success(request, _('Settings saved.'))
     return redirect(redirect_name)
 
 
-def _four_eyes(request, action, payload, summary):
+def _four_eyes(request, action, payload, summary, department=None):
     """Create a four-eyes request and send the requester to its page to confirm."""
     try:
-        req = approvals.create(action, payload, summary, request.user, request=request)
+        req = approvals.create(action, payload, summary, request.user, request=request, department=department)
     except ValidationError as exc:
         for message in exc.messages:
             messages.error(request, message)
@@ -139,6 +148,8 @@ class MyPinView(LoginRequiredMixin, View):
             'cli_reset_2fa': service.cli_reset_2fa_command(request.user),
             'unlocked_scopes': service.unlocked_scopes(request),
             'recent_events': PinEvent.objects.filter(user=request.user)[:10],
+            'pending_roles': PinDelegate.objects.filter(user=request.user, status=RoleStatus.PENDING,
+                                                        invite_expires__gt=timezone.now()),
         })
 
 
@@ -497,18 +508,59 @@ class StepUpView(AllowedUserMixin, View):
 # Administration (master = superuser, delegates via NetBox object permissions)
 #
 
+def _housekeeping():
+    """Expired invitations, ended hand-overs … are processed hourly by a job and additionally here."""
+    try:
+        if roles.due_work_exists():
+            roles.process_due()
+    except Exception:  # never break a page because of housekeeping
+        import logging
+        logging.getLogger('netbox_user_pin').exception('Role housekeeping failed')
+
+
+def view_gate(request):
+    """Other people's data is shown to non-superusers only after a PIN + 2FA confirmation."""
+    if request.user.is_superuser:
+        return None
+    return step_up_gate(request, 'full')
+
+
+def _step_up_context(request, level='full'):
+    return {
+        'step_up_active': service.has_step_up(request, level),
+        'step_up_left': service.step_up_seconds_left(request, level),
+        'step_up_level': level,
+        'step_up_otp': service.step_up_needs_2fa(level),
+    }
+
+
+def _errors(request, exc):
+    for message in exc.messages:
+        messages.error(request, message)
+
+
 class AdminViewMixin(LoginRequiredMixin, PermissionRequiredMixin, PinRequiredMixin):
     """Administrators must be logged in, hold the permission and have unlocked their own PIN."""
     raise_exception = True
     pin_scope = ADMIN_SCOPE
+
+    def dispatch(self, request, *args, **kwargs):
+        _housekeeping()
+        return super().dispatch(request, *args, **kwargs)
 
 
 class UserPinListView(AdminViewMixin, View):
     permission_required = 'netbox_user_pin.view_userpin'
 
     def get(self, request):
+        if (response := view_gate(request)) is not None:
+            return response
         settings = service.get_settings()
-        users = list(get_user_model().objects.select_related('user_pin').order_by('username'))
+        users = list(roles.visible_users(request.user).select_related(
+            'user_pin', 'pin_membership__department').order_by('username'))
+        role_map = {}
+        for role in PinDelegate.objects.filter(status__in=OPEN_ROLE_STATUSES).select_related('department'):
+            role_map.setdefault(role.user_id, []).append(role)
         now = timezone.now()
         can_change = request.user.has_perm('netbox_user_pin.change_userpin')
         rows = []
@@ -519,9 +571,12 @@ class UserPinListView(AdminViewMixin, View):
                 access == PinAccess.DEFAULT and settings.access_mode == PinAccessMode.ALL
             )
             expires = service.pin_expires_at(user_pin, settings)
+            membership = getattr(user, 'pin_membership', None)
             rows.append({
                 'user': user,
                 'name': service.full_name(user, settings),
+                'department': membership.department if membership else None,
+                'roles': role_map.get(user.pk, []),
                 'pin': user_pin,
                 'access': access,
                 'allowed': allowed,
@@ -535,7 +590,7 @@ class UserPinListView(AdminViewMixin, View):
                 'suspended': bool(user_pin and user_pin.suspended),
                 'reset_pending': user_pin.reset_pending if user_pin else '',
                 'cli_reset_2fa': service.cli_reset_2fa_command(user),
-                'role': 'master' if user.is_superuser else ('delegate' if service.is_pin_admin(user) else ''),
+                'role': 'master' if user.is_superuser else '',
                 'manageable': can_change and service.can_manage(request.user, user),
             })
         summary = {
@@ -561,7 +616,7 @@ class UserPinListView(AdminViewMixin, View):
         status = request.GET.get('status', '')
         if q:
             rows = [r for r in rows if q in r['user'].username.lower() or q in (r['user'].email or '').lower()
-                    or q in r['name'].lower()]
+                    or q in r['name'].lower() or (r['department'] and q in r['department'].name.lower())]
         if status in filters:
             rows = [r for r in rows if filters[status](r)]
         page = Paginator(rows, 50).get_page(request.GET.get('page'))
@@ -572,11 +627,8 @@ class UserPinListView(AdminViewMixin, View):
             'status': status,
             'summary': summary,
             'can_change': can_change,
-            'step_up_active': service.has_step_up(request),
-            'step_up_left': service.step_up_seconds_left(request),
-            'step_up_level': 'full',
-            'step_up_otp': service.step_up_needs_2fa('full'),
             'settings': settings,
+            **_step_up_context(request),
         })
 
 
@@ -608,8 +660,9 @@ class UserPinActionView(AdminViewMixin, View):
         if action in ('allow', 'deny', 'default'):
             access = {'allow': PinAccess.ALLOWED, 'deny': PinAccess.DENIED, 'default': PinAccess.DEFAULT}[action]
             if approvals.required_for(ApprovalAction.ACCESS):
+                department = None if roles.is_core(actor) else roles.department_of(user)
                 return _four_eyes(request, ApprovalAction.ACCESS, {'user_id': user.pk, 'access': access},
-                                  f'PIN access of {user}: {PinAccess(access).label}')
+                                  f'PIN access of {user}: {PinAccess(access).label}', department=department)
             service.set_access(user, access, actor=actor, request=request)
             messages.success(request, _('PIN access of {user} set to {access}.').format(
                 user=user, access=PinAccess(access).label))
@@ -642,11 +695,16 @@ class PinEventListView(AdminViewMixin, View):
     permission_required = 'netbox_user_pin.view_pinevent'
 
     def get(self, request):
+        if (response := view_gate(request)) is not None:
+            return response
         events = PinEvent.objects.all()
+        if not roles.is_core(request.user):
+            people = roles.visible_users(request.user)
+            events = events.filter(Q(user__in=people) | Q(actor__in=people) | Q(actor=request.user))
         user = request.GET.get('user', '').strip()
         action = request.GET.get('action', '').strip()
         if user:
-            events = events.filter(username__icontains=user) | events.filter(actor_username__icontains=user)
+            events = events.filter(Q(username__icontains=user) | Q(actor_username__icontains=user))
         if action:
             events = events.filter(action=action)
         page = Paginator(events.order_by('-time', '-pk'), 50).get_page(request.GET.get('page'))
@@ -838,8 +896,53 @@ class MailSettingsView(AdminViewMixin, View):
         return redirect('plugins:netbox_user_pin:mail')
 
 
+def _role_rows(queryset):
+    rows = []
+    for role in queryset.select_related('user', 'department', 'substitute_for__user'):
+        rows.append({
+            'role': role,
+            'name': service.full_name(role.user),
+            'missing': roles.ready_for_role(role.user),
+            'email_ok': service.email_status(role.user) == 'ok',
+        })
+    return rows
+
+
+def _invite_or_request(request, kind, user, *, department=None, hours=24, can_edit=False, reason='',
+                       approval_department=None, force_approval=False, summary=''):
+    """Invite directly, or create a four-eyes request when required (or forced: two delegates)."""
+    payload = {'user_id': user.pk, 'role': kind, 'department_id': department.pk if department else None,
+               'can_edit': can_edit, 'hours': hours, 'reason': reason}
+    if force_approval or approvals.required_for(ApprovalAction.DELEGATE_ADD):
+        return _four_eyes(request, ApprovalAction.DELEGATE_ADD, payload, summary, department=approval_department)
+    roles.invite(user, kind, request.user, department=department, hours=hours, can_edit=can_edit, reason=reason,
+                 request=request)
+    messages.success(request, _('Invitation sent to {user}. The role starts when the user accepts it.').format(
+        user=user))
+    return None
+
+
+def _replace_or_request(request, role, replacement, hours, reason, approval_department=None):
+    """End (or replace) a role; four-eyes when required."""
+    if approvals.required_for(ApprovalAction.DELEGATE_REMOVE):
+        if replacement is not None:
+            payload = {'user_id': replacement.pk, 'role': role.role, 'department_id': role.department_id,
+                       'hours': hours, 'reason': reason, 'replaces_id': role.pk, 'can_edit': role.can_edit_settings}
+            return _four_eyes(request, ApprovalAction.DELEGATE_ADD, payload,
+                              f'Replace {role} by {replacement}', department=approval_department)
+        return _four_eyes(request, ApprovalAction.DELEGATE_REMOVE, {'delegate_id': role.pk, 'reason': reason},
+                          f'End {role}', department=approval_department)
+    roles.remove_role(role, request.user, replacement=replacement, hours=hours, reason=reason, request=request)
+    if replacement is not None:
+        messages.success(request, _('Invitation sent to {user}. {old} stays until it is accepted.').format(
+            user=replacement, old=role.user))
+    else:
+        messages.success(request, _('Role ended.'))
+    return None
+
+
 class DelegateListView(AdminViewMixin, View):
-    """Only the master (superuser) manages delegates; add_pinsettings is never granted to anybody else."""
+    """CORE: the master (superusers) invites and removes CORE deputies. add_pinsettings is held by superusers only."""
     permission_required = 'netbox_user_pin.add_pinsettings'
     template_name = 'netbox_user_pin/delegates.html'
 
@@ -848,70 +951,511 @@ class DelegateListView(AdminViewMixin, View):
             raise PermissionDenied
         return super().dispatch(request, *args, **kwargs)
 
-    def _render(self, request, form):
+    @staticmethod
+    def _candidates():
+        busy = PinDelegate.objects.filter(status__in=OPEN_ROLE_STATUSES).values('user_id')
+        return get_user_model().objects.exclude(pk__in=busy)
+
+    def _render(self, request, form=None, replace_form=None):
+        settings = service.get_settings()
+        open_roles = PinDelegate.objects.filter(role=RoleKind.CORE, status__in=OPEN_ROLE_STATUSES)
         return render(request, self.template_name, {
-            'form': form,
-            'delegates': [
-                (d, service.full_name(d.user) if d.user else '')
-                for d in PinDelegate.objects.select_related('user', 'group').order_by('created')
-            ],
-            'step_up_active': service.has_step_up(request),
-            'step_up_left': service.step_up_seconds_left(request),
-            'step_up_level': 'full',
-            'step_up_otp': service.step_up_needs_2fa('full'),
+            'rows': _role_rows(open_roles),
+            'history': _role_rows(PinDelegate.objects.filter(role=RoleKind.CORE).exclude(
+                status__in=OPEN_ROLE_STATUSES).order_by('-ended', '-created')[:20]),
+            'form': form or RoleInviteForm(users=self._candidates(), with_can_edit=True),
+            'replace_form': replace_form or ReplaceRoleForm(users=self._candidates()),
+            'active_count': roles.core_roles().count(),
+            'min_core': roles.MIN_CORE,
+            'settings': settings,
+            **_step_up_context(request),
         })
 
     def get(self, request):
-        return self._render(request, DelegateForm())
+        return self._render(request)
 
     def post(self, request):
         if (response := step_up_gate(request)) is not None:
             return response
-        action = request.POST.get('action', 'add')
-        four_eyes = approvals.required_for(ApprovalAction.DELEGATE_ADD)
-        if action in ('remove', 'toggle'):
-            delegate = get_object_or_404(PinDelegate, pk=request.POST.get('pk'))
-            if four_eyes:
-                if action == 'remove':
-                    return _four_eyes(request, ApprovalAction.DELEGATE_REMOVE, {'delegate_id': delegate.pk},
-                                      f'Remove delegate {delegate}')
-                return _four_eyes(request, ApprovalAction.DELEGATE_TOGGLE,
-                                  {'delegate_id': delegate.pk, 'can_edit': not delegate.can_edit_settings},
-                                  f'Delegate {delegate}: can edit settings = {not delegate.can_edit_settings}')
-            if action == 'remove':
-                delegate.delete()
-                event, detail = PinEventAction.DELEGATE_REMOVED, str(delegate)
+        action = request.POST.get('action', 'invite')
+        try:
+            if action == 'invite':
+                form = RoleInviteForm(request.POST, users=self._candidates(), with_can_edit=True)
+                if not form.is_valid():
+                    return self._render(request, form=form)
+                data = form.cleaned_data
+                response = _invite_or_request(
+                    request, RoleKind.CORE, data['user'], hours=data['hours'],
+                    can_edit=data.get('can_edit_settings', False), reason=data['reason'],
+                    summary=f'Invite {data["user"]} as CORE deputy (can edit settings = '
+                            f'{data.get("can_edit_settings", False)})')
+                if response is not None:
+                    return response
+                return redirect('plugins:netbox_user_pin:delegates')
+            role = get_object_or_404(PinDelegate, pk=request.POST.get('pk'), role=RoleKind.CORE)
+            if action == 'resend':
+                roles.resend(role, request.user, hours=request.POST.get('hours', 24), request=request)
+                messages.success(request, _('Invitation sent again to {user}.').format(user=role.user))
+            elif action == 'cancel':
+                if role.status != RoleStatus.PENDING:
+                    raise PermissionDenied
+                roles.end_role(role, request.user, _('invitation cancelled'), request=request)
+                messages.success(request, _('Invitation cancelled.'))
+            elif action == 'toggle':
+                if approvals.required_for(ApprovalAction.DELEGATE_TOGGLE):
+                    return _four_eyes(request, ApprovalAction.DELEGATE_TOGGLE,
+                                      {'delegate_id': role.pk, 'can_edit': not role.can_edit_settings},
+                                      f'{role}: can edit settings = {not role.can_edit_settings}')
+                role.can_edit_settings = not role.can_edit_settings
+                role.save(update_fields=['can_edit_settings'])
+                roles._sync()
+                service.log_event(PinEventAction.DELEGATE_CHANGED, user=role.user, actor=request.user,
+                                  request=request, detail=f'{role}: can edit settings = {role.can_edit_settings}')
+                messages.success(request, _('Role updated.'))
+            elif action == 'remove':
+                replace_form = ReplaceRoleForm(request.POST, users=self._candidates())
+                if not replace_form.is_valid():
+                    return self._render(request, replace_form=replace_form)
+                data = replace_form.cleaned_data
+                if (response := _replace_or_request(request, role, data['replacement'], data['hours'],
+                                                    data['reason'])) is not None:
+                    return response
             else:
-                delegate.can_edit_settings = not delegate.can_edit_settings
-                delegate.save()
-                event = PinEventAction.DELEGATE_CHANGED
-                detail = f'{delegate}: can edit settings = {delegate.can_edit_settings}'
-            delegation.sync_permissions()
-            service.log_event(event, user=delegate.user, actor=request.user, request=request, detail=detail)
-            messages.success(request, _('Delegates updated.'))
-            return redirect('plugins:netbox_user_pin:delegates')
-        form = DelegateForm(request.POST)
+                raise PermissionDenied
+        except ValidationError as exc:
+            _errors(request, exc)
+        return redirect('plugins:netbox_user_pin:delegates')
+
+
+#
+# Departments
+#
+
+def _can_view_department(user, department):
+    return roles.is_core(user) or roles.managed_departments(user).filter(pk=department.pk).exists()
+
+
+class DepartmentListView(AdminViewMixin, View):
+    permission_required = 'netbox_user_pin.view_userpin'
+    template_name = 'netbox_user_pin/departments.html'
+
+    def _render(self, request, form=None):
+        is_core = roles.is_core(request.user)
+        departments = Department.objects.all() if is_core else roles.managed_departments(request.user)
+        rows = []
+        for department in departments.order_by('name'):
+            head = roles.effective_head(department)
+            rows.append({
+                'department': department,
+                'head': head,
+                'delegates': roles.department_delegates(department).count(),
+                'members': DepartmentMember.objects.filter(department=department).count(),
+                'my_role': roles.role_in(request.user, department),
+            })
+        transfers = [t for t in TransferRequest.objects.filter(status=TransferStatus.PENDING).select_related(
+            'user', 'from_department', 'to_department') if roles.can_decide_transfer(t, request.user)]
+        return render(request, self.template_name, {
+            'rows': rows,
+            'is_core': is_core,
+            'form': form or DepartmentForm(),
+            'transfers': transfers,
+            'unassigned': get_user_model().objects.filter(is_active=True, pin_membership=None).count()
+            if is_core else None,
+            'settings': service.get_settings(),
+            **_step_up_context(request),
+        })
+
+    def get(self, request):
+        if (response := view_gate(request)) is not None:
+            return response
+        return self._render(request)
+
+    def post(self, request):
+        if (response := step_up_gate(request)) is not None:
+            return response
+        action = request.POST.get('action')
+        try:
+            if action == 'create':
+                if not roles.is_core(request.user):
+                    raise PermissionDenied
+                form = DepartmentForm(request.POST)
+                if not form.is_valid():
+                    return self._render(request, form=form)
+                department = roles.create_department(form.cleaned_data['name'], request.user,
+                                                     form.cleaned_data['description'], request=request)
+                messages.success(request, _('Department {department} created. Appoint its head now.').format(
+                    department=department))
+                return redirect('plugins:netbox_user_pin:department', pk=department.pk)
+            if action in ('transfer-approve', 'transfer-reject'):
+                transfer = get_object_or_404(TransferRequest, pk=request.POST.get('pk'))
+                roles.decide_transfer(transfer, request.user, action == 'transfer-approve', request=request)
+                messages.success(request, _('Move approved.') if action == 'transfer-approve'
+                                 else _('Move rejected.'))
+            else:
+                raise PermissionDenied
+        except ValidationError as exc:
+            _errors(request, exc)
+        return redirect(_next_url(request, 'plugins:netbox_user_pin:department_list'))
+
+
+class DepartmentView(AdminViewMixin, View):
+    permission_required = 'netbox_user_pin.view_userpin'
+    template_name = 'netbox_user_pin/department.html'
+
+    def _department(self, request, pk):
+        department = get_object_or_404(Department, pk=pk)
+        if not _can_view_department(request.user, department):
+            raise PermissionDenied
+        return department
+
+    def _render(self, request, department, forms=None):
+        forms = forms or {}
+        user_model = get_user_model()
+        is_core = roles.is_core(request.user)
+        my_role = roles.role_in(request.user, department)
+        settings = service.get_settings()
+        members = list(user_model.objects.filter(pin_membership__department=department).select_related(
+            'user_pin').order_by('username'))
+        member_ids = [u.pk for u in members]
+        open_roles = PinDelegate.objects.filter(department=department, status__in=OPEN_ROLE_STATUSES)
+        role_map = {}
+        for role in open_roles:
+            role_map.setdefault(role.user_id, []).append(role)
+        busy = PinDelegate.objects.filter(status__in=OPEN_ROLE_STATUSES, department=department).values('user_id')
+        core_busy = PinDelegate.objects.filter(status__in=OPEN_ROLE_STATUSES, role=RoleKind.CORE).values('user_id')
+        unassigned = user_model.objects.filter(is_active=True, is_superuser=False, pin_membership=None).exclude(
+            pk__in=core_busy)
+        members_qs = user_model.objects.filter(pk__in=member_ids)
+        invite_users = members_qs.exclude(pk__in=busy)
+        if is_core:
+            invite_users = (invite_users | unassigned).distinct()
+        head_users = (members_qs.exclude(pk__in=core_busy) | unassigned).distinct()
+        others = Department.objects.exclude(pk=department.pk)
+        head = roles.effective_head(department)
+        member_rows = []
+        for user in members:
+            user_pin = getattr(user, 'user_pin', None)
+            member_rows.append({
+                'user': user, 'name': service.full_name(user, settings),
+                'roles': role_map.get(user.pk, []),
+                'has_pin': bool(user_pin and user_pin.is_set), 'has_2fa': bool(user_pin and user_pin.has_2fa),
+                'email_status': service.email_status(user, settings),
+            })
+        transfers = TransferRequest.objects.filter(
+            Q(from_department=department) | Q(to_department=department), status=TransferStatus.PENDING,
+        ).select_related('user', 'from_department', 'to_department')
+        return render(request, self.template_name, {
+            'department': department,
+            'is_core': is_core,
+            'my_role': my_role,
+            'is_head': my_role == RoleKind.HEAD,
+            'can_invite': is_core or bool(my_role),
+            'head': head,
+            'rows': _role_rows(open_roles.order_by('role', 'created')),
+            'history': _role_rows(PinDelegate.objects.filter(department=department).exclude(
+                status__in=OPEN_ROLE_STATUSES).order_by('-ended', '-created')[:20]),
+            'members': member_rows,
+            'transfers': [(t, roles.can_decide_transfer(t, request.user)) for t in transfers],
+            'min_delegates': roles.MIN_DEPARTMENT_DELEGATES,
+            'max_days': roles.MAX_TEMPORARY_DAYS,
+            'invite_form': forms.get('invite') or RoleInviteForm(users=invite_users),
+            'head_form': forms.get('head') or RoleInviteForm(users=head_users),
+            'replace_form': forms.get('replace') or ReplaceRoleForm(users=invite_users),
+            'hand_over_form': forms.get('hand_over') or HandOverForm(
+                users=members_qs.exclude(pk=head.user_id if head else None)),
+            'member_form': forms.get('member') or MemberForm(users=unassigned),
+            'move_form': forms.get('move') or TransferForm(users=members_qs, departments=others),
+            'transfer_in_form': forms.get('transfer_in') or TransferForm(
+                users=user_model.objects.exclude(pk__in=member_ids).exclude(pk__in=core_busy),
+                departments=Department.objects.filter(pk=department.pk)),
+            'has_others': others.exists(),
+            'hand_over_open': open_roles.filter(role=RoleKind.HEAD).exclude(temporary_until=None).exists(),
+            'settings': settings,
+            **_step_up_context(request),
+        })
+
+    def get(self, request, pk):
+        department = self._department(request, pk)
+        if (response := view_gate(request)) is not None:
+            return response
+        return self._render(request, department)
+
+    def post(self, request, pk):
+        department = self._department(request, pk)
+        if (response := step_up_gate(request)) is not None:
+            return response
+        action = request.POST.get('action', '')
+        is_core = roles.is_core(request.user)
+        my_role = roles.role_in(request.user, department)
+        handler = getattr(self, f'_post_{action.replace("-", "_")}', None)
+        if handler is None:
+            raise PermissionDenied
+        try:
+            response = handler(request, department, is_core, my_role)
+        except ValidationError as exc:
+            _errors(request, exc)
+            response = None
+        return response or redirect('plugins:netbox_user_pin:department', pk=department.pk)
+
+    def _role(self, request, department):
+        return get_object_or_404(PinDelegate, pk=request.POST.get('pk'), department=department)
+
+    # roles
+
+    def _post_invite_delegate(self, request, department, is_core, my_role):
+        if not (is_core or my_role):
+            raise PermissionDenied
+        form = RoleInviteForm(request.POST, users=get_user_model().objects.all())
+        if not form.is_valid():
+            return self._render(request, department, {'invite': form})
+        data = form.cleaned_data
+        if not is_core and roles.department_of(data['user']) != department:
+            # only CORE adds people to a department; heads ask for a move
+            form.add_error('user', _('{user} is not a member of the department {department}.').format(
+                user=data['user'], department=department))
+            return self._render(request, department, {'invite': form})
+        # a delegate alone never changes roles: two delegates (or head / CORE) confirm
+        return _invite_or_request(
+            request, RoleKind.DELEGATE, data['user'], department=department, hours=data['hours'],
+            reason=data['reason'], approval_department=department,
+            force_approval=not is_core and my_role != RoleKind.HEAD,
+            summary=f'Invite {data["user"]} as delegate of {department}')
+
+    def _post_appoint_head(self, request, department, is_core, my_role):
+        if not is_core:
+            raise PermissionDenied
+        form = RoleInviteForm(request.POST, users=get_user_model().objects.all())
+        if not form.is_valid():
+            return self._render(request, department, {'head': form})
+        data = form.cleaned_data
+        current = PinDelegate.objects.filter(department=department, role=RoleKind.HEAD, temporary_until=None,
+                                             status__in=OPEN_ROLE_STATUSES).exclude(status=RoleStatus.RESIGNING).first()
+        if current is not None:
+            return _replace_or_request(request, current, data['user'], data['hours'], data['reason'])
+        return _invite_or_request(request, RoleKind.HEAD, data['user'], department=department, hours=data['hours'],
+                                  reason=data['reason'], summary=f'Invite {data["user"]} as head of {department}')
+
+    def _post_remove_role(self, request, department, is_core, my_role):
+        role = self._role(request, department)
+        allowed = is_core or (my_role == RoleKind.HEAD and role.role == RoleKind.DELEGATE)
+        if not allowed:
+            raise PermissionDenied
+        form = ReplaceRoleForm(request.POST, users=get_user_model().objects.all())
+        if not form.is_valid():
+            return self._render(request, department, {'replace': form})
+        data = form.cleaned_data
+        return _replace_or_request(request, role, data['replacement'], data['hours'], data['reason'],
+                                   approval_department=None if role.role == RoleKind.HEAD else department)
+
+    def _post_resend(self, request, department, is_core, my_role):
+        role = self._role(request, department)
+        if not (is_core or (my_role == RoleKind.HEAD and role.role == RoleKind.DELEGATE)):
+            raise PermissionDenied
+        roles.resend(role, request.user, hours=request.POST.get('hours', 24), request=request)
+        messages.success(request, _('Invitation sent again to {user}.').format(user=role.user))
+
+    def _post_cancel_invite(self, request, department, is_core, my_role):
+        role = self._role(request, department)
+        if role.status != RoleStatus.PENDING or not (is_core or my_role == RoleKind.HEAD):
+            raise PermissionDenied
+        roles.end_role(role, request.user, _('invitation cancelled'), request=request)
+        messages.success(request, _('Invitation cancelled.'))
+
+    def _post_hand_over(self, request, department, is_core, my_role):
+        if not (is_core or my_role):
+            raise PermissionDenied
+        form = HandOverForm(request.POST, users=get_user_model().objects.filter(
+            pin_membership__department=department))
+        if not form.is_valid():
+            return self._render(request, department, {'hand_over': form})
+        data = form.cleaned_data
+        until = data['until']
+        if timezone.is_naive(until):
+            until = timezone.make_aware(until)
+        payload = {'user_id': data['user'].pk, 'role': RoleKind.HEAD, 'department_id': department.pk,
+                   'hours': data['hours'], 'reason': data['reason'], 'temporary_until': until.isoformat()}
+        two_delegates = not is_core and my_role != RoleKind.HEAD
+        if two_delegates or approvals.required_for(ApprovalAction.DELEGATE_ADD):
+            return _four_eyes(request, ApprovalAction.DELEGATE_ADD, payload,
+                              f'Hand over the head of {department} to {data["user"]} until '
+                              f'{timezone.localtime(until):%Y-%m-%d %H:%M}', department=department)
+        roles.hand_over(department, data['user'], until, request.user, hours=data['hours'], reason=data['reason'],
+                        request=request)
+        messages.success(request, _('Invitation sent to {user}. The rights pass over when it is accepted.').format(
+            user=data['user']))
+
+    def _post_end_hand_over(self, request, department, is_core, my_role):
+        role = self._role(request, department)
+        if not role.is_temporary or not (is_core or role.user_id == request.user.pk):
+            raise PermissionDenied
+        roles.end_role(role, request.user, _('hand-over ended early by {user}').format(user=request.user),
+                       request=request)
+        messages.success(request, _('The hand-over ended; the rights returned.'))
+
+    # members
+
+    def _post_add_member(self, request, department, is_core, my_role):
+        if not is_core:
+            raise PermissionDenied
+        form = MemberForm(request.POST, users=get_user_model().objects.filter(pin_membership=None))
+        if not form.is_valid():
+            return self._render(request, department, {'member': form})
+        roles.add_member(form.cleaned_data['user'], department, request.user, request=request)
+        messages.success(request, _('{user} added.').format(user=form.cleaned_data['user']))
+
+    def _post_remove_member(self, request, department, is_core, my_role):
+        if not is_core:
+            raise PermissionDenied
+        user = get_object_or_404(get_user_model(), pk=request.POST.get('user'), pin_membership__department=department)
+        roles.remove_member(user, request.user, request=request)
+        messages.success(request, _('{user} removed from the department.').format(user=user))
+
+    def _post_move(self, request, department, is_core, my_role):
+        """CORE moves directly; a head asks the head of the other department."""
+        if not (is_core or my_role == RoleKind.HEAD):
+            raise PermissionDenied
+        inbound = request.POST.get('direction') == 'in'
+        users = get_user_model().objects.exclude(pin_membership__department=department) if inbound else \
+            get_user_model().objects.filter(pin_membership__department=department)
+        departments = Department.objects.filter(pk=department.pk) if inbound else \
+            Department.objects.exclude(pk=department.pk)
+        form = TransferForm(request.POST, users=users, departments=departments)
+        if not form.is_valid():
+            return self._render(request, department, {'transfer_in' if inbound else 'move': form})
+        user, target = form.cleaned_data['user'], form.cleaned_data['department']
+        if is_core:
+            roles.move_member(user, target, request.user, request=request)
+            messages.success(request, _('{user} moved to {department}.').format(user=user, department=target))
+        else:
+            roles.request_transfer(user, target, request.user, request=request)
+            messages.success(request, _('The move of {user} is waiting for the other head.').format(user=user))
+
+    def _post_transfer_approve(self, request, department, is_core, my_role):
+        transfer = get_object_or_404(TransferRequest, pk=request.POST.get('pk'))
+        roles.decide_transfer(transfer, request.user, True, request=request)
+        messages.success(request, _('Move approved.'))
+
+    def _post_transfer_reject(self, request, department, is_core, my_role):
+        transfer = get_object_or_404(TransferRequest, pk=request.POST.get('pk'))
+        roles.decide_transfer(transfer, request.user, False, request=request)
+        messages.success(request, _('Move rejected.'))
+
+    def _post_transfer_cancel(self, request, department, is_core, my_role):
+        transfer = get_object_or_404(TransferRequest, pk=request.POST.get('pk'), requested_by=request.user,
+                                     status=TransferStatus.PENDING)
+        TransferRequest.objects.filter(pk=transfer.pk).update(status=TransferStatus.CANCELLED)
+        messages.success(request, _('Move cancelled.'))
+
+    def _post_dissolve(self, request, department, is_core, my_role):
+        if not is_core:
+            raise PermissionDenied
+        if approvals.required_for(ApprovalAction.DEPARTMENT_DELETE):
+            return _four_eyes(request, ApprovalAction.DEPARTMENT_DELETE, {'department_id': department.pk},
+                              f'Dissolve the department {department}')
+        roles.delete_department(department, request.user, request=request)
+        messages.success(request, _('Department dissolved.'))
+        return redirect('plugins:netbox_user_pin:department_list')
+
+
+#
+# My roles, invitations
+#
+
+class MyRolesView(LoginRequiredMixin, View):
+    template_name = 'netbox_user_pin/my_roles.html'
+
+    def _render(self, request, forms=None):
+        _housekeeping()
+        mine = PinDelegate.objects.filter(user=request.user)
+        rows = []
+        for role in mine.filter(status__in=OPEN_ROLE_STATUSES).select_related('department', 'substitute_for__user'):
+            rows.append({'role': role, 'form': (forms or {}).get(role.pk) or ResignForm(prefix=f'r{role.pk}'),
+                         'title': roles.role_title(role), 'needs_replacement': roles.below_minimum_without(role)})
+        return render(request, self.template_name, {
+            'rows': rows,
+            'history': mine.exclude(status__in=OPEN_ROLE_STATUSES).select_related('department').order_by(
+                '-ended', '-created')[:20],
+            'department': roles.department_of(request.user),
+        })
+
+    def get(self, request):
+        return self._render(request)
+
+    def post(self, request):
+        role = get_object_or_404(PinDelegate, pk=request.POST.get('pk'), user=request.user)
+        form = ResignForm(request.POST, prefix=f'r{role.pk}')
         if form.is_valid():
-            user, group = form.cleaned_data['user'], form.cleaned_data['group']
-            can_edit = form.cleaned_data['can_edit_settings']
-            if four_eyes:
-                return _four_eyes(
-                    request, ApprovalAction.DELEGATE_ADD,
-                    {'user_id': user.pk if user else None, 'group_id': group.pk if group else None, 'can_edit': can_edit},
-                    f'Add delegate {"user " + str(user) if user else "group " + str(group)}, can edit settings = '
-                    f'{can_edit}',
-                )
-            delegate = PinDelegate.objects.create(
-                user=user, group=group, can_edit_settings=can_edit, created_by=request.user.username,
-            )
-            delegation.sync_permissions()
-            service.log_event(
-                PinEventAction.DELEGATE_ADDED, user=delegate.user, actor=request.user, request=request,
-                detail=f'{delegate}, can edit settings = {delegate.can_edit_settings}',
-            )
-            messages.success(request, _('Delegate added.'))
+            try:
+                result = roles.resign(role, request.user, form.cleaned_data['reason'], form.cleaned_data['pin'],
+                                      form.cleaned_data['otp'], request=request)
+            except ValidationError as exc:
+                form.add_error(None, ' '.join(exc.messages))
+            else:
+                if result == 'resigning':
+                    messages.warning(request, _('Your resignation is recorded. The role stays in force until a '
+                                                'replacement accepts it.'))
+                else:
+                    messages.success(request, _('You gave up the role.'))
+                return redirect('plugins:netbox_user_pin:my_roles')
+        return self._render(request, {role.pk: form})
+
+
+class InvitationView(LoginRequiredMixin, View):
+    template_name = 'netbox_user_pin/invitation.html'
+
+    def _role(self, request, pk):
+        _housekeeping()
+        return get_object_or_404(PinDelegate.objects.select_related('department', 'substitute_for__user'), pk=pk)
+
+    def _elsewhere(self, request, role):
+        """Somebody else opened the link (e.g. from a notification): show the role's overview instead."""
+        if role.department_id and _can_view_department(request.user, role.department):
+            return redirect('plugins:netbox_user_pin:department', pk=role.department_id)
+        if request.user.is_superuser:
             return redirect('plugins:netbox_user_pin:delegates')
-        return self._render(request, form)
+        return redirect('plugins:netbox_user_pin:my_roles')
+
+    def _render(self, request, role, form=None):
+        missing = roles.ready_for_role(request.user)
+        return render(request, self.template_name, {
+            'role': role,
+            'title': roles.role_title(role),
+            'form': form or AcceptRoleForm(),
+            'missing': missing,
+            'open': role.status == RoleStatus.PENDING and role.invite_pending,
+            'here': request.get_full_path(),
+            'allowed': service.is_allowed(request.user),
+        })
+
+    def get(self, request, pk):
+        role = self._role(request, pk)
+        if role.user_id != request.user.pk:
+            return self._elsewhere(request, role)
+        return self._render(request, role)
+
+    def post(self, request, pk):
+        role = self._role(request, pk)
+        if role.user_id != request.user.pk:
+            raise PermissionDenied
+        if request.POST.get('action') == 'decline':
+            try:
+                roles.decline(role, request.user, request=request)
+            except ValidationError as exc:
+                _errors(request, exc)
+            else:
+                messages.info(request, _('You declined the invitation.'))
+            return redirect('plugins:netbox_user_pin:my_roles')
+        form = AcceptRoleForm(request.POST)
+        if form.is_valid():
+            try:
+                roles.accept(role, request.user, form.cleaned_data['code'], form.cleaned_data['pin'],
+                             form.cleaned_data['otp'], request=request)
+            except ValidationError as exc:
+                form.add_error('code' if exc.code == 'code' else None, ' '.join(exc.messages))
+            else:
+                messages.success(request, _('You accepted the role: {role}.').format(role=roles.role_title(role)))
+                return redirect('plugins:netbox_user_pin:my_roles')
+        return self._render(request, role, form)
 
 
 #
@@ -925,6 +1469,9 @@ class ApprovalListView(AdminViewMixin, View):
         for req in ApprovalRequest.objects.filter(status=ApprovalStatus.PENDING):
             approvals.refresh(req)
         requests = ApprovalRequest.objects.prefetch_related('votes')
+        if not roles.is_core(request.user):
+            requests = requests.filter(Q(department__in=roles.managed_departments(request.user))
+                                       | Q(requested_by=request.user))
         pending = [r for r in requests.filter(status=ApprovalStatus.PENDING)]
         history = Paginator(requests.exclude(status=ApprovalStatus.PENDING), 30).get_page(request.GET.get('page'))
         return render(request, 'netbox_user_pin/approval_list.html', {
@@ -952,12 +1499,20 @@ class ApprovalView(AdminViewMixin, View):
             **_approval_status_context(req),
         }
 
-    def get(self, request, pk):
+    @staticmethod
+    def _get(request, pk):
         req = approvals.refresh(get_object_or_404(ApprovalRequest, pk=pk))
+        if not roles.is_core(request.user) and req.requested_by_id != request.user.pk and not (
+                req.department_id and roles.managed_departments(request.user).filter(pk=req.department_id).exists()):
+            raise PermissionDenied
+        return req
+
+    def get(self, request, pk):
+        req = self._get(request, pk)
         return render(request, self.template_name, self._context(request, req))
 
     def post(self, request, pk):
-        req = approvals.refresh(get_object_or_404(ApprovalRequest, pk=pk))
+        req = self._get(request, pk)
         settings = service.get_settings()
         action = request.POST.get('action')
         if action == 'cancel':
@@ -1009,7 +1564,7 @@ class ApprovalStatusView(AdminViewMixin, View):
     permission_required = 'netbox_user_pin.view_userpin'
 
     def get(self, request, pk):
-        req = approvals.refresh(get_object_or_404(ApprovalRequest, pk=pk))
+        req = ApprovalView._get(request, pk)
         response = render(request, 'netbox_user_pin/inc/approval_status.html', _approval_status_context(req))
         if request.GET.get('open') and not req.is_open:
             response['HX-Refresh'] = 'true'   # finished meanwhile: reload the whole page

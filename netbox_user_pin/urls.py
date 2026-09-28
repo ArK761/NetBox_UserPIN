@@ -27,4 +27,8 @@ urlpatterns = [
     path('approvals/<int:pk>/status/', views.ApprovalStatusView.as_view(), name='approval_status'),
     path('2fa-codes/', views.BackupCodesView.as_view(), name='backup_codes'),
     path('delegates/', views.DelegateListView.as_view(), name='delegates'),
+    path('departments/', views.DepartmentListView.as_view(), name='department_list'),
+    path('departments/<int:pk>/', views.DepartmentView.as_view(), name='department'),
+    path('my-roles/', views.MyRolesView.as_view(), name='my_roles'),
+    path('invitation/<int:pk>/', views.InvitationView.as_view(), name='invitation'),
 ]

@@ -608,24 +608,37 @@ class DelegationTest(PinTestCase):
 
     def _add_delegates(self, can_edit_settings=False):
         from netbox_user_pin import delegation
-        PinDelegate.objects.create(user=self.delegate, can_edit_settings=can_edit_settings)
-        PinDelegate.objects.create(user=self.other_delegate)
+        PinDelegate.objects.create(user=self.delegate, can_edit_settings=can_edit_settings, status='active')
+        PinDelegate.objects.create(user=self.other_delegate, status='active')
         delegation.sync_permissions()
         for user in (self.delegate, self.other_delegate):
             for attr in ('_perm_cache', '_user_perm_cache', '_group_perm_cache', '_object_perm_cache'):
                 if hasattr(user, attr):
                     delattr(user, attr)
 
+    @override_settings(EMAIL={'SERVER': 'localhost', 'FROM_EMAIL': 'netbox@firma.sk'})
     def test_master_adds_delegate_via_view(self):
+        import re
+        allow_domains('firma.sk')
+        User.objects.filter(pk=self.delegate.pk).update(email='deleg@firma.sk')
         admin_login(self.client, self.master)
-        self.client.post(reverse('plugins:netbox_user_pin:delegates'), {'user': self.delegate.pk})
+        self.client.post(reverse('plugins:netbox_user_pin:delegates'), {'action': 'invite', 'user': self.delegate.pk,
+                                                                         'hours': 24})
+        role = PinDelegate.objects.get(user=self.delegate)
+        self.assertEqual(role.status, 'pending')
+        self.assertFalse(User.objects.get(pk=self.delegate.pk).has_perm('netbox_user_pin.change_userpin'))
+        code = re.search(r'(\d{8})', mail.outbox[-1].body).group(1)
+        service.set_pin(self.delegate, GOOD_PIN)
+        secret = enable_2fa(self.delegate)
+        from netbox_user_pin import roles
+        roles.accept(role, self.delegate, code, GOOD_PIN, current_code(secret))
         delegate = User.objects.get(pk=self.delegate.pk)
         self.assertTrue(delegate.has_perm('netbox_user_pin.change_userpin'))
         self.assertTrue(delegate.has_perm('netbox_user_pin.view_pinevent'))
         self.assertTrue(delegate.has_perm('netbox_user_pin.view_pinsettings'))
         self.assertFalse(delegate.has_perm('netbox_user_pin.change_pinsettings'))
         self.assertFalse(delegate.has_perm('netbox_user_pin.add_pinsettings'))
-        self.assertTrue(PinEvent.objects.filter(action=PinEventAction.DELEGATE_ADDED).exists())
+        self.assertTrue(PinEvent.objects.filter(action=PinEventAction.ROLE_ACCEPTED).exists())
 
     def test_separation_of_duties(self):
         self._add_delegates()
@@ -855,11 +868,15 @@ class FourEyesTest(PinTestCase):
         self.assertFalse(form.is_valid())
         self.assertIn('four_eyes', form.errors)
 
+    @override_settings(EMAIL={'SERVER': 'localhost', 'FROM_EMAIL': 'netbox@firma.sk'})
     def test_live_flow_add_delegate(self):
         from django.test import Client
+        allow_domains('firma.sk')
+        User.objects.filter(pk=self.plain.pk).update(email='plain2@firma.sk')
         peter_client, martin_client = Client(), Client()
         admin_login(peter_client, self.peter, secret=self.secrets[self.peter.pk])
-        response = peter_client.post(reverse('plugins:netbox_user_pin:delegates'), {'user': self.plain.pk})
+        response = peter_client.post(reverse('plugins:netbox_user_pin:delegates'),
+                                     {'action': 'invite', 'user': self.plain.pk, 'hours': 24})
         req = ApprovalRequest.objects.get()
         self.assertRedirects(response, req.get_absolute_url(), fetch_redirect_response=False)
         self.assertFalse(PinDelegate.objects.exists())
@@ -879,7 +896,8 @@ class FourEyesTest(PinTestCase):
         self._vote(martin_client, req, self.martin)
         req.refresh_from_db()
         self.assertEqual(req.status, ApprovalStatus.EXECUTED)
-        self.assertTrue(PinDelegate.objects.filter(user=self.plain).exists())
+        # executed = the invitation was sent; the role starts when plain2 accepts it
+        self.assertEqual(PinDelegate.objects.get(user=self.plain).status, 'pending')
         self.assertEqual(martin_client.get(status_url)['HX-Refresh'], 'true')
         self.assertTrue(PinEvent.objects.filter(action=PinEventAction.APPROVAL_EXECUTED).exists())
 
@@ -1166,7 +1184,7 @@ class FullNamesAndReverifyTest(PinTestCase):
         response = self.client.get(reverse('plugins:netbox_user_pin:user_list') + '?q=mal')
         self.assertContains(response, 'Jana Malá')
         from netbox_user_pin import delegation
-        PinDelegate.objects.create(user=self.jana)
+        PinDelegate.objects.create(user=self.jana, status='active')
         delegation.sync_permissions()
         self.assertContains(self.client.get(reverse('plugins:netbox_user_pin:delegates')), 'Jana Malá')
         service.set_access(self.jana, PinAccess.ALLOWED, actor=self.admin)
@@ -1183,3 +1201,306 @@ class FullNamesAndReverifyTest(PinTestCase):
         response = self.client.get(reverse('plugins:netbox_user_pin:mail'))
         self.assertContains(response, 'Verify again')
         self.assertTrue(AllowedDomain.objects.get(domain='firma.sk').is_verified)
+
+
+@override_settings(EMAIL={'SERVER': 'localhost', 'FROM_EMAIL': 'netbox@firma.sk'})
+class RolesTest(PinTestCase):
+    """CORE deputies, departments, invitations, resignations, hand-overs and moves."""
+
+    def setUp(self):
+        super().setUp()
+        allow_domains('firma.sk')
+        self.secrets = {}
+        self.boss = self.person('boss', superuser=True)
+
+    def person(self, name, superuser=False, ready=True):
+        create = User.objects.create_superuser if superuser else User.objects.create_user
+        user = create(name, password='pw', email=f'{name}@firma.sk', first_name=name.title(), last_name='Test')
+        if ready:
+            service.set_pin(user, GOOD_PIN)
+            self.secrets[user.pk] = enable_2fa(user)
+        return user
+
+    def otp(self, user):
+        UserPin.objects.filter(user=user).update(totp_last_step=0)
+        return current_code(self.secrets[user.pk])
+
+    def code_for(self, user):
+        import re
+        for message in reversed(mail.outbox):
+            if user.email in message.to and 'Code:' in message.body:
+                return re.search(r'Code: (\d{8})', message.body).group(1)
+        self.fail(f'no invitation for {user}')
+
+    def accept(self, role, user=None):
+        from netbox_user_pin import roles
+        user = user or role.user
+        return roles.accept(role, user, self.code_for(user), GOOD_PIN, self.otp(user))
+
+    def make_core(self, *names):
+        from netbox_user_pin import roles
+        result = []
+        for name in names:
+            user = self.person(name)
+            self.accept(roles.invite(user, 'core', self.boss))
+            result.append(user)
+        return result
+
+    def make_department(self, name='IT', head='head', delegates=('del1', 'del2'), members=('m1',)):
+        from netbox_user_pin import roles
+        department = roles.create_department(name, self.boss)
+        head_user = self.person(f'{head}')
+        self.accept(roles.invite(head_user, 'head', self.boss, department=department))
+        delegate_users = []
+        for name_ in delegates:
+            user = self.person(name_)
+            self.accept(roles.invite(user, 'delegate', head_user, department=department))
+            delegate_users.append(user)
+        member_users = []
+        for name_ in members:
+            user = self.person(name_, ready=False)
+            roles.add_member(user, department, self.boss)
+            member_users.append(user)
+        return department, head_user, delegate_users, member_users
+
+    def fresh(self, user):
+        return User.objects.get(pk=user.pk)
+
+    def test_invitation_flow(self):
+        from netbox_user_pin import roles
+        jozef = self.person('jozef', ready=False)
+        role = roles.invite(jozef, 'core', self.boss, hours=12)
+        self.assertEqual(role.status, 'pending')
+        body = mail.outbox[-1].body
+        self.assertIn('CORE', mail.outbox[-1].subject)
+        self.assertIn('Your responsibility', body)
+        self.assertIn('other plugins', body)
+        self.assertIn(reverse('plugins:netbox_user_pin:invitation', kwargs={'pk': role.pk}), body)
+        # invited users may set a PIN even in "allowed only" mode
+        settings = PinSettings.load()
+        settings.access_mode = PinAccessMode.ALLOWED_ONLY
+        settings.save()
+        self.assertTrue(service.is_allowed(jozef))
+        self.client.force_login(jozef)
+        response = self.client.get(reverse('plugins:netbox_user_pin:invitation', kwargs={'pk': role.pk}))
+        self.assertContains(response, 'Set your PIN')
+        service.set_pin(jozef, GOOD_PIN)
+        self.secrets[jozef.pk] = enable_2fa(jozef)
+        with self.assertRaises(ValidationError):
+            roles.accept(role, jozef, '00000000', GOOD_PIN, self.otp(jozef))
+        url = reverse('plugins:netbox_user_pin:invitation', kwargs={'pk': role.pk})
+        response = self.client.post(url, {'code': self.code_for(jozef), 'pin': GOOD_PIN, 'otp': self.otp(jozef),
+                                          'understand': 'on'})
+        self.assertRedirects(response, reverse('plugins:netbox_user_pin:my_roles'), fetch_redirect_response=False)
+        role.refresh_from_db()
+        self.assertEqual(role.status, 'active')
+        self.assertTrue(roles.is_core(jozef))
+        self.assertTrue(self.fresh(jozef).has_perm('netbox_user_pin.change_userpin'))
+
+    def test_invitation_needs_email_and_expires(self):
+        from netbox_user_pin import roles
+        nomail = self.person('nomail')
+        User.objects.filter(pk=nomail.pk).update(email='nomail@gmail.com')
+        with self.assertRaises(ValidationError):
+            roles.invite(self.fresh(nomail), 'core', self.boss)
+        with self.assertRaises(ValidationError):
+            roles.invite(self.person('x1'), 'core', self.boss, hours=5)
+        role = roles.invite(self.person('late'), 'core', self.boss)
+        PinDelegate.objects.filter(pk=role.pk).update(invite_expires=timezone.now() - timedelta(minutes=1))
+        roles.process_due()
+        role.refresh_from_db()
+        self.assertEqual(role.status, 'expired')
+        self.assertIn('did not accept', mail.outbox[-1].body)
+        roles.resend(role, self.boss, hours=48)
+        role.refresh_from_db()
+        self.assertEqual(role.status, 'pending')
+        self.accept(role)
+
+    def test_four_eyes_rules(self):
+        from netbox_user_pin import roles
+        from netbox_user_pin.forms import PinSettingsForm
+        settings = PinSettings.load()
+        fields = {f: getattr(settings, f) for f in PinSettingsForm.Meta.fields}
+        self.assertFalse(PinSettingsForm({**fields, 'four_eyes': True}, instance=settings).is_valid())
+        anna, jan = self.make_core('anna', 'jan')
+        self.assertTrue(PinSettingsForm({**fields, 'four_eyes': True}, instance=settings).is_valid())
+        settings.four_eyes = True
+        settings.save()
+        department = roles.create_department('Sales', self.boss)
+        form = PinSettingsForm({**fields, 'four_eyes': False}, instance=PinSettings.load())
+        self.assertFalse(form.is_valid())
+        self.assertIn('department', str(form.errors['four_eyes']))
+        roles.delete_department(department, self.boss)
+        # switching off needs two people and ends the CORE delegation
+        admin_login(self.client, self.boss, secret=self.secrets[self.boss.pk])
+        data = {**{f: v for f, v in fields.items() if not isinstance(v, bool)}, 'block_weak_pins': 'on',
+                'sliding_unlock': 'on', 'require_2fa_admin': 'on', 'four_eyes_delegates': 'on',
+                'four_eyes_settings': 'on', 'show_full_names': 'on'}
+        self.client.post(reverse('plugins:netbox_user_pin:settings'), data)
+        self.assertTrue(PinSettings.load().four_eyes)
+        req = ApprovalRequest.objects.get()
+        approvals.vote(req, self.boss, True, GOOD_PIN, self.otp(self.boss))
+        approvals.vote(req, anna, True, GOOD_PIN, self.otp(anna))
+        self.assertFalse(PinSettings.load().four_eyes)
+        self.assertFalse(roles.is_core(anna))
+        self.assertTrue(any('switched off' in m.subject and jan.email in m.to for m in mail.outbox))
+
+    def test_core_minimum_and_resignation(self):
+        from netbox_user_pin import roles
+        anna, jan = self.make_core('anna', 'jan')
+        settings = PinSettings.load()
+        settings.four_eyes = True
+        settings.save()
+        role = PinDelegate.objects.get(user=anna)
+        self.assertEqual(roles.resign(role, anna, 'leaving', GOOD_PIN, self.otp(anna)), 'resigning')
+        self.assertTrue(roles.is_core(anna))   # stays until a replacement accepts
+        with self.assertRaises(ValidationError):
+            roles.remove_role(PinDelegate.objects.get(user=jan), self.boss)
+        eva = self.person('eva')
+        self.accept(roles.invite(eva, 'core', self.boss))
+        self.assertFalse(roles.is_core(anna))
+        self.assertEqual(PinDelegate.objects.get(user=anna).status, 'ended')
+        # replacement: the old one stays until the new one accepts
+        new = roles.remove_role(PinDelegate.objects.get(user=jan), self.boss, replacement=self.person('fero'))
+        self.assertTrue(roles.is_core(jan))
+        self.accept(new)
+        self.assertFalse(roles.is_core(jan))
+
+    def test_department_scope(self):
+        from netbox_user_pin import roles
+        department, head, (del1, del2), (m1,) = self.make_department()
+        other, head2, _d, (m2,) = self.make_department('HR', 'head2', ('d3', 'd4'), ('m2',))
+        self.assertTrue(roles.can_manage(head, m1))
+        self.assertTrue(roles.can_manage(head, del1))
+        self.assertFalse(roles.can_manage(head, m2))
+        self.assertTrue(roles.can_manage(del1, m1))
+        self.assertFalse(roles.can_manage(del1, del2))
+        self.assertFalse(roles.can_manage(del1, head))
+        self.assertFalse(roles.can_manage(head, self.boss))
+        self.assertEqual(set(roles.visible_users(head)), {head, del1, del2, m1})
+        # the head sees the users list only after PIN + 2FA and only the own department
+        self.client.force_login(head)
+        self.client.post(reverse('plugins:netbox_user_pin:unlock'), {'pin': GOOD_PIN, 'scope': 'user-pin-admin'})
+        response = self.client.get(reverse('plugins:netbox_user_pin:user_list'))
+        self.assertIn(reverse('plugins:netbox_user_pin:step_up'), response.url)
+        self.client.post(reverse('plugins:netbox_user_pin:step_up'), {'pin': GOOD_PIN, 'otp': self.otp(head)})
+        response = self.client.get(reverse('plugins:netbox_user_pin:user_list'))
+        self.assertContains(response, 'm1')
+        self.assertNotContains(response, 'm2')
+        self.assertEqual(self.client.get(reverse('plugins:netbox_user_pin:department',
+                                                 kwargs={'pk': other.pk})).status_code, 403)
+        self.assertContains(self.client.get(reverse('plugins:netbox_user_pin:department',
+                                                    kwargs={'pk': department.pk})), 'Temporary hand-over')
+        self.assertEqual(self.client.get(reverse('plugins:netbox_user_pin:delegates')).status_code, 403)
+        # the head may allow PIN use of a member
+        url = reverse('plugins:netbox_user_pin:user_action', kwargs={'pk': m1.pk, 'action': 'allow'})
+        self.client.post(url)
+        self.assertEqual(UserPin.objects.get(user=m1).access, PinAccess.ALLOWED)
+        url = reverse('plugins:netbox_user_pin:user_action', kwargs={'pk': m2.pk, 'action': 'allow'})
+        self.assertEqual(self.client.post(url).status_code, 403)
+
+    def test_delegate_minimum(self):
+        from netbox_user_pin import roles
+        department, head, (del1, del2), (m1,) = self.make_department()
+        role = PinDelegate.objects.get(user=del1, department=department)
+        self.assertEqual(roles.resign(role, del1, 'too busy', GOOD_PIN, self.otp(del1)), 'resigning')
+        self.assertTrue(any('too busy' in m.body and head.email in m.to for m in mail.outbox))
+        with self.assertRaises(ValidationError):   # cannot leave the department without a replacement
+            roles.remove_member(del2, self.boss)
+        service.set_pin(m1, GOOD_PIN)
+        self.secrets[m1.pk] = enable_2fa(m1)
+        self.accept(roles.invite(m1, 'delegate', head, department=department))
+        role.refresh_from_db()
+        self.assertEqual(role.status, 'ended')
+        self.assertEqual(roles.department_delegates(department).count(), 2)
+
+    def test_temporary_hand_over(self):
+        from netbox_user_pin import roles
+        department, head, (del1, del2), (m1,) = self.make_department()
+        until = timezone.now() + timedelta(days=7)
+        temp = roles.hand_over(department, del1, until, head, reason='holiday')
+        self.assertIn('temporary', mail.outbox[-1].body)
+        self.accept(temp)
+        self.assertEqual(roles.effective_head(department).user, del1)
+        self.assertEqual(PinDelegate.objects.get(user=head, department=department).status, 'on_leave')
+        self.assertFalse(roles.can_manage(head, m1))
+        self.assertTrue(roles.can_manage(del1, m1))
+        notice = [m for m in mail.outbox if m1.email in m.to and 'New head' in m.subject]
+        self.assertTrue(notice and 'rights end' in notice[-1].body)
+        # the job reminds a day before and returns the rights after the date
+        PinDelegate.objects.filter(pk=temp.pk).update(temporary_until=timezone.now() + timedelta(hours=5))
+        roles.process_due()
+        self.assertTrue(any('ends tomorrow' in m.subject.lower() or 'tomorrow' in m.subject for m in mail.outbox))
+        PinDelegate.objects.filter(pk=temp.pk).update(temporary_until=timezone.now() - timedelta(minutes=1))
+        roles.process_due()
+        self.assertEqual(roles.effective_head(department).user, head)
+        self.assertTrue(any(m1.email in m.to and 'Rights returned' in m.subject for m in mail.outbox))
+        self.assertTrue(PinEvent.objects.filter(action=PinEventAction.ROLE_RETURNED).exists())
+
+    def test_two_delegates_hand_over_without_head(self):
+        from netbox_user_pin import roles
+        department, head, (del1, del2), (m1,) = self.make_department()
+        until = timezone.now() + timedelta(days=5)
+        UserPin.objects.filter(user=del1).update(totp_last_step=0)
+        admin_login(self.client, del1, secret=self.secrets[del1.pk])
+        response = self.client.post(reverse('plugins:netbox_user_pin:department', kwargs={'pk': department.pk}), {
+            'action': 'hand-over', 'user': del2.pk, 'until': timezone.localtime(until).strftime('%Y-%m-%dT%H:%M'),
+            'hours': 24, 'reason': 'head is ill'})
+        req = ApprovalRequest.objects.get()
+        self.assertRedirects(response, req.get_absolute_url(), fetch_redirect_response=False)
+        self.assertEqual(req.department, department)
+        self.assertIn(del2, approvals.eligible_approvers(department=department))
+        approvals.vote(req, del1, True, GOOD_PIN, self.otp(del1))
+        approvals.vote(req, del2, True, GOOD_PIN, self.otp(del2))
+        req.refresh_from_db()
+        self.assertEqual(req.status, ApprovalStatus.EXECUTED, req.result)
+        temp = PinDelegate.objects.get(user=del2, role='head')
+        self.accept(temp)
+        self.assertEqual(roles.effective_head(department).user, del2)
+        # at most 30 days for two delegates
+        with self.assertRaises(ValidationError):
+            roles.hand_over(department, m1, timezone.now() + timedelta(days=40), del1)
+
+    def test_move_between_departments(self):
+        from netbox_user_pin import roles
+        it, head, _dels, (m1,) = self.make_department()
+        hr, head2, _dels2, _members = self.make_department('HR', 'head2', ('d3', 'd4'), ())
+        transfer = roles.request_transfer(m1, hr, head)
+        self.assertEqual(transfer.approving_department, hr)
+        self.assertFalse(roles.can_decide_transfer(transfer, head))
+        self.assertTrue(roles.can_decide_transfer(transfer, head2))
+        with self.assertRaises(ValidationError):
+            roles.decide_transfer(transfer, head, True)
+        roles.decide_transfer(transfer, head2, True)
+        self.assertEqual(roles.department_of(m1), hr)
+        self.assertTrue(any(m1.email in m.to and 'Department change' in m.subject for m in mail.outbox))
+        # a head cannot be moved away without a new head
+        with self.assertRaises(ValidationError):
+            roles.move_member(head, hr, self.boss)
+
+    def test_pages_and_slovak(self):
+        department, head, _dels, _m = self.make_department()
+        admin_login(self.client, self.boss, secret=self.secrets[self.boss.pk])
+        for name, kwargs in (('delegates', {}), ('department_list', {}), ('department', {'pk': department.pk}),
+                             ('my_roles', {})):
+            self.assertEqual(self.client.get(reverse(f'plugins:netbox_user_pin:{name}', kwargs=kwargs)).status_code,
+                             200, name)
+        settings = PinSettings.load()
+        settings.language = 'sk'
+        settings.save()
+        self.assertContains(self.client.get(reverse('plugins:netbox_user_pin:department_list')), 'Oddelenia')
+        self.client.force_login(head)
+        self.assertContains(self.client.get(reverse('plugins:netbox_user_pin:my_roles')), 'Vzdať sa')
+
+    def test_head_invites_only_members(self):
+        department, head, _dels, (m1,) = self.make_department()
+        outsider = self.person('outsider')
+        UserPin.objects.filter(user=head).update(totp_last_step=0)
+        admin_login(self.client, head, secret=self.secrets[head.pk])
+        url = reverse('plugins:netbox_user_pin:department', kwargs={'pk': department.pk})
+        response = self.client.post(url, {'action': 'invite-delegate', 'user': outsider.pk, 'hours': 24})
+        self.assertContains(response, 'is not a member')
+        self.assertFalse(PinDelegate.objects.filter(user=outsider).exists())
+        self.client.post(url, {'action': 'invite-delegate', 'user': m1.pk, 'hours': 36})
+        role = PinDelegate.objects.get(user=m1)
+        self.assertEqual((role.status, role.invite_hours), ('pending', 36))

@@ -1,0 +1,71 @@
+{% extends 'generic/_base.html' %}
+{% load form_helpers i18n %}
+{% block title %}{% trans "Invitation" %}{% endblock %}
+{% block content %}
+<div class="row"><div class="col-12 col-lg-8 col-xl-6">
+<div class="card">
+  <h2 class="card-header"><i class="mdi mdi-account-tie"></i> {{ title|capfirst }}</h2>
+  <div class="card-body">
+    <p>{% blocktrans with by=role.invited_by %}<strong>{{ by }}</strong> has chosen you for this role in the PIN administration.{% endblocktrans %}</p>
+    {% if role.temporary_until %}<div class="alert alert-info"><div><i class="mdi mdi-timer-sand"></i> {% blocktrans with until=role.temporary_until|date:"Y-m-d H:i" %}Temporary hand-over – the rights end on {{ until }} and then return automatically.{% endblocktrans %}</div></div>{% endif %}
+    {% if role.reason %}<p class="text-secondary">{% trans "Reason" %}: {{ role.reason }}</p>{% endif %}
+    <h3 class="h4">{% trans "What it means" %}</h3>
+    <ul>
+      {% if role.role == 'core' %}
+        <li>{% trans "Together with the administrator you see and manage the PINs of all users and departments." %}</li>
+        <li>{% trans "You confirm sensitive changes together with a second person (four eyes): roles, settings, departments." %}</li>
+        <li>{% trans "You create departments and appoint their heads." %}</li>
+      {% elif role.role == 'head' %}
+        <li>{% blocktrans with d=role.department %}You manage the PINs of the people in the department {{ d }}: allow / deny, resets (the user always confirms them), suspend.{% endblocktrans %}</li>
+        <li>{% trans "You invite the delegates of the department and can hand over your rights temporarily." %}</li>
+        <li>{% trans "You approve moves of people into and out of the department." %}</li>
+      {% else %}
+        <li>{% blocktrans with d=role.department %}Together with the head or another delegate you confirm changes in the department {{ d }} (four eyes).{% endblocktrans %}</li>
+        <li>{% blocktrans with d=role.department %}You handle PIN and 2FA resets of the people in the department {{ d }} (the user always confirms them).{% endblocktrans %}</li>
+        <li>{% trans "When the head is not available, two delegates together can hand the head's rights over temporarily." %}</li>
+      {% endif %}
+      <li>{% trans "The PIN protects sensitive parts of NetBox and of other plugins that require it (e.g. projects and documentation) – you share responsibility for this protection." %}</li>
+    </ul>
+    <h3 class="h4">{% trans "Your responsibility" %}</h3>
+    <ul>
+      <li>{% trans "Never give your PIN, 2FA or backup codes to anybody; keep the phone with 2FA with you." %}</li>
+      <li>{% trans "React to approval requests in time; confirm only what you understand and what is justified." %}</li>
+      <li>{% trans "Every action you take is recorded in the audit log." %}</li>
+      <li>{% trans "You can resign under User PIN > My roles (it takes effect after a hand-over)." %}</li>
+    </ul>
+  </div>
+</div>
+{% if not open %}
+  <div class="alert alert-secondary"><div>{% if role.status == 'pending' %}{% trans "The code is no longer valid. Ask for a new invitation." %}{% else %}{% blocktrans with status=role.get_status_display %}This invitation is closed ({{ status }}).{% endblocktrans %}{% endif %}</div></div>
+{% elif missing %}
+  <div class="card border-warning">
+    <h2 class="card-header">{% trans "First set up" %}</h2>
+    <div class="card-body">
+      <ol class="mb-0">
+        <li>{% if 'no_pin' in missing %}<a href="{% url 'plugins:netbox_user_pin:set_pin' %}?next={{ here|urlencode }}">{% trans "Set your PIN" %}</a>{% else %}<s>{% trans "Set your PIN" %}</s> <i class="mdi mdi-check text-green"></i>{% endif %}</li>
+        <li>{% if 'no_2fa' in missing %}{% if 'no_pin' in missing %}{% trans "Set up 2FA (authenticator app)" %}{% else %}<a href="{% url 'plugins:netbox_user_pin:totp_setup' %}?next={{ here|urlencode }}">{% trans "Set up 2FA (authenticator app)" %}</a>{% endif %}{% else %}<s>{% trans "Set up 2FA (authenticator app)" %}</s> <i class="mdi mdi-check text-green"></i>{% endif %}</li>
+        <li>{% trans "Come back here and accept." %}</li>
+      </ol>
+    </div>
+  </div>
+{% else %}
+  <div class="card">
+    <h2 class="card-header">{% trans "Accept" %}</h2>
+    <div class="card-body">
+      <form method="post" class="object-edit">{% csrf_token %}<input type="hidden" name="action" value="accept">
+        {% if form.non_field_errors %}<div class="alert alert-danger"><div>{{ form.non_field_errors|join:" " }}</div></div>{% endif %}
+        {% render_field form.code %}
+        {% render_field form.pin %}
+        {% render_field form.otp %}
+        {% render_field form.understand %}
+        <div class="text-end"><button type="submit" class="btn btn-primary"><i class="mdi mdi-check"></i> {% trans "Accept the role" %}</button></div>
+      </form>
+    </div>
+  </div>
+{% endif %}
+{% if role.status == 'pending' %}
+  <form method="post" data-confirm="{% trans 'Decline the invitation?' %}" onsubmit="return confirm(this.dataset.confirm);">{% csrf_token %}<input type="hidden" name="action" value="decline">
+    <button type="submit" class="btn btn-outline-danger">{% trans "Decline" %}</button></form>
+{% endif %}
+</div></div>
+{% endblock %}

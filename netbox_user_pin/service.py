@@ -215,7 +215,11 @@ def is_allowed(user, settings=None):
         return False
     if access == PinAccess.ALLOWED:
         return True
-    return settings.access_mode == PinAccessMode.ALL
+    if settings.access_mode == PinAccessMode.ALL:
+        return True
+    # holders of a role (and the invited) always may use a PIN – they need it to accept and to act
+    from .models import OPEN_ROLE_STATUSES, PinDelegate
+    return PinDelegate.objects.filter(user=user, status__in=OPEN_ROLE_STATUSES).exists()
 
 
 def _not_allowed_error():
@@ -542,22 +546,19 @@ def is_master(user):
 
 
 def is_pin_admin(user):
-    """Master or delegate (anyone allowed to manage other users' PINs)."""
-    return bool(_user_or_none(user) and user.is_active and user.has_perm('netbox_user_pin.change_userpin'))
+    """Master, CORE deputy, department head or delegate (anyone allowed to manage other users' PINs)."""
+    from . import roles
+    return bool(_user_or_none(user) and user.is_active and roles.is_manager(user))
 
 
 def can_manage(actor, target):
     """
-    Separation of duties: nobody manages themselves here (own PIN only under My PIN); the master may manage
-    everybody else; a delegate may not manage the master or other delegates.
+    Separation of duties: nobody manages themselves here (own PIN only under My PIN); the master manages everybody
+    else; CORE deputies everybody except the master and other CORE deputies; department heads and delegates only
+    the members of their department (see roles.can_manage).
     """
-    if target.pk == actor.pk:
-        return False
-    if is_master(actor):
-        return True
-    if not is_pin_admin(actor):
-        return False
-    return not (target.is_superuser or is_pin_admin(target))
+    from . import roles
+    return roles.can_manage(actor, target)
 
 
 #

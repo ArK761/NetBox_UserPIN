@@ -7,11 +7,16 @@ menu = PluginMenu(
     groups=(
         (_('My PIN'), (
             PluginMenuItem(link='plugins:netbox_user_pin:my_pin', link_text=_('My PIN'), auth_required=True),
+            PluginMenuItem(link='plugins:netbox_user_pin:my_roles', link_text=_('My roles'), auth_required=True),
             PluginMenuItem(link='plugins:netbox_user_pin:test', link_text=_('Test unlock'), auth_required=True),
         )),
         (_('Administration'), (
             PluginMenuItem(
                 link='plugins:netbox_user_pin:user_list', link_text=_('Users'),
+                permissions=['netbox_user_pin.view_userpin'],
+            ),
+            PluginMenuItem(
+                link='plugins:netbox_user_pin:department_list', link_text=_('Departments'),
                 permissions=['netbox_user_pin.view_userpin'],
             ),
             PluginMenuItem(
@@ -32,7 +37,7 @@ menu = PluginMenu(
             ),
             PluginMenuItem(
                 # add_pinsettings is only ever held by superusers (the master)
-                link='plugins:netbox_user_pin:delegates', link_text=_('Delegates'),
+                link='plugins:netbox_user_pin:delegates', link_text=_('CORE (deputies)'),
                 permissions=['netbox_user_pin.add_pinsettings'],
             ),
         )),

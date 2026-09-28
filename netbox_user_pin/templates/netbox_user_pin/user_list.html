@@ -14,7 +14,7 @@
 </div>
 {% if can_change %}{% include 'netbox_user_pin/inc/step_up_bar.html' %}{% endif %}
 <form method="get" class="row g-2 mb-3">
-  <div class="col-auto"><input type="text" name="q" value="{{ q }}" class="form-control" placeholder="{% trans 'Name, username or e-mail' %}"></div>
+  <div class="col-auto"><input type="text" name="q" value="{{ q }}" class="form-control" placeholder="{% trans 'Name, username, e-mail or department' %}"></div>
   <div class="col-auto">
     <select name="status" class="form-select">
       <option value="">{% trans "All users" %}</option>
@@ -40,9 +40,11 @@
           <td class="text-nowrap">
             {{ row.user.username }}
             {% if row.user == request.user %}<span class="badge text-bg-blue">{% trans "you" %}</span>{% endif %}
-            {% if row.role == 'master' %}<span class="badge text-bg-purple">{% trans "master" %}</span>{% elif row.role == 'delegate' %}<span class="badge text-bg-cyan">{% trans "delegate" %}</span>{% endif %}
+            {% if row.role == 'master' %}<span class="badge text-bg-purple">{% trans "master" %}</span>{% endif %}
+            {% for r in row.roles %}{% if r.role == 'core' %}<span class="badge text-bg-blue">CORE</span>{% elif r.role == 'head' %}<span class="badge text-bg-purple">{% trans "head" %}</span>{% else %}<span class="badge text-bg-cyan">{% trans "delegate" %}</span>{% endif %}{% if r.status == 'pending' %}<span class="badge text-bg-secondary">{% trans "invited" %}</span>{% endif %} {% endfor %}
             {% if not row.user.is_active %}<span class="badge text-bg-secondary">{% trans "inactive" %}</span>{% endif %}
             {% if row.name %}<div class="small text-secondary">{{ row.name }}</div>{% endif %}
+            {% if row.department %}<div class="small"><i class="mdi mdi-office-building"></i> {{ row.department.name }}</div>{% endif %}
           </td>
           <td>
             {% if row.allowed %}<span class="badge text-bg-green">{% trans "Yes" %}</span>{% else %}<span class="badge text-bg-red">{% trans "No" %}</span>{% endif %}
@@ -91,7 +93,7 @@
                     {% endif %}
                   </div>
                 </div>
-              {% else %}<span class="text-secondary small" title="{% trans 'Nobody manages themselves here; delegates cannot manage the master or other delegates' %}">—</span>{% endif %}
+              {% else %}<span class="text-secondary small" title="{% trans 'Nobody manages themselves here; CORE deputies cannot manage the master or other CORE deputies; heads and delegates manage only their department' %}">—</span>{% endif %}
             </td>
           {% endif %}
         </tr>

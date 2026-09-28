@@ -1,7 +1,7 @@
 # Návrh: delegovanie, oddelenia a schvaľovanie štyrmi očami
 
-Stav: **NÁVRH na pripomienkovanie (verzia 2)** – zatiaľ nič z tohto nie je naprogramované.
-Pripomienky píš priamo sem (alebo mi ich pošli) a dokument upravím.
+Stav: **IMPLEMENTOVANÉ vo verzii 0.10.0** (fáza 1 aj 2). Otvorené otázky sú rozhodnuté podľa môjho návrhu –
+pozri kap. 13; ak chceš niečo inak, napíš a upravím.
 
 Zmeny vo verzii 2: hierarchia CORE → oddelenie, štyri oči sa nevypínajú, kým existuje oddelenie alebo delegát,
 dočasné delegovanie s mailom celému oddeleniu, presun ľudí medzi oddeleniami, prezeranie po PIN + 2FA.
@@ -85,8 +85,9 @@ V zoznamoch je pri každom aj to, čo mu chýba: *chýba PIN / chýba 2FA / nem�
 
 - **Zapnutie:** admin CORE – iba ak existujú aspoň **2 aktívni zástupcovia CORE**.
 - **Kým existuje aspoň jedno oddelenie alebo jeden delegát, štyri oči sa vypnúť nedajú.**
-- Vypnúť sa dajú až vtedy, keď **neexistuje žiadne oddelenie ani žiadny delegát**; aj vtedy potvrdia dvaja
-  (ak ešte dvaja sú), inak admin sám.
+- Vypnúť sa dajú až vtedy, keď **neexistuje žiadne oddelenie** (oddelenia musia byť zrušené – tým končia aj
+  ich delegáti); vypnutie potvrdia dvaja (ak je druhý), inak admin sám. Po vypnutí končí delegovanie CORE a
+  zástupcovia CORE dostanú mail.
 - **Ak skončí delegovanie v CORE** (napr. zástupca CORE odíde), oddelenia fungujú ďalej normálne a štyri oči
   ostávajú zapnuté.
 - Pri zapnutí / vypnutí dostanú mail všetci dotknutí.
@@ -188,7 +189,7 @@ správcom) sa zapíše do auditu – kto, komu, oddelenie, kedy, odkiaľ (IP), d
 > - Funkcie sa môžeš vzdať v menu „Moja delegácia“ (platí po odovzdaní).
 >
 > **Prijať:** https://netbox.firma.sk/plugins/user-pin/invitation/…
-> **Kód:** 482 913 – platí do 29. 09. 2026 14:00 (24 h)
+> **Kód:** 48291305 – platí do 29. 09. 2026 14:00 (24 h)
 >
 > Ak o tom nič nevieš, neprijímaj a kontaktuj administrátora.
 
@@ -205,9 +206,9 @@ správcom) sa zapíše do auditu – kto, komu, oddelenie, kedy, odkiaľ (IP), d
 2. **Fáza 2:** oddelenia, správca, delegáti oddelenia, dočasné delegovanie s návratom práv, trvalý presun,
    presun ľudí medzi oddeleniami, prezeranie po PIN + 2FA, maily celému oddeleniu.
 
-## 13. Otvorené otázky
+## 13. Rozhodnutia (pôvodne otvorené otázky)
 
-| # | Otázka | Môj návrh |
+| # | Otázka | Rozhodnutie (implementované) |
 |---|---|---|
 | 1 | „Core zástupca pre ODD“ – je **správca oddelenia** zároveň členom CORE (vidí aj ostatné oddelenia), alebo je to človek z CORE, ktorý oddelenie iba **dozoruje** a oddelenie má ešte vlastného správcu? | správca oddelenia **nie je** členom CORE, vidí iba svoje oddelenie; CORE vidí všetko |
 | 2 | Môže byť používateľ vo **viacerých oddeleniach**? | nie, iba v jednom |

@@ -10,6 +10,8 @@ __all__ = (
     'ApprovalRequest',
     'ApprovalStatus',
     'ApprovalVote',
+    'Department',
+    'DepartmentMember',
     'PinEvent',
     'PinAccess',
     'PinAccessMode',
@@ -17,6 +19,10 @@ __all__ = (
     'PinEventAction',
     'PinScopeMode',
     'PinSettings',
+    'RoleKind',
+    'RoleStatus',
+    'TransferRequest',
+    'TransferStatus',
     'UserPin',
 )
 
@@ -160,10 +166,11 @@ class PinSettings(models.Model):
     four_eyes = models.BooleanField(
         verbose_name=_('Four-eyes approval'),
         default=False,
-        help_text=_('Selected administrative changes need a second administrator or delegate who confirms with '
-                    'their own PIN + 2FA. Needs at least two administrators / delegates with PIN and 2FA.'),
+        help_text=_('Selected administrative changes need a second person who confirms with their own PIN + 2FA. '
+                    'Turning it on needs at least two active CORE deputies. It cannot be turned off while a '
+                    'department exists; turning it off needs two people and ends the CORE delegation.'),
     )
-    four_eyes_delegates = models.BooleanField(verbose_name=_('… for delegates (add / remove / change)'),
+    four_eyes_delegates = models.BooleanField(verbose_name=_('… for roles (CORE, department heads and delegates)'),
                                               default=True)
     four_eyes_settings = models.BooleanField(verbose_name=_('… for settings and mail settings'), default=True)
     four_eyes_access = models.BooleanField(verbose_name=_('… for allowing / denying PIN use'), default=False)
@@ -368,6 +375,21 @@ class PinEventAction(models.TextChoices):
     LOCKED = 'locked', _('Locked manually')
     SETTINGS_CHANGED = 'settings_changed', _('Settings changed')
     KEY_ROTATED = 'key_rotated', _('Encryption key rotated')
+    ROLE_INVITED = 'role_invited', _('Role invitation sent')
+    ROLE_ACCEPTED = 'role_accepted', _('Role accepted')
+    ROLE_DECLINED = 'role_declined', _('Role invitation declined')
+    ROLE_EXPIRED = 'role_expired', _('Role invitation expired')
+    ROLE_RESIGNING = 'role_resigning', _('Resignation waiting for a replacement')
+    ROLE_ENDED = 'role_ended', _('Role ended')
+    ROLE_ON_LEAVE = 'role_on_leave', _('Rights handed over temporarily')
+    ROLE_RETURNED = 'role_returned', _('Rights returned')
+    DEPARTMENT_CREATED = 'department_created', _('Department created')
+    DEPARTMENT_DELETED = 'department_deleted', _('Department dissolved')
+    MEMBER_ADDED = 'member_added', _('Member added to a department')
+    MEMBER_REMOVED = 'member_removed', _('Member removed from a department')
+    TRANSFER_REQUESTED = 'transfer_requested', _('Move between departments requested')
+    TRANSFER_APPROVED = 'transfer_approved', _('Move between departments approved')
+    TRANSFER_REJECTED = 'transfer_rejected', _('Move between departments rejected')
     ERROR = 'error', _('Error')
 
 
@@ -419,41 +441,167 @@ class PinEvent(models.Model):
         raise RuntimeError('PIN events are append-only and cannot be deleted.')
 
 
-class PinDelegate(models.Model):
-    """
-    A user or group the master (superuser) delegated PIN administration to. Synchronised into NetBox object
-    permissions so that menus and permission checks work natively.
-    """
-    user = models.OneToOneField(
-        to=settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True, related_name='+',
-    )
-    group = models.OneToOneField(
-        to='users.Group', on_delete=models.CASCADE, null=True, blank=True, related_name='+',
-    )
-    can_edit_settings = models.BooleanField(default=False)
+class Department(models.Model):
+    """A department (workplace). Its head and delegates manage the PINs of its members."""
+    name = models.CharField(verbose_name=_('Name'), max_length=100, unique=True)
+    description = models.CharField(verbose_name=_('Description'), max_length=200, blank=True)
     created = models.DateTimeField(auto_now_add=True)
     created_by = models.CharField(max_length=150, blank=True)
 
     class Meta:
-        verbose_name = _('PIN delegate')
-        verbose_name_plural = _('PIN delegates')
-        constraints = (
-            models.CheckConstraint(
-                condition=(
-                    models.Q(user__isnull=False, group__isnull=True) | models.Q(user__isnull=True, group__isnull=False)
-                ),
-                name='netbox_user_pin_delegate_user_xor_group',
-            ),
-        )
+        verbose_name = _('department')
+        verbose_name_plural = _('departments')
+        ordering = ('name',)
 
     def __str__(self):
-        return f'user {self.user}' if self.user_id else f'group {self.group}'
+        return self.name
+
+
+class DepartmentMember(models.Model):
+    """A user belongs to at most one department."""
+    user = models.OneToOneField(to=settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='pin_membership')
+    department = models.ForeignKey(to=Department, on_delete=models.CASCADE, related_name='members')
+    added = models.DateTimeField(auto_now_add=True)
+    added_by = models.CharField(max_length=150, blank=True)
+
+    class Meta:
+        verbose_name = _('department member')
+        verbose_name_plural = _('department members')
+        ordering = ('user__username',)
+
+    def __str__(self):
+        return f'{self.user} @ {self.department}'
+
+
+class RoleKind(models.TextChoices):
+    CORE = 'core', _('CORE deputy')
+    HEAD = 'head', _('Department head')
+    DELEGATE = 'delegate', _('Department delegate')
+
+
+class RoleStatus(models.TextChoices):
+    PENDING = 'pending', _('Waiting for acceptance')
+    ACTIVE = 'active', _('Active')
+    ON_LEAVE = 'on_leave', _('Handed over temporarily')
+    RESIGNING = 'resigning', _('Resigning (until replaced)')
+    ENDED = 'ended', _('Ended')
+    DECLINED = 'declined', _('Declined')
+    EXPIRED = 'expired', _('Expired')
+
+
+OPEN_ROLE_STATUSES = (RoleStatus.PENDING, RoleStatus.ACTIVE, RoleStatus.ON_LEAVE, RoleStatus.RESIGNING)
+EFFECTIVE_ROLE_STATUSES = (RoleStatus.ACTIVE, RoleStatus.RESIGNING)
+
+
+class PinDelegate(models.Model):
+    """
+    A role in the PIN administration: CORE deputy (department = empty), department head or department delegate.
+    A role starts as an invitation and is effective only after the user accepted it (e-mail code + PIN + 2FA).
+    Effective roles are synchronised into NetBox object permissions so that menus and permission checks work.
+    """
+    user = models.ForeignKey(to=settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='pin_roles')
+    role = models.CharField(max_length=10, choices=RoleKind.choices, default=RoleKind.CORE)
+    department = models.ForeignKey(to=Department, on_delete=models.CASCADE, null=True, blank=True,
+                                   related_name='roles')
+    status = models.CharField(max_length=10, choices=RoleStatus.choices, default=RoleStatus.PENDING)
+    can_edit_settings = models.BooleanField(default=False)
+    temporary_until = models.DateTimeField(null=True, blank=True, help_text='Temporary head until this time.')
+    substitute_for = models.ForeignKey(to='self', on_delete=models.SET_NULL, null=True, blank=True,
+                                       related_name='substitutes', help_text='Temporary head: the regular head.')
+    replaces = models.ForeignKey(to='self', on_delete=models.SET_NULL, null=True, blank=True,
+                                 related_name='replaced_by', help_text='Role that ends when this one is accepted.')
+    reason = models.CharField(max_length=500, blank=True)
+    invited_by = models.CharField(max_length=150, blank=True)
+    invite_hours = models.PositiveSmallIntegerField(default=24)
+    invite_code = models.CharField(max_length=128, blank=True)
+    invite_expires = models.DateTimeField(null=True, blank=True)
+    invite_sent = models.DateTimeField(null=True, blank=True)
+    invite_attempts = models.PositiveSmallIntegerField(default=0)
+    reminder_sent = models.DateTimeField(null=True, blank=True)
+    accepted = models.DateTimeField(null=True, blank=True)
+    ended = models.DateTimeField(null=True, blank=True)
+    end_reason = models.CharField(max_length=500, blank=True)
+    created = models.DateTimeField(auto_now_add=True)
+    created_by = models.CharField(max_length=150, blank=True)
+
+    class Meta:
+        verbose_name = _('PIN role')
+        verbose_name_plural = _('PIN roles')
+        ordering = ('created',)
+
+    def __str__(self):
+        where = f' {self.department}' if self.department_id else ''
+        return f'{self.get_role_display()}{where}: {self.user}'
+
+    def get_absolute_url(self):
+        from django.urls import reverse
+        return reverse('plugins:netbox_user_pin:invitation', kwargs={'pk': self.pk})
+
+    @property
+    def is_open(self):
+        return self.status in OPEN_ROLE_STATUSES
+
+    @property
+    def is_effective(self):
+        return self.status in EFFECTIVE_ROLE_STATUSES and self.user.is_active
+
+    @property
+    def invite_pending(self):
+        return (self.status == RoleStatus.PENDING and bool(self.invite_code) and self.invite_expires is not None
+                and self.invite_expires > timezone.now())
+
+    @property
+    def is_temporary(self):
+        return self.temporary_until is not None
+
+
+class TransferStatus(models.TextChoices):
+    PENDING = 'pending', _('Waiting')
+    APPROVED = 'approved', _('Approved')
+    REJECTED = 'rejected', _('Rejected')
+    CANCELLED = 'cancelled', _('Cancelled')
+    EXPIRED = 'expired', _('Expired')
+
+
+class TransferRequest(models.Model):
+    """Move of a user between departments, requested by one head and approved by the head of the other one."""
+    user = models.ForeignKey(to=settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='+')
+    from_department = models.ForeignKey(to=Department, on_delete=models.CASCADE, null=True, blank=True,
+                                        related_name='+')
+    to_department = models.ForeignKey(to=Department, on_delete=models.CASCADE, related_name='+')
+    requested_by = models.ForeignKey(to=settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True,
+                                     related_name='+')
+    requested_by_name = models.CharField(max_length=150)
+    approving_department = models.ForeignKey(to=Department, on_delete=models.CASCADE, null=True, blank=True,
+                                             related_name='+', help_text='Department whose head must approve.')
+    status = models.CharField(max_length=10, choices=TransferStatus.choices, default=TransferStatus.PENDING)
+    created = models.DateTimeField(auto_now_add=True)
+    expires = models.DateTimeField()
+    decided = models.DateTimeField(null=True, blank=True)
+    decided_by = models.CharField(max_length=150, blank=True)
+
+    class Meta:
+        verbose_name = _('department move')
+        verbose_name_plural = _('department moves')
+        ordering = ('-created',)
+
+    def __str__(self):
+        return f'{self.user}: {self.from_department or "-"} -> {self.to_department}'
+
+    def get_absolute_url(self):
+        from django.urls import reverse
+        return reverse('plugins:netbox_user_pin:department_list')
+
+    @property
+    def is_open(self):
+        return self.status == TransferStatus.PENDING and self.expires > timezone.now()
 
 
 class ApprovalAction(models.TextChoices):
-    DELEGATE_ADD = 'delegate_add', _('Add delegate')
-    DELEGATE_REMOVE = 'delegate_remove', _('Remove delegate')
+    DELEGATE_ADD = 'delegate_add', _('Invite to a role')
+    DELEGATE_REMOVE = 'delegate_remove', _('End or replace a role')
     DELEGATE_TOGGLE = 'delegate_toggle', _('Change delegate settings permission')
+    DEPARTMENT_DELETE = 'department_delete', _('Dissolve a department')
     SETTINGS = 'settings', _('Change PIN settings')
     MAIL_SETTINGS = 'mail_settings', _('Change mail settings')
     ACCESS = 'access', _('Allow / deny PIN use')
@@ -485,6 +633,10 @@ class ApprovalRequest(models.Model):
     approver = models.ForeignKey(
         to=settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='+',
         help_text='Optional: only this person may give the second confirmation.',
+    )
+    department = models.ForeignKey(
+        to=Department, on_delete=models.SET_NULL, null=True, blank=True, related_name='+',
+        help_text='Department request: its head and delegates (and CORE) may confirm.',
     )
     created = models.DateTimeField(auto_now_add=True)
     expires = models.DateTimeField()

@@ -10,6 +10,11 @@
     {% endwith %}</div>
     <a class="btn btn-warning ms-3" href="{% url 'plugins:netbox_user_pin:reset_confirm' %}">{% trans "Confirm reset" %}</a></div>
 {% endif %}
+{% for role in pending_roles %}
+  <div class="alert alert-info d-flex justify-content-between align-items-center"><div><i class="mdi mdi-account-tie"></i>
+    {% blocktrans with by=role.invited_by %}<strong>{{ by }}</strong> invited you to a role in the PIN administration.{% endblocktrans %}</div>
+    <a class="btn btn-primary ms-3" href="{% url 'plugins:netbox_user_pin:invitation' pk=role.pk %}">{% trans "Open the invitation" %}</a></div>
+{% endfor %}
 {% if user_pin.suspended %}
   <div class="alert alert-danger"><div><i class="mdi mdi-cancel"></i> {% trans "Your PIN is suspended. Contact your administrator." %}</div></div>
 {% endif %}

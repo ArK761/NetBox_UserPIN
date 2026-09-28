@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-28 06:13+0000\n"
+"POT-Creation-Date: 2026-09-28 10:29+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -18,40 +18,42 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=3; plural=(n==1) ? 0 : (n>=2 && n<=4) ? 1 : 2;\n"
 
-#: approvals.py:93
+#: approvals.py:101
 #, python-brace-format
 msgid "Four-eyes request #{pk}"
 msgstr "Žiadosť na štyri oči #{pk}"
 
-#: approvals.py:110
+#: approvals.py:118
 #, python-brace-format
 msgid "{user} cannot confirm this request."
 msgstr "{user} nemôže potvrdiť túto žiadosť."
 
-#: approvals.py:113
-msgid ""
-"There is no other administrator or delegate with PIN and 2FA who could "
-"confirm."
-msgstr ""
-"Nie je žiadny iný administrátor ani delegát s PINom a 2FA, ktorý by mohol "
-"potvrdiť."
-
 #: approvals.py:121
+msgid ""
+"There is no other person with PIN and 2FA who could confirm (CORE, or the "
+"head / delegates of the department)."
+msgstr ""
+"Nie je nikto ďalší s PINom a 2FA, kto by mohol potvrdiť (CORE, alebo "
+"správca / delegáti oddelenia)."
+
+#: approvals.py:130
 #, python-brace-format
 msgid ""
 "{user} asks you to confirm: {summary}\n"
 "\n"
-"Open NetBox > User PIN > Approvals (#{pk}) and confirm with your PIN and 2FA until {time}."
+"Open NetBox > User PIN > Approvals (#{pk}) and confirm with your PIN and 2FA "
+"until {time}."
 msgstr ""
 "{user} vás žiada o potvrdenie: {summary}\n"
 "\n"
-"Otvorte NetBox > User PIN > Schvaľovanie (#{pk}) a potvrďte svojím PINom a 2FA do {time}."
+"Otvorte NetBox > User PIN > Schvaľovanie (#{pk}) a potvrďte svojím PINom a "
+"2FA do {time}."
 
-#: approvals.py:133
+#: approvals.py:142 roles.py:489 roles.py:603
 msgid "PIN or 2FA code is not correct."
 msgstr "PIN alebo 2FA kód nie je správny."
 
-#: approvals.py:149
+#: approvals.py:158
 msgid ""
 "You cannot confirm this request (already confirmed, expired or not "
 "permitted)."
@@ -59,28 +61,28 @@ msgstr ""
 "Túto žiadosť nemôžete potvrdiť (už potvrdená, vypršala alebo nemáte "
 "oprávnenie)."
 
-#: approvals.py:154
+#: approvals.py:163
 msgid "The request is no longer open."
 msgstr "Žiadosť už nie je otvorená."
 
-#: approvals.py:166
+#: approvals.py:175
 #, python-brace-format
 msgid "{user} rejected: {summary}"
 msgstr "{user} zamietol: {summary}"
 
-#: approvals.py:177
+#: approvals.py:186
 msgid "You cannot cancel this request."
 msgstr "Túto žiadosť nemôžete zrušiť."
 
-#: approvals.py:187
+#: approvals.py:196
 msgid "Break-glass is not available."
 msgstr "Núdzové vykonanie (break-glass) nie je dostupné."
 
-#: approvals.py:189
+#: approvals.py:198 roles.py:598
 msgid "A reason is required."
 msgstr "Dôvod je povinný."
 
-#: approvals.py:200
+#: approvals.py:209
 #, python-brace-format
 msgid ""
 "BREAK-GLASS: {user} executed alone: {summary}\n"
@@ -89,171 +91,231 @@ msgstr ""
 "BREAK-GLASS: {user} vykonal sám: {summary}\n"
 "Dôvod: {reason}"
 
-#: forms.py:50 forms.py:197
-#: templates/netbox_user_pin/inc/step_up_modal.html:13
+#: forms.py:57 forms.py:310 templates/netbox_user_pin/inc/step_up_modal.html:13
 msgid "2FA code"
 msgstr "2FA kód"
 
-#: forms.py:55 templates/netbox_user_pin/inc/step_up_modal.html:15
+#: forms.py:62 templates/netbox_user_pin/inc/step_up_modal.html:15
 msgid "6 digits from your authenticator app, or a backup code."
 msgstr "6 číslic z aplikácie Authenticator alebo záložný kód."
 
-#: forms.py:64 service.py:1160
+#: forms.py:71 service.py:1161
 msgid "PIN"
 msgstr "PIN"
 
-#: forms.py:74 forms.py:163 forms.py:174 forms.py:195
+#: forms.py:81 forms.py:235 forms.py:241 forms.py:276 forms.py:287 forms.py:308
 #: templates/netbox_user_pin/inc/step_up_modal.html:10
 msgid "Your PIN"
 msgstr "Váš PIN"
 
-#: forms.py:84
+#: forms.py:91
 msgid "Code from the app"
 msgstr "Kód z aplikácie"
 
-#: forms.py:92 forms.py:203
+#: forms.py:99 forms.py:228 forms.py:316
 msgid "Code from the e-mail"
 msgstr "Kód z e-mailu"
 
-#: forms.py:97 forms.py:133 forms.py:160
+#: forms.py:104 forms.py:246 forms.py:273
 msgid "New PIN"
 msgstr "Nový PIN"
 
-#: forms.py:98 forms.py:134 forms.py:161
+#: forms.py:105 forms.py:247 forms.py:274
 msgid "Confirm new PIN"
 msgstr "Potvrďte nový PIN"
 
-#: forms.py:103 forms.py:139 forms.py:168
+#: forms.py:110 forms.py:252 forms.py:281
 msgid "The PINs do not match."
 msgstr "PINy sa nezhodujú."
 
-#: forms.py:110 templates/netbox_user_pin/event_list.html:17
+#: forms.py:127
+msgid "12 hours"
+msgstr "12 hodín"
+
+#: forms.py:127
+msgid "24 hours"
+msgstr "24 hodín"
+
+#: forms.py:127
+msgid "36 hours"
+msgstr "36 hodín"
+
+#: forms.py:127
+msgid "48 hours"
+msgstr "48 hodín"
+
+#: forms.py:132 templates/netbox_user_pin/inc/hours_select.html:1
+msgid "Invitation valid for"
+msgstr "Platnosť pozvánky"
+
+#: forms.py:134
+msgid "The code in the e-mail must be used within this time."
+msgstr "Kód z e-mailu treba použiť v tomto čase."
+
+#: forms.py:140 forms.py:295 templates/netbox_user_pin/approval.html:11
+#: templates/netbox_user_pin/invitation.html:11
+msgid "Reason"
+msgstr "Dôvod"
+
+#: forms.py:151 forms.py:205 forms.py:214
+#: templates/netbox_user_pin/department.html:78
+#: templates/netbox_user_pin/department.html:104
+#: templates/netbox_user_pin/departments.html:10
+#: templates/netbox_user_pin/event_list.html:17
 #: templates/netbox_user_pin/user_list.html:36
 msgid "User"
 msgstr "Používateľ"
 
-#: forms.py:113
-msgid "or group"
-msgstr "alebo skupina"
-
-#: forms.py:117 templates/netbox_user_pin/delegates.html:11
+#: forms.py:161 templates/netbox_user_pin/delegates.html:17
 msgid "Can edit settings"
 msgstr "Môže meniť nastavenia"
 
-#: forms.py:124
-msgid "Select either a user or a group."
-msgstr "Vyberte buď používateľa, alebo skupinu."
+#: forms.py:171
+msgid "Replacement"
+msgstr "Náhrada"
 
-#: forms.py:126
-msgid "This user is already a delegate."
-msgstr "Tento používateľ už je delegát."
+#: forms.py:173
+msgid "Needed when the minimum would not be met without it."
+msgstr "Potrebná, ak by bez nej nebolo splnené minimum."
 
-#: forms.py:128
-msgid "This group is already a delegate."
-msgstr "Táto skupina už je delegát."
+#: forms.py:183
+msgid "Hand over to"
+msgstr "Odovzdať komu"
 
-#: forms.py:144
+#: forms.py:186
+msgid "Until"
+msgstr "Do"
+
+#: forms.py:188
+msgid "Then the rights return automatically."
+msgstr "Potom sa práva automaticky vrátia."
+
+#: forms.py:199 models.py:446
+msgid "Name"
+msgstr "Názov"
+
+#: forms.py:200 models.py:447
+msgid "Description"
+msgstr "Popis"
+
+#: forms.py:216
+msgid "To the department"
+msgstr "Do oddelenia"
+
+#: forms.py:233
+msgid "I understand the responsibility"
+msgstr "Rozumiem zodpovednosti"
+
+#: forms.py:257
 msgid "Current PIN"
 msgstr "Súčasný PIN"
 
-#: forms.py:182 templates/netbox_user_pin/approval.html:11
-msgid "Reason"
-msgstr "Dôvod"
-
-#: forms.py:183
+#: forms.py:296
 msgid "e.g. employee left"
 msgstr "napr. zamestnanec odišiel"
 
-#: forms.py:200
+#: forms.py:313
 msgid "From your authenticator app – or leave empty and use the e-mail code."
 msgstr ""
 "Z aplikácie Authenticator – alebo nechajte prázdne a použite kód z e-mailu."
 
-#: forms.py:210
+#: forms.py:323
 msgid "Enter a 2FA code or the code from the e-mail."
 msgstr "Zadajte 2FA kód alebo kód z e-mailu."
 
-#: forms.py:230
+#: forms.py:330
 msgid "Send test e-mail to"
 msgstr "Poslať testovací e-mail na"
 
-#: forms.py:232
+#: forms.py:332
 msgid ""
 "Users permitted to use a PIN with an e-mail address in an allowed domain."
 msgstr "Používatelia s povoleným PINom a e-mailom v povolenej doméne."
 
-#: forms.py:260
+#: forms.py:360
 msgid "SMTP password"
 msgstr "SMTP heslo"
 
-#: forms.py:262
+#: forms.py:362
 msgid ""
 "Stored encrypted and never shown. Leave empty to keep the current password."
 msgstr ""
 "Uloží sa šifrovane a nikdy sa nezobrazí. Nechajte prázdne, ak chcete "
 "ponechať súčasné heslo."
 
-#: forms.py:275
+#: forms.py:375
 msgid "A sender address is needed together with the SMTP server."
 msgstr "K SMTP serveru je potrebná adresa odosielateľa."
 
-#: forms.py:277
+#: forms.py:377
 msgid "Enter the SMTP user."
 msgstr "Zadajte SMTP používateľa."
 
-#: forms.py:279
+#: forms.py:379
 msgid "Enter the SMTP password."
 msgstr "Zadajte SMTP heslo."
 
-#: forms.py:284
+#: forms.py:384
 msgid "Domain"
 msgstr "Doména"
 
-#: forms.py:307
-msgid "At least two administrators / delegates with PIN and 2FA are needed."
-msgstr "Sú potrební aspoň dvaja administrátori / delegáti s PINom a 2FA."
+#: forms.py:412
+msgid ""
+"At least two active CORE deputies with PIN and 2FA are needed (User PIN > "
+"CORE)."
+msgstr ""
+"Sú potrební aspoň dvaja aktívni zástupcovia CORE s PINom a 2FA (User PIN > "
+"CORE)."
 
-#: models.py:25
+#: forms.py:417
+msgid ""
+"Four-eyes approval cannot be switched off while a department exists. "
+"Dissolve the departments first."
+msgstr ""
+"Schvaľovanie štyrmi očami sa nedá vypnúť, kým existuje nejaké oddelenie. "
+"Najprv oddelenia zrušte."
+
+#: models.py:31
 msgid "One unlock for everything"
 msgstr "Jedno odomknutie pre všetko"
 
-#: models.py:26
+#: models.py:32
 msgid "Separate unlock per scope (plugin / area)"
 msgstr "Samostatné odomknutie pre každú oblasť (plugin)"
 
-#: models.py:30
+#: models.py:36
 msgid "All users may use a PIN (except denied users)"
 msgstr "Všetci používatelia môžu mať PIN (okrem zakázaných)"
 
-#: models.py:31
+#: models.py:37
 msgid "Only explicitly allowed users may use a PIN"
 msgstr "PIN môžu mať iba výslovne povolení používatelia"
 
-#: models.py:35
+#: models.py:41
 msgid "Default"
 msgstr "Predvolené"
 
-#: models.py:36
+#: models.py:42
 msgid "Allowed"
 msgstr "Povolené"
 
-#: models.py:37
+#: models.py:43
 msgid "Denied"
 msgstr "Zakázané"
 
-#: models.py:45
+#: models.py:51
 msgid "Language"
 msgstr "Jazyk"
 
-#: models.py:49
+#: models.py:55
 msgid "Language of the User PIN pages and e-mails."
 msgstr "Jazyk stránok a e-mailov User PIN."
 
-#: models.py:52
+#: models.py:58
 msgid "Show first and last name"
 msgstr "Zobrazovať meno a priezvisko"
 
-#: models.py:54
+#: models.py:60
 msgid ""
 "Show the users' first and last name next to the username (Users, Delegates, "
 "e-mail recipients)."
@@ -261,11 +323,11 @@ msgstr ""
 "Zobrazovať meno a priezvisko používateľov vedľa používateľského mena "
 "(Používatelia, Delegáti, príjemcovia e-mailu)."
 
-#: models.py:57
+#: models.py:63
 msgid "Who may use a PIN"
 msgstr "Kto môže mať PIN"
 
-#: models.py:61
+#: models.py:67
 msgid ""
 "Per-user Allow / Deny is set on the Users page. Superusers are always "
 "allowed."
@@ -273,25 +335,25 @@ msgstr ""
 "Povolenie / zákaz pre jednotlivcov sa nastavuje na stránke Používatelia. "
 "Superpoužívatelia majú PIN povolený vždy."
 
-#: models.py:64
+#: models.py:70
 msgid "PIN length"
 msgstr "Dĺžka PINu"
 
-#: models.py:67
+#: models.py:73
 msgid ""
 "Number of digits (4-12). Existing PINs of another length stay valid until "
 "changed."
 msgstr "Počet číslic (4–12). Existujúce PINy inej dĺžky platia až do zmeny."
 
-#: models.py:70
+#: models.py:76
 msgid "Unlock duration (minutes)"
 msgstr "Doba odomknutia (minúty)"
 
-#: models.py:75
+#: models.py:81
 msgid "Extend unlock on activity"
 msgstr "Predlžovať odomknutie pri aktivite"
 
-#: models.py:77
+#: models.py:83
 msgid ""
 "Every protected page view restarts the unlock timer (i.e. it expires after "
 "inactivity)."
@@ -299,41 +361,41 @@ msgstr ""
 "Každé zobrazenie chránenej stránky reštartuje časovač (odomknutie vyprší po "
 "nečinnosti)."
 
-#: models.py:80
+#: models.py:86
 msgid "Unlock scope"
 msgstr "Rozsah odomknutia"
 
-#: models.py:86
+#: models.py:92
 msgid "Max failed attempts"
 msgstr "Max. počet chybných pokusov"
 
-#: models.py:91
+#: models.py:97
 msgid "Lockout duration (minutes)"
 msgstr "Doba zablokovania (minúty)"
 
-#: models.py:96
+#: models.py:102
 msgid "Block weak PINs"
 msgstr "Blokovať slabé PINy"
 
-#: models.py:98
+#: models.py:104
 msgid ""
 "Reject repeated digits (111111), sequences (123456) and patterns (121212)."
 msgstr ""
 "Odmietnuť opakované číslice (111111), postupnosti (123456) a vzory (121212)."
 
-#: models.py:101
+#: models.py:107
 msgid "Additional blocked PINs"
 msgstr "Ďalšie zakázané PINy"
 
-#: models.py:103
+#: models.py:109
 msgid "One per line or comma separated."
 msgstr "Jeden na riadok alebo oddelené čiarkou."
 
-#: models.py:106
+#: models.py:112
 msgid "PIN max age (days)"
 msgstr "Platnosť PINu (dni)"
 
-#: models.py:109
+#: models.py:115
 msgid ""
 "Users must change their PIN after this many days (company policy). Note: "
 "NIST SP 800-63B-4 does not recommend periodic changes, only forced changes "
@@ -343,27 +405,27 @@ msgstr ""
 "Poznámka: NIST SP 800-63B-4 neodporúča pravidelné zmeny, iba vynútenú zmenu "
 "pri podozrení na kompromitáciu."
 
-#: models.py:113
+#: models.py:119
 msgid "Warn before expiry (days)"
 msgstr "Upozorniť pred vypršaním (dni)"
 
-#: models.py:118
+#: models.py:124
 msgid "Require PIN + 2FA for administrative actions"
 msgstr "Vyžadovať PIN + 2FA pri správcovských akciách"
 
-#: models.py:120
+#: models.py:126
 msgid ""
-"Allow / deny, reset, force change, settings and delegates need a fresh PIN +"
-" 2FA confirmation (step-up). When off, the PIN alone is enough."
+"Allow / deny, reset, force change, settings and delegates need a fresh PIN + "
+"2FA confirmation (step-up). When off, the PIN alone is enough."
 msgstr ""
 "Povolenie / zákaz, reset, vynútená zmena, nastavenia a delegáti vyžadujú "
 "čerstvé potvrdenie PIN + 2FA. Ak je vypnuté, stačí PIN."
 
-#: models.py:124
+#: models.py:130
 msgid "Require 2FA also for settings"
 msgstr "Vyžadovať 2FA aj pre nastavenia"
 
-#: models.py:126
+#: models.py:132
 msgid ""
 "Off: changes on the Settings and Mail pages need only your PIN (you are "
 "logged in anyway). Actions on other users and delegates always need PIN + "
@@ -373,35 +435,35 @@ msgstr ""
 "(prihlásený ste aj tak). Zásahy do iných používateľov a delegátov vždy "
 "vyžadujú PIN + 2FA."
 
-#: models.py:130
+#: models.py:136
 msgid "Administrative window (minutes)"
 msgstr "Admin okno (minúty)"
 
-#: models.py:133
+#: models.py:139
 msgid "How long a step-up confirmation stays valid."
 msgstr "Ako dlho platí potvrdenie totožnosti."
 
-#: models.py:136
+#: models.py:142
 msgid "Require 2FA on every unlock"
 msgstr "Vyžadovať 2FA pri každom odomknutí"
 
-#: models.py:140
+#: models.py:146
 msgid "Self-service recovery of a forgotten PIN"
 msgstr "Samoobslužná obnova zabudnutého PINu"
 
-#: models.py:142
+#: models.py:148
 msgid "A code sent by e-mail AND a 2FA code are required together."
 msgstr "Vyžaduje sa kód z e-mailu A zároveň 2FA kód."
 
-#: models.py:145
+#: models.py:151
 msgid "Recovery code validity (minutes)"
 msgstr "Platnosť kódu na obnovu (minúty)"
 
-#: models.py:150 templates/netbox_user_pin/mail.html:61
+#: models.py:156 templates/netbox_user_pin/mail.html:61
 msgid "Allowed e-mail domains"
 msgstr "Povolené e-mailové domény"
 
-#: models.py:152
+#: models.py:158
 msgid ""
 "E-mails are only sent to these domains, one per line (e.g. firma.sk). Empty "
 "= no e-mails."
@@ -409,57 +471,59 @@ msgstr ""
 "E-maily sa posielajú iba na tieto domény, jedna na riadok (napr. firma.sk). "
 "Prázdne = žiadne e-maily."
 
-#: models.py:155
+#: models.py:161
 msgid "Administrator reset valid (hours)"
 msgstr "Platnosť resetu od administrátora (hodiny)"
 
-#: models.py:158
+#: models.py:164
 msgid "How long the user has to confirm a reset started by an administrator."
 msgstr ""
 "Koľko času má používateľ na potvrdenie resetu, ktorý spustil administrátor."
 
-#: models.py:161 templates/netbox_user_pin/settings.html:46
+#: models.py:167 templates/netbox_user_pin/settings.html:46
 msgid "Four-eyes approval"
 msgstr "Schvaľovanie štyrmi očami"
 
-#: models.py:163
+#: models.py:169
 msgid ""
-"Selected administrative changes need a second administrator or delegate who "
-"confirms with their own PIN + 2FA. Needs at least two administrators / "
-"delegates with PIN and 2FA."
+"Selected administrative changes need a second person who confirms with their "
+"own PIN + 2FA. Turning it on needs at least two active CORE deputies. It "
+"cannot be turned off while a department exists; turning it off needs two "
+"people and ends the CORE delegation."
 msgstr ""
-"Vybrané správcovské zmeny musí potvrdiť druhý administrátor alebo delegát "
-"svojím PINom + 2FA. Vyžaduje aspoň dvoch administrátorov / delegátov s PINom"
-" a 2FA."
+"Vybrané správcovské zmeny musí potvrdiť druhá osoba vlastným PINom + 2FA. "
+"Zapnutie vyžaduje aspoň dvoch aktívnych zástupcov CORE. Kým existuje "
+"oddelenie, nedá sa vypnúť; vypnutie potvrdzujú dvaja a ukončí delegovanie "
+"CORE."
 
-#: models.py:166
-msgid "… for delegates (add / remove / change)"
-msgstr "… pre delegátov (pridať / odobrať / zmeniť)"
+#: models.py:173
+msgid "… for roles (CORE, department heads and delegates)"
+msgstr "… pre roly (CORE, správcovia a delegáti oddelení)"
 
-#: models.py:168
+#: models.py:175
 msgid "… for settings and mail settings"
 msgstr "… pre nastavenia a nastavenia mailu"
 
-#: models.py:169
+#: models.py:176
 msgid "… for allowing / denying PIN use"
 msgstr "… pre povolenie / zákaz PINu"
 
-#: models.py:171
+#: models.py:178
 msgid "Approval request valid (minutes)"
 msgstr "Platnosť žiadosti o schválenie (minúty)"
 
-#: models.py:174
+#: models.py:181
 msgid ""
 "Both can confirm live at the same time or the second one later, until the "
 "request expires."
 msgstr ""
 "Obaja môžu potvrdiť naživo naraz alebo druhý neskôr, kým žiadosť nevyprší."
 
-#: models.py:177
+#: models.py:184
 msgid "Allow break-glass for the master"
 msgstr "Povoliť núdzové vykonanie (break-glass) pre mastera"
 
-#: models.py:179
+#: models.py:186
 msgid ""
 "In an emergency a superuser may execute a request alone with a reason; all "
 "administrators and delegates are informed by e-mail."
@@ -467,375 +531,505 @@ msgstr ""
 "V núdzi môže superpoužívateľ vykonať žiadosť sám s uvedením dôvodu; všetci "
 "administrátori a delegáti dostanú e-mail."
 
-#: models.py:182
+#: models.py:189
 msgid "Sender name"
 msgstr "Meno odosielateľa"
 
-#: models.py:183
+#: models.py:190
 msgid "e.g. NetBox PIN"
 msgstr "napr. NetBox PIN"
 
-#: models.py:185
+#: models.py:192
 msgid "Sender e-mail address"
 msgstr "E-mailová adresa odosielateľa"
 
-#: models.py:186
+#: models.py:193
 msgid ""
-"e.g. netbox@firma.sk. Together with the SMTP server; if the server is empty,"
-" the NetBox e-mail configuration (EMAIL in configuration.py) is used."
+"e.g. netbox@firma.sk. Together with the SMTP server; if the server is empty, "
+"the NetBox e-mail configuration (EMAIL in configuration.py) is used."
 msgstr ""
-"napr. netbox@firma.sk. Spolu so SMTP serverom; ak je server prázdny, použije"
-" sa e-mailové nastavenie NetBoxu (EMAIL v configuration.py)."
+"napr. netbox@firma.sk. Spolu so SMTP serverom; ak je server prázdny, použije "
+"sa e-mailové nastavenie NetBoxu (EMAIL v configuration.py)."
 
-#: models.py:190
+#: models.py:197
 msgid "SMTP server"
 msgstr "SMTP server"
 
-#: models.py:191
+#: models.py:198
 msgid "e.g. mail.firma.sk. Empty = use the NetBox e-mail configuration."
 msgstr ""
 "napr. mail.firma.sk. Prázdne = použije sa e-mailové nastavenie NetBoxu."
 
-#: models.py:193
+#: models.py:200
 msgid "SMTP port"
 msgstr "SMTP port"
 
-#: models.py:195
+#: models.py:202
 msgid "SMTP timeout (s)"
 msgstr "SMTP časový limit (s)"
 
-#: models.py:198
+#: models.py:205
 msgid "Encryption"
 msgstr "Šifrovanie"
 
-#: models.py:199
+#: models.py:206
 msgid "Off (usually port 25)"
 msgstr "Vypnuté (zvyčajne port 25)"
 
-#: models.py:199
+#: models.py:206
 msgid "STARTTLS (usually port 587)"
 msgstr "STARTTLS (zvyčajne port 587)"
 
-#: models.py:200
+#: models.py:207
 msgid "SSL/TLS (usually port 465)"
 msgstr "SSL/TLS (zvyčajne port 465)"
 
-#: models.py:203
+#: models.py:210
 msgid "Automatic TLS"
 msgstr "Automatické TLS"
 
-#: models.py:204
+#: models.py:211
 msgid "With encryption off, STARTTLS is used when the server offers it."
 msgstr "Pri vypnutom šifrovaní sa použije STARTTLS, ak ho server ponúka."
 
-#: models.py:206
+#: models.py:213
 msgid "SMTP authentication"
 msgstr "SMTP autentifikácia"
 
-#: models.py:207
+#: models.py:214
 msgid "SMTP user"
 msgstr "SMTP používateľ"
 
-#: models.py:208
+#: models.py:215
 msgid "Service account the e-mails are sent from."
 msgstr "Servisný účet, z ktorého sa posielajú e-maily."
 
-#: models.py:211
+#: models.py:218
 msgid "Security notifications by e-mail"
 msgstr "Bezpečnostné upozornenia e-mailom"
 
-#: models.py:213
+#: models.py:220
 msgid "PIN set / changed / reset, lockout, upcoming expiry, 2FA changes."
 msgstr ""
 "Nastavenie / zmena / reset PINu, zablokovanie, blížiace sa vypršanie, zmeny "
 "2FA."
 
-#: models.py:217 models.py:218 models.py:221
+#: models.py:224 models.py:225 models.py:228
 #: templates/netbox_user_pin/settings.html:3
 msgid "PIN settings"
 msgstr "Nastavenia PINu"
 
-#: models.py:291
+#: models.py:298
 msgid "user PIN"
 msgstr "PIN používateľa"
 
-#: models.py:292
+#: models.py:299
 msgid "user PINs"
 msgstr "PINy používateľov"
 
-#: models.py:324
+#: models.py:331
 msgid "PIN set"
 msgstr "PIN nastavený"
 
-#: models.py:325
+#: models.py:332
 msgid "PIN changed"
 msgstr "PIN zmenený"
 
-#: models.py:326
+#: models.py:333
 msgid "PIN reset by administrator"
 msgstr "PIN resetovaný administrátorom"
 
-#: models.py:327
+#: models.py:334
 msgid "PIN verified"
 msgstr "PIN overený"
 
-#: models.py:328
+#: models.py:335
 msgid "Wrong PIN"
 msgstr "Nesprávny PIN"
 
-#: models.py:329
+#: models.py:336
 msgid "Locked out after failed attempts"
 msgstr "Zablokovaný po chybných pokusoch"
 
-#: models.py:330
+#: models.py:337
 msgid "Attempt while locked out"
 msgstr "Pokus počas zablokovania"
 
-#: models.py:331
+#: models.py:338
 msgid "Lockout cleared by administrator"
 msgstr "Zablokovanie zrušil administrátor"
 
-#: models.py:332
+#: models.py:339
 msgid "PIN change forced"
 msgstr "Vynútená zmena PINu"
 
-#: models.py:333
+#: models.py:340
 msgid "2FA enabled"
 msgstr "2FA zapnuté"
 
-#: models.py:334
+#: models.py:341
 msgid "2FA disabled"
 msgstr "2FA vypnuté"
 
-#: models.py:335
+#: models.py:342
 msgid "2FA reset by administrator"
 msgstr "2FA resetované administrátorom"
 
-#: models.py:336
+#: models.py:343
 msgid "Wrong 2FA code"
 msgstr "Nesprávny 2FA kód"
 
-#: models.py:337
+#: models.py:344
 msgid "Backup code used"
 msgstr "Použitý záložný kód"
 
-#: models.py:338
+#: models.py:345
 msgid "New backup codes generated"
 msgstr "Vygenerované nové záložné kódy"
 
-#: models.py:339
+#: models.py:346
 msgid "Administrative confirmation (step-up)"
 msgstr "Potvrdenie totožnosti (admin)"
 
-#: models.py:340
+#: models.py:347
 msgid "Administrative confirmation failed"
 msgstr "Potvrdenie totožnosti zlyhalo"
 
-#: models.py:341
+#: models.py:348
 msgid "Recovery code e-mailed"
 msgstr "Kód na obnovu odoslaný e-mailom"
 
-#: models.py:342
+#: models.py:349
 msgid "PIN recovered (e-mail + 2FA)"
 msgstr "PIN obnovený (e-mail + 2FA)"
 
-#: models.py:343
+#: models.py:350
 msgid "PIN recovery failed"
 msgstr "Obnova PINu zlyhala"
 
-#: models.py:344
+#: models.py:351
 msgid "E-mail sent"
 msgstr "E-mail odoslaný"
 
-#: models.py:345
+#: models.py:352
 msgid "E-mail failed"
 msgstr "E-mail zlyhal"
 
-#: models.py:346
+#: models.py:353
 msgid "Delegate added"
 msgstr "Delegát pridaný"
 
-#: models.py:347
+#: models.py:354
 msgid "Delegate removed"
 msgstr "Delegát odobratý"
 
-#: models.py:348
+#: models.py:355
 msgid "Delegate changed"
 msgstr "Delegát zmenený"
 
-#: models.py:349
+#: models.py:356
 msgid "Backup codes viewed"
 msgstr "Záložné kódy zobrazené"
 
-#: models.py:350
+#: models.py:357
 msgid "Verification code e-mailed"
 msgstr "Overovací kód odoslaný e-mailom"
 
-#: models.py:351
+#: models.py:358
 msgid "Four-eyes request created"
 msgstr "Žiadosť na štyri oči vytvorená"
 
-#: models.py:352
+#: models.py:359
 msgid "Four-eyes request confirmed"
 msgstr "Žiadosť na štyri oči potvrdená"
 
-#: models.py:353
+#: models.py:360
 msgid "Four-eyes request rejected"
 msgstr "Žiadosť na štyri oči zamietnutá"
 
-#: models.py:354
+#: models.py:361
 msgid "Four-eyes request cancelled"
 msgstr "Žiadosť na štyri oči zrušená"
 
-#: models.py:355
+#: models.py:362
 msgid "Four-eyes request executed"
 msgstr "Žiadosť na štyri oči vykonaná"
 
-#: models.py:356
+#: models.py:363
 msgid "Break-glass: executed alone by the master"
 msgstr "Break-glass: master vykonal sám"
 
-#: models.py:357
+#: models.py:364
 msgid "Allowed e-mail domain added"
 msgstr "Povolená e-mailová doména pridaná"
 
-#: models.py:358
+#: models.py:365
 msgid "Allowed e-mail domain verified"
 msgstr "Povolená e-mailová doména overená"
 
-#: models.py:359
+#: models.py:366
 msgid "Domain verification failed"
 msgstr "Overenie domény zlyhalo"
 
-#: models.py:360
+#: models.py:367
 msgid "Allowed e-mail domain removed"
 msgstr "Povolená e-mailová doména odobratá"
 
-#: models.py:361
+#: models.py:368
 msgid "PIN access changed by administrator"
 msgstr "Povolenie PINu zmenil administrátor"
 
-#: models.py:362
+#: models.py:369
 msgid "PIN suspended by administrator"
 msgstr "PIN pozastavený administrátorom"
 
-#: models.py:363
+#: models.py:370
 msgid "PIN suspension lifted by administrator"
 msgstr "Pozastavenie PINu zrušil administrátor"
 
-#: models.py:364
+#: models.py:371
 msgid "Reset started by administrator"
 msgstr "Reset spustil administrátor"
 
-#: models.py:365
+#: models.py:372
 msgid "Reset confirmed by the user"
 msgstr "Reset potvrdil používateľ"
 
-#: models.py:366
+#: models.py:373
 msgid "Reset cancelled"
 msgstr "Reset zrušený"
 
-#: models.py:367
+#: models.py:374
 msgid "Attempt by a user not allowed to use a PIN"
 msgstr "Pokus používateľa bez povolenia PINu"
 
-#: models.py:368
+#: models.py:375
 msgid "Locked manually"
 msgstr "Uzamknuté ručne"
 
-#: models.py:369
+#: models.py:376
 msgid "Settings changed"
 msgstr "Nastavenia zmenené"
 
-#: models.py:370
+#: models.py:377
 msgid "Encryption key rotated"
 msgstr "Šifrovací kľúč vymenený"
 
-#: models.py:371
+#: models.py:378
+msgid "Role invitation sent"
+msgstr "Pozvánka do role odoslaná"
+
+#: models.py:379
+msgid "Role accepted"
+msgstr "Rola prijatá"
+
+#: models.py:380
+msgid "Role invitation declined"
+msgstr "Pozvánka do role odmietnutá"
+
+#: models.py:381
+msgid "Role invitation expired"
+msgstr "Pozvánka do role prepadla"
+
+#: models.py:382
+msgid "Resignation waiting for a replacement"
+msgstr "Vzdanie sa čaká na náhradu"
+
+#: models.py:383
+msgid "Role ended"
+msgstr "Rola ukončená"
+
+#: models.py:384
+msgid "Rights handed over temporarily"
+msgstr "Práva dočasne odovzdané"
+
+#: models.py:385
+msgid "Rights returned"
+msgstr "Práva vrátené"
+
+#: models.py:386
+msgid "Department created"
+msgstr "Oddelenie vytvorené"
+
+#: models.py:387
+msgid "Department dissolved"
+msgstr "Oddelenie zrušené"
+
+#: models.py:388
+msgid "Member added to a department"
+msgstr "Člen pridaný do oddelenia"
+
+#: models.py:389
+msgid "Member removed from a department"
+msgstr "Člen odobratý z oddelenia"
+
+#: models.py:390
+msgid "Move between departments requested"
+msgstr "Žiadosť o presun medzi oddeleniami"
+
+#: models.py:391
+msgid "Move between departments approved"
+msgstr "Presun medzi oddeleniami schválený"
+
+#: models.py:392
+msgid "Move between departments rejected"
+msgstr "Presun medzi oddeleniami zamietnutý"
+
+#: models.py:393
 msgid "Error"
 msgstr "Chyba"
 
-#: models.py:406
+#: models.py:428
 msgid "PIN event"
 msgstr "Udalosť PINu"
 
-#: models.py:407
+#: models.py:429
 msgid "PIN events"
 msgstr "Udalosti PINu"
 
-#: models.py:438
-msgid "PIN delegate"
-msgstr "Delegát PINu"
+#: models.py:452
+msgid "department"
+msgstr "oddelenie"
 
-#: models.py:439 templates/netbox_user_pin/delegates.html:3
-msgid "PIN delegates"
-msgstr "Delegáti PINu"
-
-#: models.py:454 templates/netbox_user_pin/delegates.html:34
-msgid "Add delegate"
-msgstr "Pridať delegáta"
-
-#: models.py:455
-msgid "Remove delegate"
-msgstr "Odobrať delegáta"
-
-#: models.py:456
-msgid "Change delegate settings permission"
-msgstr "Zmeniť oprávnenie delegáta na nastavenia"
-
-#: models.py:457
-msgid "Change PIN settings"
-msgstr "Zmeniť nastavenia PINu"
-
-#: models.py:458
-msgid "Change mail settings"
-msgstr "Zmeniť nastavenia mailu"
-
-#: models.py:459
-msgid "Allow / deny PIN use"
-msgstr "Povoliť / zakázať PIN"
-
-#: models.py:460
-msgid "Add allowed e-mail domain"
-msgstr "Pridať povolenú e-mailovú doménu"
-
-#: models.py:464 templates/netbox_user_pin/approval_list.html:7
-msgid "Waiting"
-msgstr "Čaká"
-
-#: models.py:465
-msgid "Approved and executed"
-msgstr "Schválené a vykonané"
-
-#: models.py:466
-msgid "Rejected"
-msgstr "Zamietnuté"
-
-#: models.py:467
-msgid "Cancelled"
-msgstr "Zrušené"
+#: models.py:453
+msgid "departments"
+msgstr "oddelenia"
 
 #: models.py:468
+msgid "department member"
+msgstr "člen oddelenia"
+
+#: models.py:469
+msgid "department members"
+msgstr "členovia oddelenia"
+
+#: models.py:477 roles.py:245
+msgid "CORE deputy"
+msgstr "zástupca CORE"
+
+#: models.py:478
+msgid "Department head"
+msgstr "Správca oddelenia"
+
+#: models.py:479
+msgid "Department delegate"
+msgstr "Delegát oddelenia"
+
+#: models.py:483
+msgid "Waiting for acceptance"
+msgstr "Čaká na prijatie"
+
+#: models.py:484 templates/netbox_user_pin/department.html:83
+#: templates/netbox_user_pin/my_pin.html:39
+#: templates/netbox_user_pin/user_list.html:54
+msgid "Active"
+msgstr "Aktívny"
+
+#: models.py:485
+msgid "Handed over temporarily"
+msgstr "Dočasne odovzdané"
+
+#: models.py:486
+msgid "Resigning (until replaced)"
+msgstr "Odstupuje (do náhrady)"
+
+#: models.py:487
+msgid "Ended"
+msgstr "Ukončená"
+
+#: models.py:488
+msgid "Declined"
+msgstr "Odmietnutá"
+
+#: models.py:489 models.py:563 models.py:616
 msgid "Expired"
 msgstr "Vypršané"
 
-#: models.py:469
+#: models.py:528
+msgid "PIN role"
+msgstr "rola PIN"
+
+#: models.py:529
+msgid "PIN roles"
+msgstr "roly PIN"
+
+#: models.py:559 models.py:612 templates/netbox_user_pin/approval_list.html:7
+msgid "Waiting"
+msgstr "Čaká"
+
+#: models.py:560
+msgid "Approved"
+msgstr "Schválené"
+
+#: models.py:561 models.py:614
+msgid "Rejected"
+msgstr "Zamietnuté"
+
+#: models.py:562 models.py:615
+msgid "Cancelled"
+msgstr "Zrušené"
+
+#: models.py:584
+msgid "department move"
+msgstr "presun medzi oddeleniami"
+
+#: models.py:585
+msgid "department moves"
+msgstr "presuny medzi oddeleniami"
+
+#: models.py:601
+msgid "Invite to a role"
+msgstr "Pozvať do role"
+
+#: models.py:602
+msgid "End or replace a role"
+msgstr "Ukončiť alebo vymeniť rolu"
+
+#: models.py:603
+msgid "Change delegate settings permission"
+msgstr "Zmeniť oprávnenie delegáta na nastavenia"
+
+#: models.py:604
+msgid "Dissolve a department"
+msgstr "Zrušiť oddelenie"
+
+#: models.py:605
+msgid "Change PIN settings"
+msgstr "Zmeniť nastavenia PINu"
+
+#: models.py:606
+msgid "Change mail settings"
+msgstr "Zmeniť nastavenia mailu"
+
+#: models.py:607
+msgid "Allow / deny PIN use"
+msgstr "Povoliť / zakázať PIN"
+
+#: models.py:608
+msgid "Add allowed e-mail domain"
+msgstr "Pridať povolenú e-mailovú doménu"
+
+#: models.py:613
+msgid "Approved and executed"
+msgstr "Schválené a vykonané"
+
+#: models.py:617
 msgid "Failed"
 msgstr "Zlyhalo"
 
-#: models.py:497
+#: models.py:649
 msgid "four-eyes request"
 msgstr "žiadosť na štyri oči"
 
-#: models.py:498
+#: models.py:650
 msgid "four-eyes requests"
 msgstr "žiadosti na štyri oči"
 
-#: models.py:545
+#: models.py:697
 msgid "allowed e-mail domain"
 msgstr "povolená e-mailová doména"
 
-#: models.py:546
+#: models.py:698
 msgid "allowed e-mail domains"
 msgstr "povolené e-mailové domény"
 
@@ -843,37 +1037,46 @@ msgstr "povolené e-mailové domény"
 msgid "My PIN"
 msgstr "Môj PIN"
 
-#: navigation.py:10 templates/netbox_user_pin/test.html:3
+#: navigation.py:10 templates/netbox_user_pin/my_roles.html:3
+msgid "My roles"
+msgstr "Moje roly"
+
+#: navigation.py:11 templates/netbox_user_pin/test.html:3
 msgid "Test unlock"
 msgstr "Test odomknutia"
 
-#: navigation.py:12
+#: navigation.py:13
 msgid "Administration"
 msgstr "Správa"
 
-#: navigation.py:14 templates/netbox_user_pin/user_list.html:6
+#: navigation.py:15 templates/netbox_user_pin/user_list.html:6
 msgid "Users"
 msgstr "Používatelia"
 
-#: navigation.py:18
+#: navigation.py:19 templates/netbox_user_pin/departments.html:3
+#: templates/netbox_user_pin/departments.html:31
+msgid "Departments"
+msgstr "Oddelenia"
+
+#: navigation.py:23
 msgid "Approvals (four eyes)"
 msgstr "Schvaľovanie (štyri oči)"
 
-#: navigation.py:22
+#: navigation.py:27
 msgid "Audit log"
 msgstr "Audit log"
 
-#: navigation.py:26
+#: navigation.py:31
 msgid "Settings"
 msgstr "Nastavenia"
 
-#: navigation.py:30 templates/netbox_user_pin/mail.html:3
+#: navigation.py:35 templates/netbox_user_pin/mail.html:3
 msgid "Mail"
 msgstr "Mail"
 
-#: navigation.py:35 templates/netbox_user_pin/delegates.html:9
-msgid "Delegates"
-msgstr "Delegáti"
+#: navigation.py:40
+msgid "CORE (deputies)"
+msgstr "CORE (zástupcovia)"
 
 #: policy.py:40
 msgid "The PIN must contain digits only."
@@ -886,174 +1089,780 @@ msgstr "PIN musí mať presne %(length)d číslic."
 
 #: policy.py:48
 msgid ""
-"This PIN is too easy to guess (repeated digits, sequences or a blocked PIN)."
-" Choose another one."
+"This PIN is too easy to guess (repeated digits, sequences or a blocked PIN). "
+"Choose another one."
 msgstr ""
 "Tento PIN je príliš ľahko uhádnuteľný (opakované číslice, postupnosť alebo "
 "zakázaný PIN). Zvoľte iný."
 
-#: service.py:222
+#: roles.py:248
+#, python-brace-format
+msgid "temporary head of the department {department}"
+msgstr "dočasný správca oddelenia {department}"
+
+#: roles.py:249
+#, python-brace-format
+msgid "head of the department {department}"
+msgstr "správca oddelenia {department}"
+
+#: roles.py:250
+#, python-brace-format
+msgid "delegate of the department {department}"
+msgstr "delegát oddelenia {department}"
+
+#: roles.py:286
+msgid "replacement accepted"
+msgstr "náhrada prijala rolu"
+
+#: roles.py:295
+#, python-brace-format
+msgid "{user} is not active."
+msgstr "{user} nie je aktívny."
+
+#: roles.py:297
+#, python-brace-format
+msgid "{user} is a superuser (master) and needs no role."
+msgstr "{user} je superpoužívateľ (master) a nepotrebuje rolu."
+
+#: roles.py:300
+#, python-brace-format
+msgid "{user} is denied to use a PIN."
+msgstr "{user} má zakázané používať PIN."
+
+#: roles.py:302
+#, python-brace-format
+msgid ""
+"{user} has no e-mail address in a verified allowed domain (or no mail server "
+"is configured), so the invitation cannot be delivered."
+msgstr ""
+"{user} nemá e-mail v overenej povolenej doméne (alebo nie je nastavený "
+"mailový server), pozvánku sa nedá doručiť."
+
+#: roles.py:309
+#, python-brace-format
+msgid "{user} already has a role (or an open invitation)."
+msgstr "{user} už má rolu (alebo otvorenú pozvánku)."
+
+#: roles.py:312
+#, python-brace-format
+msgid "{user} is a CORE deputy and cannot hold a department role."
+msgstr "{user} je zástupca CORE a nemôže mať rolu v oddelení."
+
+#: roles.py:315
+#, python-brace-format
+msgid "{user} belongs to the department {department}. Move the user first."
+msgstr "{user} patrí do oddelenia {department}. Najprv ho presuňte."
+
+#: roles.py:323
+#, python-brace-format
+msgid "{user} already has this role (or an open invitation)."
+msgstr "{user} už túto rolu má (alebo otvorenú pozvánku)."
+
+#: roles.py:330
+#, python-brace-format
+msgid ""
+"The department {department} already has a head. Replace the head instead."
+msgstr "Oddelenie {department} už má správcu. Použite výmenu správcu."
+
+#: roles.py:341
+#, python-brace-format
+msgid "{actor} has chosen you as {role} for the PIN administration in NetBox."
+msgstr "{actor} vás určil ako {role} pre správu PIN v NetBoxe."
+
+#: roles.py:344
+msgid "What it means:"
+msgstr "Čo to znamená:"
+
+#: roles.py:349 templates/netbox_user_pin/invitation.html:15
+#: templates/netbox_user_pin/my_roles.html:18
+msgid ""
+"Together with the administrator you see and manage the PINs of all users and "
+"departments."
+msgstr ""
+"Spolu s administrátorom vidíte a spravujete PINy všetkých používateľov a "
+"oddelení."
+
+#: roles.py:350 templates/netbox_user_pin/invitation.html:16
+#: templates/netbox_user_pin/my_roles.html:19
+msgid ""
+"You confirm sensitive changes together with a second person (four eyes): "
+"roles, settings, departments."
+msgstr ""
+"Citlivé zmeny potvrdzujete spolu s druhou osobou (štyri oči): roly, "
+"nastavenia, oddelenia."
+
+#: roles.py:352 templates/netbox_user_pin/invitation.html:17
+msgid "You create departments and appoint their heads."
+msgstr "Zakladáte oddelenia a určujete ich správcov."
+
+#: roles.py:356
+#, python-brace-format
+msgid ""
+"You manage the PINs of the people in the department {department}: allow / "
+"deny, resets (the user always confirms them), suspend."
+msgstr ""
+"Spravujete PINy ľudí v oddelení {department}: povolenie / zákaz, resety "
+"(používateľ ich vždy potvrdí), pozastavenie."
+
+#: roles.py:358 templates/netbox_user_pin/invitation.html:20
+msgid ""
+"You invite the delegates of the department and can hand over your rights "
+"temporarily."
+msgstr "Pozývate delegátov oddelenia a svoje práva môžete dočasne odovzdať."
+
+#: roles.py:359 templates/netbox_user_pin/invitation.html:21
+msgid "You approve moves of people into and out of the department."
+msgstr "Schvaľujete presuny ľudí do oddelenia a z neho."
+
+#: roles.py:363
+#, python-brace-format
+msgid ""
+"Together with the head or another delegate you confirm changes in the "
+"department {department} (four eyes)."
+msgstr ""
+"Spolu so správcom alebo iným delegátom potvrdzujete zmeny v oddelení "
+"{department} (štyri oči)."
+
+#: roles.py:365
+#, python-brace-format
+msgid ""
+"You handle PIN and 2FA resets of the people in the department {department} "
+"(the user always confirms them)."
+msgstr ""
+"Riešite resety PINu a 2FA ľudí v oddelení {department} (používateľ ich vždy "
+"potvrdí)."
+
+#: roles.py:367 templates/netbox_user_pin/invitation.html:25
+msgid ""
+"When the head is not available, two delegates together can hand the head's "
+"rights over temporarily."
+msgstr ""
+"Keď správca nie je dostupný, dvaja delegáti spolu môžu jeho práva dočasne "
+"odovzdať."
+
+#: roles.py:371 templates/netbox_user_pin/invitation.html:27
+msgid ""
+"The PIN protects sensitive parts of NetBox and of other plugins that require "
+"it (e.g. projects and documentation) – you share responsibility for this "
+"protection."
+msgstr ""
+"PIN chráni citlivé časti NetBoxu aj ďalších pluginov, ktoré ho vyžadujú "
+"(napr. projekty a dokumentácia) – za túto ochranu ste spoluzodpovedný."
+
+#: roles.py:374
+msgid "Your responsibility:"
+msgstr "Vaša zodpovednosť:"
+
+#: roles.py:375 templates/netbox_user_pin/invitation.html:31
+msgid ""
+"Never give your PIN, 2FA or backup codes to anybody; keep the phone with 2FA "
+"with you."
+msgstr ""
+"PIN, 2FA ani záložné kódy nikomu nedávajte; telefón s 2FA majte pri sebe."
+
+#: roles.py:376 templates/netbox_user_pin/invitation.html:32
+msgid ""
+"React to approval requests in time; confirm only what you understand and "
+"what is justified."
+msgstr ""
+"Na žiadosti o schválenie reagujte včas; potvrďte iba to, čomu rozumiete a čo "
+"je oprávnené."
+
+#: roles.py:377 templates/netbox_user_pin/invitation.html:33
+msgid "Every action you take is recorded in the audit log."
+msgstr "Každá vaša akcia sa zapisuje do auditného záznamu."
+
+#: roles.py:378 templates/netbox_user_pin/invitation.html:34
+msgid ""
+"You can resign under User PIN > My roles (it takes effect after a hand-over)."
+msgstr "Funkcie sa môžete vzdať v User PIN > Moje roly (platí po odovzdaní)."
+
+#: roles.py:382
+#, python-brace-format
+msgid ""
+"This is a temporary hand-over: the rights end on {until} and then return to "
+"{head}."
+msgstr ""
+"Ide o dočasné odovzdanie: práva končia {until} a potom sa vrátia "
+"používateľovi {head}."
+
+#: roles.py:384
+#, python-brace-format
+msgid "This is a temporary hand-over: the rights end on {until}."
+msgstr "Ide o dočasné odovzdanie: práva končia {until}."
+
+#: roles.py:386 roles.py:571
+#, python-brace-format
+msgid "Reason: {reason}"
+msgstr "Dôvod: {reason}"
+
+#: roles.py:389
+#, python-brace-format
+msgid "Accept: {link}"
+msgstr "Prijať: {link}"
+
+#: roles.py:390
+#, python-brace-format
+msgid "Code: {code} – valid until {time} ({hours} h)"
+msgstr "Kód: {code} – platí do {time} ({hours} h)"
+
+#: roles.py:393
+msgid ""
+"To accept, log in to NetBox, set a PIN and 2FA if you do not have them yet, "
+"enter the code and confirm with your PIN + 2FA."
+msgstr ""
+"Na prijatie sa prihláste do NetBoxu, ak ešte nemáte PIN a 2FA, nastavte si "
+"ich, zadajte kód a potvrďte PINom + 2FA."
+
+#: roles.py:395
+msgid ""
+"If you know nothing about this, do not accept and contact your administrator."
+msgstr "Ak o tom nič neviete, neprijímajte a kontaktujte administrátora."
+
+#: roles.py:409
+#, python-brace-format
+msgid "PIN administration role – {where}"
+msgstr "Rola v správe PIN – {where}"
+
+#: roles.py:412
+#, python-brace-format
+msgid "The invitation e-mail to {user} could not be sent – see the audit log."
+msgstr "Pozvánku pre {user} sa nepodarilo odoslať – pozrite audit log."
+
+#: roles.py:414
+#, python-brace-format
+msgid "Invitation: {role}"
+msgstr "Pozvánka: {role}"
+
+#: roles.py:423
+msgid "The invitation can be valid for 12, 24, 36 or 48 hours."
+msgstr "Pozvánka môže platiť 12, 24, 36 alebo 48 hodín."
+
+#: roles.py:432
+msgid "Select a department."
+msgstr "Vyberte oddelenie."
+
+#: roles.py:438
+msgid "The end of the hand-over must be in the future."
+msgstr "Koniec odovzdania musí byť v budúcnosti."
+
+#: roles.py:441
+msgid "There already is a temporary hand-over in this department."
+msgstr "V tomto oddelení už prebieha dočasné odovzdanie."
+
+#: roles.py:463
+msgid "This invitation cannot be sent again."
+msgstr "Túto pozvánku nemožno poslať znova."
+
+#: roles.py:476
+msgid "This invitation is not for you."
+msgstr "Táto pozvánka nie je pre vás."
+
+#: roles.py:478 roles.py:497
+msgid "The invitation is no longer valid. Ask for a new one."
+msgstr "Pozvánka už neplatí. Požiadajte o novú."
+
+#: roles.py:480
+msgid "Set your PIN and 2FA first."
+msgstr "Najprv si nastavte PIN a 2FA."
+
+#: roles.py:484 service.py:950
+msgid "The code is wrong or expired."
+msgstr "Kód je nesprávny alebo vypršal."
+
+#: roles.py:493
+msgid "You belong to another department. Ask to be moved first."
+msgstr "Patríte do iného oddelenia. Najprv požiadajte o presun."
+
+#: roles.py:514 roles.py:638
+#, python-brace-format
+msgid "replaced by {user}"
+msgstr "nahradený používateľom {user}"
+
+#: roles.py:523
+#, python-brace-format
+msgid "Role accepted: {role}"
+msgstr "Rola prijatá: {role}"
+
+#: roles.py:524
+#, python-brace-format
+msgid "{user} accepted the role {role}."
+msgstr "{user} prijal rolu {role}."
+
+#: roles.py:529
+#, python-brace-format
+msgid ""
+"{user} is now the head (superadmin) of the department {department}. The "
+"rights end on {until} and then return to {head}."
+msgstr ""
+"{user} je teraz správcom (superadminom) oddelenia {department}. Práva končia "
+"{until} a potom sa vrátia používateľovi {head}."
+
+#: roles.py:534
+#, python-brace-format
+msgid ""
+"The head {old} was removed. The rights were moved to {user}, who is now the "
+"head (superadmin) of the department {department}."
+msgstr ""
+"Správca {old} bol zrušený. Práva boli presunuté na {user}, ktorý je teraz "
+"správcom (superadminom) oddelenia {department}."
+
+#: roles.py:538
+#, python-brace-format
+msgid "{user} is now the head (superadmin) of the department {department}."
+msgstr "{user} je teraz správcom (superadminom) oddelenia {department}."
+
+#: roles.py:540
+#, python-brace-format
+msgid "New head of the department {department}"
+msgstr "Nový správca oddelenia {department}"
+
+#: roles.py:546
+msgid "This invitation is not open."
+msgstr "Táto pozvánka nie je otvorená."
+
+#: roles.py:550
+#, python-brace-format
+msgid "Invitation declined: {role}"
+msgstr "Pozvánka odmietnutá: {role}"
+
+#: roles.py:551
+#, python-brace-format
+msgid "{user} declined the role {role}."
+msgstr "{user} odmietol rolu {role}."
+
+#: roles.py:569
+#, python-brace-format
+msgid "Your role ended: {role}"
+msgstr "Vaša rola skončila: {role}"
+
+#: roles.py:570
+#, python-brace-format
+msgid "Your role {role} ended."
+msgstr "Vaša rola {role} skončila."
+
+#: roles.py:584
+#, python-brace-format
+msgid ""
+"The temporary hand-over to {user} ended. The head of the department "
+"{department} is again {head}."
+msgstr ""
+"Dočasné odovzdanie používateľovi {user} skončilo. Správcom oddelenia "
+"{department} je opäť {head}."
+
+#: roles.py:587
+#, python-brace-format
+msgid ""
+"The temporary hand-over to {user} ended. The department {department} is "
+"managed by CORE until a new head is appointed."
+msgstr ""
+"Dočasné odovzdanie používateľovi {user} skončilo. Oddelenie {department} "
+"spravuje CORE, kým nebude určený nový správca."
+
+#: roles.py:589
+#, python-brace-format
+msgid "Rights returned – department {department}"
+msgstr "Práva vrátené – oddelenie {department}"
+
+#: roles.py:596
+msgid "This role cannot be given up."
+msgstr "Tejto roly sa nemožno vzdať."
+
+#: roles.py:613
+#, python-brace-format
+msgid ""
+"{user} wants to give up the role {role}: {reason}\n"
+"The role stays in force until a replacement accepts – invite one."
+msgstr ""
+"{user} sa chce vzdať roly {role}: {reason}\n"
+"Rola platí, kým náhrada neprijme – pozvite ju."
+
+#: roles.py:616
+#, python-brace-format
+msgid "Resignation: {user}"
+msgstr "Vzdanie sa: {user}"
+
+#: roles.py:617
+#, python-brace-format
+msgid "Resignation: {role}"
+msgstr "Vzdanie sa: {role}"
+
+#: roles.py:620
+#, python-brace-format
+msgid "Resigned: {user}"
+msgstr "Vzdal sa: {user}"
+
+#: roles.py:621
+#, python-brace-format
+msgid "Resigned: {role}"
+msgstr "Vzdal sa: {role}"
+
+#: roles.py:622
+#, python-brace-format
+msgid "{user} gave up the role {role}: {reason}"
+msgstr "{user} sa vzdal roly {role}: {reason}"
+
+#: roles.py:633
+msgid "This role has already ended."
+msgstr "Táto rola už skončila."
+
+#: roles.py:643
+#, python-brace-format
+msgid ""
+"A replacement is needed – without it the minimum (head, {n} delegates, {c} "
+"CORE deputies) would not be met."
+msgstr ""
+"Je potrebná náhrada – bez nej by nebolo splnené minimum (správca, {n} "
+"delegáti, {c} zástupcovia CORE)."
+
+#: roles.py:645
+#, python-brace-format
+msgid "removed by {user}"
+msgstr "odobral {user}"
+
+#: roles.py:653
+#, python-brace-format
+msgid "{user} already is the head."
+msgstr "{user} už je správca."
+
+#: roles.py:655
+#, python-brace-format
+msgid "{user} is not a member of the department {department}."
+msgstr "{user} nie je členom oddelenia {department}."
+
+#: roles.py:660
+#, python-brace-format
+msgid "Delegates can hand the rights over for at most {days} days."
+msgstr "Delegáti môžu práva odovzdať najviac na {days} dní."
+
+#: roles.py:673
+msgid "Enter a name."
+msgstr "Zadajte názov."
+
+#: roles.py:675
+msgid "A department with this name already exists."
+msgstr "Oddelenie s týmto názvom už existuje."
+
+#: roles.py:685
+msgid "department dissolved"
+msgstr "oddelenie zrušené"
+
+#: roles.py:687
+#, python-brace-format
+msgid "Department {department} dissolved"
+msgstr "Oddelenie {department} zrušené"
+
+#: roles.py:688
+#, python-brace-format
+msgid ""
+"The department {department} was dissolved by {user}. Your own PIN is not "
+"affected."
+msgstr "Oddelenie {department} zrušil {user}. Váš vlastný PIN to neovplyvňuje."
+
+#: roles.py:702
+#, python-brace-format
+msgid "{user} is the head of {department}. Appoint a new head first."
+msgstr "{user} je správca oddelenia {department}. Najprv určte nového správcu."
+
+#: roles.py:705
+#, python-brace-format
+msgid ""
+"{user} is needed as a delegate of {department} (minimum {n}). Invite a "
+"replacement first."
+msgstr ""
+"{user} je potrebný ako delegát oddelenia {department} (minimum {n}). Najprv "
+"pozvite náhradu."
+
+#: roles.py:709
+msgid "left the department"
+msgstr "odišiel z oddelenia"
+
+#: roles.py:725
+#, python-brace-format
+msgid "Department change: {user}"
+msgstr "Zmena oddelenia: {user}"
+
+#: roles.py:727
+#, python-brace-format
+msgid "{user} moved from the department {old} to the department {new}."
+msgstr "{user} prešiel z oddelenia {old} do oddelenia {new}."
+
+#: roles.py:730
+#, python-brace-format
+msgid "{user} joined the department {new}."
+msgstr "{user} bol zaradený do oddelenia {new}."
+
+#: roles.py:732
+#, python-brace-format
+msgid "{user} left the department {old}."
+msgstr "{user} odišiel z oddelenia {old}."
+
+#: roles.py:756
+#, python-brace-format
+msgid "{user} is already in {department}."
+msgstr "{user} už je v oddelení {department}."
+
+#: roles.py:760
+msgid "Only a head of one of the departments can ask for this move."
+msgstr "O tento presun môže požiadať iba správca jedného z oddelení."
+
+#: roles.py:762
+#, python-brace-format
+msgid "A move of {user} is already waiting."
+msgstr "Presun používateľa {user} už čaká."
+
+#: roles.py:776
+#, python-brace-format
+msgid "Move {user} to {department}"
+msgstr "Presun {user} do {department}"
+
+#: roles.py:777
+#, python-brace-format
+msgid "Move between departments: {user}"
+msgstr "Presun medzi oddeleniami: {user}"
+
+#: roles.py:778
+#, python-brace-format
+msgid ""
+"{actor} asks to move {user} from {old} to {new}. Approve or reject it in "
+"NetBox > User PIN > Departments until {time}."
+msgstr ""
+"{actor} žiada o presun používateľa {user} z {old} do {new}. Schváľte alebo "
+"zamietnite ho v NetBox > User PIN > Oddelenia do {time}."
+
+#: roles.py:797
+msgid "You cannot decide this move."
+msgstr "O tomto presune nemôžete rozhodnúť."
+
+#: roles.py:807
+#, python-brace-format
+msgid "Move rejected: {user}"
+msgstr "Presun zamietnutý: {user}"
+
+#: roles.py:808
+#, python-brace-format
+msgid "{actor} rejected the move of {user} to {department}."
+msgstr "{actor} zamietol presun používateľa {user} do {department}."
+
+#: roles.py:821
+msgid "Four-eyes approval switched on"
+msgstr "Schvaľovanie štyrmi očami zapnuté"
+
+#: roles.py:822
+#, python-brace-format
+msgid ""
+"{user} switched four-eyes approval on. Sensitive changes now need two people."
+msgstr ""
+"{user} zapol schvaľovanie štyrmi očami. Citlivé zmeny teraz potvrdzujú dvaja."
+
+#: roles.py:826
+msgid "four-eyes approval switched off"
+msgstr "schvaľovanie štyrmi očami vypnuté"
+
+#: roles.py:827
+msgid "Four-eyes approval switched off"
+msgstr "Schvaľovanie štyrmi očami vypnuté"
+
+#: roles.py:828
+msgid ""
+"Four-eyes approval was switched off, the delegation ended. From now on you "
+"manage only your own PIN."
+msgstr ""
+"Schvaľovanie štyrmi očami bolo zrušené, delegovanie skončilo. Ďalej "
+"spravujete iba svoj PIN."
+
+#: roles.py:844
+#, python-brace-format
+msgid "Invitation expired: {role}"
+msgstr "Pozvánka prepadla: {role}"
+
+#: roles.py:845
+#, python-brace-format
+msgid ""
+"{user} did not accept the role {role} in time. You can send the invitation "
+"again."
+msgstr "{user} neprijal rolu {role} včas. Pozvánku môžete poslať znova."
+
+#: roles.py:848
+msgid "temporary hand-over ended"
+msgstr "dočasné odovzdanie skončilo"
+
+#: roles.py:854
+#, python-brace-format
+msgid "Hand-over ends tomorrow – {department}"
+msgstr "Odovzdanie končí zajtra – {department}"
+
+#: roles.py:856
+#, python-brace-format
+msgid ""
+"The temporary hand-over of the department {department} to {user} ends on "
+"{until}."
+msgstr ""
+"Dočasné odovzdanie oddelenia {department} používateľovi {user} končí {until}."
+
+#: service.py:226
 msgid "You are not permitted to use a PIN. Ask an administrator."
 msgstr "Nemáte povolený PIN. Obráťte sa na administrátora."
 
-#: service.py:256
+#: service.py:260
 msgid "A PIN is already set. Use the change form."
 msgstr "PIN už je nastavený. Použite formulár na zmenu."
 
-#: service.py:266
+#: service.py:270
 msgid "Your PIN was set"
 msgstr "Váš PIN bol nastavený"
 
-#: service.py:266
+#: service.py:270
 msgid "A PIN was set for your NetBox account."
 msgstr "Pre váš účet v NetBoxe bol nastavený PIN."
 
-#: service.py:284
+#: service.py:288
 msgid "Too many failed attempts. Try again later."
 msgstr "Príliš veľa chybných pokusov. Skúste to neskôr."
 
-#: service.py:285
+#: service.py:289
 msgid "The current PIN is not correct."
 msgstr "Súčasný PIN nie je správny."
 
-#: service.py:288
+#: service.py:292
 msgid "The new PIN must differ from the current one."
 msgstr "Nový PIN sa musí líšiť od súčasného."
 
-#: service.py:298
+#: service.py:302
 msgid "Your PIN was changed"
 msgstr "Váš PIN bol zmenený"
 
-#: service.py:298
+#: service.py:302
 msgid "The PIN of your NetBox account was changed."
 msgstr "PIN vášho účtu v NetBoxe bol zmenený."
 
-#: service.py:376
+#: service.py:380
 msgid "Your PIN is locked"
 msgstr "Váš PIN je zablokovaný"
 
-#: service.py:377
+#: service.py:381
 #, python-brace-format
 msgid ""
 "Too many wrong PIN / 2FA attempts. Your PIN is locked until {time}. If this "
 "was not you, contact your administrator."
 msgstr ""
-"Príliš veľa nesprávnych pokusov PIN / 2FA. Váš PIN je zablokovaný do {time}."
-" Ak ste to neboli vy, kontaktujte administrátora."
+"Príliš veľa nesprávnych pokusov PIN / 2FA. Váš PIN je zablokovaný do {time}. "
+"Ak ste to neboli vy, kontaktujte administrátora."
 
-#: service.py:504 service.py:1204
+#: service.py:508 service.py:1205
 msgid "Your PIN was reset"
 msgstr "Váš PIN bol resetovaný"
 
-#: service.py:505
+#: service.py:509
 #, python-brace-format
 msgid ""
-"Your PIN was reset by {actor}. Set a new PIN the next time you are asked for"
-" it."
+"Your PIN was reset by {actor}. Set a new PIN the next time you are asked for "
+"it."
 msgstr "Váš PIN resetoval {actor}. Pri najbližšej výzve si nastavte nový PIN."
 
-#: service.py:594
+#: service.py:595
 msgid "The setup expired. Start again."
 msgstr "Nastavenie vypršalo. Začnite znova."
 
-#: service.py:598
+#: service.py:599
 msgid "The code is not correct. Check the time on your phone and try again."
 msgstr "Kód nie je správny. Skontrolujte čas v mobile a skúste znova."
 
-#: service.py:611
+#: service.py:612
 msgid "Two-factor authentication enabled"
 msgstr "Dvojfaktorové overenie zapnuté"
 
-#: service.py:612
+#: service.py:613
 msgid "Two-factor authentication was enabled for your NetBox PIN."
 msgstr "Pre váš PIN v NetBoxe bolo zapnuté dvojfaktorové overenie."
 
-#: service.py:691
+#: service.py:692
 msgid "No verification e-mail can be sent to your account."
 msgstr "Na váš účet nie je možné poslať overovací e-mail."
 
-#: service.py:693
+#: service.py:694
 msgid "Verification code"
 msgstr "Overovací kód"
 
-#: service.py:694
+#: service.py:695
 #, python-brace-format
 msgid ""
 "Your verification code for showing your 2FA backup codes is: {code}\n"
 "\n"
-"It is valid for {minutes} minutes. If you did not request it, contact your administrator."
+"It is valid for {minutes} minutes. If you did not request it, contact your "
+"administrator."
 msgstr ""
 "Váš overovací kód na zobrazenie záložných 2FA kódov je: {code}\n"
 "\n"
 "Platí {minutes} minút. Ak ste oň nežiadali, kontaktujte administrátora."
 
-#: service.py:709 templates/netbox_user_pin/recover.html:16
+#: service.py:710 templates/netbox_user_pin/recover.html:16
 msgid "Two-factor authentication is not set up."
 msgstr "Dvojfaktorové overenie nie je nastavené."
 
-#: service.py:712 service.py:1218
+#: service.py:713 service.py:1219
 msgid "The PIN is not correct."
 msgstr "PIN nie je správny."
 
-#: service.py:715 service.py:1079 service.py:1189
+#: service.py:716 service.py:1080 service.py:1190
 msgid "The 2FA code is not correct."
 msgstr "2FA kód nie je správny."
 
-#: service.py:717 service.py:1075
+#: service.py:718 service.py:1076
 msgid "The e-mail code is wrong or expired."
 msgstr "Kód z e-mailu je nesprávny alebo vypršal."
 
-#: service.py:728
+#: service.py:729
 msgid "Your backup codes were viewed"
 msgstr "Vaše záložné kódy boli zobrazené"
 
-#: service.py:729
+#: service.py:730
 msgid ""
-"Your 2FA backup codes were displayed in NetBox. If this was not you, contact"
-" your administrator and generate new codes."
+"Your 2FA backup codes were displayed in NetBox. If this was not you, contact "
+"your administrator and generate new codes."
 msgstr ""
 "Vaše záložné 2FA kódy boli zobrazené v NetBoxe. Ak ste to neboli vy, "
 "kontaktujte administrátora a vygenerujte nové kódy."
 
-#: service.py:749
+#: service.py:750
 msgid "Two-factor authentication disabled"
 msgstr "Dvojfaktorové overenie vypnuté"
 
-#: service.py:750
+#: service.py:751
 msgid "Two-factor authentication was disabled for your NetBox PIN."
 msgstr "Pre váš PIN v NetBoxe bolo vypnuté dvojfaktorové overenie."
 
-#: service.py:757
+#: service.py:758
 msgid "Two-factor authentication reset"
 msgstr "Dvojfaktorové overenie resetované"
 
-#: service.py:758
+#: service.py:759
 #, python-brace-format
 msgid ""
 "Your two-factor authentication was reset by {actor}. Set it up again under "
 "My PIN."
 msgstr ""
-"Vaše dvojfaktorové overenie resetoval {actor}. Nastavte ho znova v časti Môj"
-" PIN."
+"Vaše dvojfaktorové overenie resetoval {actor}. Nastavte ho znova v časti Môj "
+"PIN."
 
-#: service.py:902
+#: service.py:903
 msgid "Enter a domain such as firma.sk."
 msgstr "Zadajte doménu, napr. firma.sk."
 
-#: service.py:921
+#: service.py:922
 #, python-brace-format
 msgid "The address must end with @{domain}."
 msgstr "Adresa musí končiť na @{domain}."
 
-#: service.py:924
+#: service.py:925
 msgid "No mail server is configured."
 msgstr "Nie je nastavený žiadny mail server."
 
-#: service.py:927
+#: service.py:928
 msgid "Domain verification"
 msgstr "Overenie domény"
 
-#: service.py:928
+#: service.py:929
 #, python-brace-format
 msgid ""
 "Verification code for the domain {domain}: {code}\n"
@@ -1064,56 +1873,55 @@ msgstr ""
 "\n"
 "Zadajte ho v NetBox > User PIN > Mail. Platí {minutes} minút."
 
-#: service.py:933
+#: service.py:934
 #, python-brace-format
 msgid "The e-mail could not be sent: {error}"
 msgstr "E-mail sa nepodarilo odoslať: {error}"
 
-#: service.py:949
-msgid "The code is wrong or expired."
-msgstr "Kód je nesprávny alebo vypršal."
-
-#: service.py:976
+#: service.py:977
 msgid "Your PIN expires soon"
 msgstr "Váš PIN čoskoro vyprší"
 
-#: service.py:977
+#: service.py:978
 #, python-brace-format
 msgid "Your NetBox PIN expires on {date}. Change it under User PIN > My PIN."
 msgstr "Váš PIN v NetBoxe vyprší {date}. Zmeňte ho v User PIN > Môj PIN."
 
-#: service.py:1011
+#: service.py:1012
 msgid "A code was sent a moment ago. Please wait a minute."
 msgstr "Kód bol odoslaný pred chvíľou. Počkajte prosím minútu."
 
-#: service.py:1024
+#: service.py:1025
 msgid "The e-mail could not be sent. Contact your administrator."
 msgstr "E-mail sa nepodarilo odoslať. Kontaktujte administrátora."
 
-#: service.py:1058
+#: service.py:1059
 msgid "Self-service recovery is not available for your account."
 msgstr "Samoobslužná obnova nie je pre váš účet dostupná."
 
-#: service.py:1060
+#: service.py:1061
 msgid "PIN recovery code"
 msgstr "Kód na obnovu PINu"
 
-#: service.py:1061
+#: service.py:1062
 #, python-brace-format
 msgid ""
 "Your PIN recovery code is: {code}\n"
 "\n"
-"It is valid for {minutes} minutes and must be entered together with a code from your authenticator app. If you did not request it, contact your administrator."
+"It is valid for {minutes} minutes and must be entered together with a code "
+"from your authenticator app. If you did not request it, contact your "
+"administrator."
 msgstr ""
 "Váš kód na obnovu PINu je: {code}\n"
 "\n"
-"Platí {minutes} minút a zadáva sa spolu s kódom z aplikácie Authenticator. Ak ste oň nežiadali, kontaktujte administrátora."
+"Platí {minutes} minút a zadáva sa spolu s kódom z aplikácie Authenticator. "
+"Ak ste oň nežiadali, kontaktujte administrátora."
 
-#: service.py:1093
+#: service.py:1094
 msgid "Your PIN was recovered"
 msgstr "Váš PIN bol obnovený"
 
-#: service.py:1094
+#: service.py:1095
 msgid ""
 "A new PIN was set using the e-mail code and 2FA. If this was not you, "
 "contact your administrator immediately."
@@ -1121,80 +1929,80 @@ msgstr ""
 "Nový PIN bol nastavený pomocou kódu z e-mailu a 2FA. Ak ste to neboli vy, "
 "okamžite kontaktujte administrátora."
 
-#: service.py:1122
+#: service.py:1123
 msgid "Your PIN was suspended"
 msgstr "Váš PIN bol pozastavený"
 
-#: service.py:1123
+#: service.py:1124
 #, python-brace-format
 msgid "Your NetBox PIN was suspended by {actor}. Contact your administrator."
 msgstr "Váš PIN v NetBoxe pozastavil {actor}. Kontaktujte administrátora."
 
-#: service.py:1130
+#: service.py:1131
 msgid "Your PIN is active again"
 msgstr "Váš PIN je opäť aktívny"
 
-#: service.py:1131
+#: service.py:1132
 #, python-brace-format
 msgid "The suspension of your NetBox PIN was lifted by {actor}."
 msgstr "Pozastavenie vášho PINu v NetBoxe zrušil {actor}."
 
-#: service.py:1145
+#: service.py:1146
 #, python-brace-format
 msgid "{user} has no 2FA, so the reset cannot be confirmed by the user."
 msgstr "{user} nemá 2FA, takže reset nemôže potvrdiť."
 
-#: service.py:1149
+#: service.py:1150
 #, python-brace-format
 msgid "{user} has no 2FA or no PIN."
 msgstr "{user} nemá 2FA alebo PIN."
 
-#: service.py:1160
+#: service.py:1161
 msgid "two-factor authentication"
 msgstr "dvojfaktorové overenie"
 
-#: service.py:1161
+#: service.py:1162
 msgid "your 2FA code"
 msgstr "vaším 2FA kódom"
 
-#: service.py:1161
+#: service.py:1162
 msgid "your PIN"
 msgstr "vaším PINom"
 
-#: service.py:1162
+#: service.py:1163
 #, python-brace-format
 msgid "Reset of your {what} started"
 msgstr "Spustený reset: {what}"
 
-#: service.py:1163
+#: service.py:1164
 #, python-brace-format
 msgid ""
-"{actor} started a reset of your {what}. Log in to NetBox, open User PIN > My"
-" PIN and confirm it with {how} until {time}. If you did not ask for it, "
+"{actor} started a reset of your {what}. Log in to NetBox, open User PIN > My "
+"PIN and confirm it with {how} until {time}. If you did not ask for it, "
 "contact your administrator."
 msgstr ""
 "{actor} spustil reset ({what}). Prihláste sa do NetBoxu, otvorte User PIN > "
 "Môj PIN a potvrďte ho {how} do {time}. Ak ste o to nežiadali, kontaktujte "
 "administrátora."
 
-#: service.py:1185
+#: service.py:1186
 msgid "There is no PIN reset waiting for you."
 msgstr "Nečaká na vás žiadny reset PINu."
 
-#: service.py:1204
+#: service.py:1205
 #, python-brace-format
 msgid "You set a new PIN (reset started by {by})."
 msgstr "Nastavili ste nový PIN (reset spustil {by})."
 
-#: service.py:1215
+#: service.py:1216
 msgid "There is no 2FA reset waiting for you."
 msgstr "Nečaká na vás žiadny reset 2FA."
 
-#: service.py:1226
+#: service.py:1227
 msgid "Your two-factor authentication was reset"
 msgstr "Vaše dvojfaktorové overenie bolo resetované"
 
-#: service.py:1227
+#: service.py:1228
 #, python-brace-format
 msgid "Set it up again under User PIN > My PIN (reset started by {by})."
 msgstr "Nastavte ho znova v User PIN > Môj PIN (reset spustil {by})."
@@ -1218,11 +2026,15 @@ msgid "Your decision"
 msgstr "Vaše rozhodnutie"
 
 #: templates/netbox_user_pin/approval.html:26
+#: templates/netbox_user_pin/department.html:114
+#: templates/netbox_user_pin/departments.html:20
 msgid "Reject"
 msgstr "Zamietnuť"
 
 #: templates/netbox_user_pin/approval.html:27
 #: templates/netbox_user_pin/approval_list.html:18
+#: templates/netbox_user_pin/delegates.html:45
+#: templates/netbox_user_pin/department.html:61
 #: templates/netbox_user_pin/inc/step_up_modal.html:20
 #: templates/netbox_user_pin/reset_confirm.html:17
 #: templates/netbox_user_pin/step_up.html:19
@@ -1248,8 +2060,8 @@ msgid ""
 "Execute alone without the second person. All administrators and delegates "
 "are informed by e-mail and it is marked in the audit log."
 msgstr ""
-"Vykonať sám bez druhej osoby. Všetci administrátori a delegáti dostanú "
-"e-mail a v audit logu sa to označí."
+"Vykonať sám bez druhej osoby. Všetci administrátori a delegáti dostanú e-"
+"mail a v audit logu sa to označí."
 
 #: templates/netbox_user_pin/approval.html:48
 msgid "Execute alone (break-glass)?"
@@ -1276,6 +2088,8 @@ msgstr "Zmena"
 
 #: templates/netbox_user_pin/approval_list.html:9
 #: templates/netbox_user_pin/approval_list.html:29
+#: templates/netbox_user_pin/department.html:104
+#: templates/netbox_user_pin/departments.html:10
 msgid "Requested by"
 msgstr "Žiadateľ"
 
@@ -1284,12 +2098,15 @@ msgid "Confirmed"
 msgstr "Potvrdili"
 
 #: templates/netbox_user_pin/approval_list.html:9
-#: templates/netbox_user_pin/my_pin.html:40
+#: templates/netbox_user_pin/department.html:104
+#: templates/netbox_user_pin/departments.html:10
+#: templates/netbox_user_pin/my_pin.html:45
 #: templates/netbox_user_pin/user_list.html:36
 msgid "Valid until"
 msgstr "Platí do"
 
 #: templates/netbox_user_pin/approval_list.html:18
+#: templates/netbox_user_pin/departments.html:42
 msgid "Open"
 msgstr "Otvoriť"
 
@@ -1298,6 +2115,9 @@ msgid "Nothing is waiting."
 msgstr "Nič nečaká."
 
 #: templates/netbox_user_pin/approval_list.html:27
+#: templates/netbox_user_pin/delegates.html:59
+#: templates/netbox_user_pin/department.html:129
+#: templates/netbox_user_pin/my_roles.html:51
 msgid "History"
 msgstr "História"
 
@@ -1306,6 +2126,8 @@ msgid "Confirmed by"
 msgstr "Potvrdili"
 
 #: templates/netbox_user_pin/approval_list.html:29
+#: templates/netbox_user_pin/delegates.html:17
+#: templates/netbox_user_pin/department.html:27
 #: templates/netbox_user_pin/inc/approval_status.html:23
 #: templates/netbox_user_pin/mail.html:39
 msgid "Status"
@@ -1357,84 +2179,515 @@ msgid "The new PIN must have <strong>%(n)s digits</strong>."
 msgstr "Nový PIN musí mať <strong>%(n)s číslic</strong>."
 
 #: templates/netbox_user_pin/change_pin.html:11
-#: templates/netbox_user_pin/my_pin.html:72
+#: templates/netbox_user_pin/my_pin.html:77
 msgid "Change PIN"
 msgstr "Zmeniť PIN"
 
-#: templates/netbox_user_pin/delegates.html:11
-msgid "Delegate"
-msgstr "Delegát"
+#: templates/netbox_user_pin/delegates.html:3
+msgid "CORE – deputies of the master"
+msgstr "CORE – zástupcovia mastera"
 
-#: templates/netbox_user_pin/delegates.html:11
-msgid "Added"
-msgstr "Pridaný"
+#: templates/netbox_user_pin/delegates.html:8
+#, python-format
+msgid ""
+"Active CORE deputies: <strong>%(n)s</strong> (four-eyes approval needs at "
+"least %(m)s)."
+msgstr ""
+"Aktívni zástupcovia CORE: <strong>%(n)s</strong> (schvaľovanie štyrmi očami "
+"potrebuje aspoň %(m)s)."
 
-#: templates/netbox_user_pin/delegates.html:16
-#: templates/netbox_user_pin/my_pin.html:29
-#: templates/netbox_user_pin/user_list.html:48
+#: templates/netbox_user_pin/delegates.html:9
+msgid "Four-eyes approval is on"
+msgstr "Schvaľovanie štyrmi očami je zapnuté"
+
+#: templates/netbox_user_pin/delegates.html:9
+msgid "Four-eyes approval is off"
+msgstr "Schvaľovanie štyrmi očami je vypnuté"
+
+#: templates/netbox_user_pin/delegates.html:14
+msgid "CORE deputies"
+msgstr "Zástupcovia CORE"
+
+#: templates/netbox_user_pin/delegates.html:17
+msgid "Deputy"
+msgstr "Zástupca"
+
+#: templates/netbox_user_pin/delegates.html:17
+#: templates/netbox_user_pin/department.html:27
+msgid "Invited"
+msgstr "Pozvaný"
+
+#: templates/netbox_user_pin/delegates.html:23
+#: templates/netbox_user_pin/my_pin.html:34
+#: templates/netbox_user_pin/user_list.html:50
 msgid "Yes"
 msgstr "Áno"
 
-#: templates/netbox_user_pin/delegates.html:16
+#: templates/netbox_user_pin/delegates.html:23
 msgid "No (read only)"
 msgstr "Nie (iba čítanie)"
 
-#: templates/netbox_user_pin/delegates.html:20
+#: templates/netbox_user_pin/delegates.html:29
+#: templates/netbox_user_pin/department.html:41
+#: templates/netbox_user_pin/recover.html:28
+#: templates/netbox_user_pin/show_backup_codes.html:30
+msgid "Send again"
+msgstr "Poslať znova"
+
+#: templates/netbox_user_pin/delegates.html:29
+#: templates/netbox_user_pin/delegates.html:77
+#: templates/netbox_user_pin/department.html:41
+#: templates/netbox_user_pin/department.html:148
+#: templates/netbox_user_pin/department.html:164
+msgid "Send invitation"
+msgstr "Poslať pozvánku"
+
+#: templates/netbox_user_pin/delegates.html:30
+#: templates/netbox_user_pin/department.html:42
+msgid "Cancel this invitation?"
+msgstr "Zrušiť túto pozvánku?"
+
+#: templates/netbox_user_pin/delegates.html:31
+#: templates/netbox_user_pin/department.html:43
+#: templates/netbox_user_pin/department.html:117
+#: templates/netbox_user_pin/inc/pin_form.html:14
+#: templates/netbox_user_pin/inc/step_up_modal.html:19
+#: templates/netbox_user_pin/show_backup_codes.html:41
+msgid "Cancel"
+msgstr "Zrušiť"
+
+#: templates/netbox_user_pin/delegates.html:34
 msgid "Make read-only"
 msgstr "Iba na čítanie"
 
-#: templates/netbox_user_pin/delegates.html:20
+#: templates/netbox_user_pin/delegates.html:34
 msgid "Allow settings"
 msgstr "Povoliť nastavenia"
 
-#: templates/netbox_user_pin/delegates.html:21
-msgid "Remove this delegate?"
-msgstr "Odobrať tohto delegáta?"
+#: templates/netbox_user_pin/delegates.html:35
+#: templates/netbox_user_pin/department.html:50
+msgid "Remove / replace"
+msgstr "Odobrať / vymeniť"
 
-#: templates/netbox_user_pin/delegates.html:26
-msgid "No delegates. Only the master (superusers) manages PINs."
-msgstr "Žiadni delegáti. PINy spravuje iba master (superpoužívatelia)."
-
-#: templates/netbox_user_pin/delegates.html:42
-#: templates/netbox_user_pin/mail.html:87
-msgid "Add"
-msgstr "Pridať"
-
-#: templates/netbox_user_pin/delegates.html:47
-msgid "What delegates can do"
-msgstr "Čo môžu delegáti"
-
-#: templates/netbox_user_pin/delegates.html:50
-msgid "See all users' PIN status, the audit log and the settings."
-msgstr "Vidieť stav PINov všetkých používateľov, audit log a nastavenia."
+#: templates/netbox_user_pin/delegates.html:46
+#, python-format
+msgid ""
+"With four-eyes approval on, at least %(min_core)s CORE deputies must stay: "
+"then choose a replacement – the current deputy stays until the replacement "
+"accepts."
+msgstr ""
+"Pri zapnutom schvaľovaní štyrmi očami musia ostať aspoň %(min_core)s "
+"zástupcovia CORE: vtedy vyberte náhradu – súčasný zástupca ostáva, kým "
+"náhrada neprijme."
 
 #: templates/netbox_user_pin/delegates.html:51
-msgid ""
-"Allow / deny PIN use, suspend, start PIN or 2FA resets, force a PIN change, "
-"clear lockouts – after confirming with their own PIN + 2FA."
-msgstr ""
-"Povoliť / zakázať PIN, pozastaviť, spustiť reset PINu alebo 2FA, vynútiť "
-"zmenu PINu, zrušiť zablokovanie – po potvrdení vlastným PINom + 2FA."
+msgid "No CORE deputies. Only the master (superusers) manages PINs."
+msgstr "Žiadni zástupcovia CORE. PINy spravuje iba master (superpoužívatelia)."
 
-#: templates/netbox_user_pin/delegates.html:52
-msgid "Edit settings only when \"Can edit settings\" is on."
-msgstr "Meniť nastavenia iba ak je zapnuté „Môže meniť nastavenia“."
+#: templates/netbox_user_pin/delegates.html:68
+msgid "Invite a CORE deputy"
+msgstr "Pozvať zástupcu CORE"
 
-#: templates/netbox_user_pin/delegates.html:53
-msgid ""
-"They cannot manage the master, other delegates or themselves, and cannot "
-"manage delegates."
-msgstr ""
-"Nemôžu zasahovať do mastera, iných delegátov ani do seba a nemôžu spravovať "
-"delegátov."
+#: templates/netbox_user_pin/delegates.html:82
+msgid "How it works"
+msgstr "Ako to funguje"
 
-#: templates/netbox_user_pin/delegates.html:55
+#: templates/netbox_user_pin/delegates.html:85
 msgid ""
-"Implemented as NetBox object permissions \"User PIN: delegates …\" (kept in "
-"sync automatically)."
+"The invited user gets an e-mail with a link and a code. The role starts only "
+"after they accept it with the code, their PIN and 2FA (they set them up "
+"first if needed)."
 msgstr ""
-"Realizované ako oprávnenia NetBoxu „User PIN: delegates …“ (synchronizované "
-"automaticky)."
+"Pozvaný dostane e-mail s odkazom a kódom. Rola začne platiť, až keď ju "
+"prijme kódom, svojím PINom a 2FA (ak ich nemá, najprv si ich nastaví)."
+
+#: templates/netbox_user_pin/delegates.html:86
+msgid ""
+"CORE deputies see all users and departments after confirming with their PIN "
+"+ 2FA, create departments and appoint their heads."
+msgstr ""
+"Zástupcovia CORE vidia všetkých používateľov a oddelenia po potvrdení PINom "
+"+ 2FA, zakladajú oddelenia a určujú ich správcov."
+
+#: templates/netbox_user_pin/delegates.html:87
+msgid "They cannot manage the master or other CORE deputies."
+msgstr "Nemôžu zasahovať do mastera ani iných zástupcov CORE."
+
+#: templates/netbox_user_pin/delegates.html:88
+msgid ""
+"A deputy can resign under My roles; below the minimum the role stays until a "
+"replacement accepts."
+msgstr ""
+"Zástupca sa môže vzdať v Moje roly; pod minimom rola platí, kým náhrada "
+"neprijme."
+
+#: templates/netbox_user_pin/delegates.html:89
+msgid ""
+"Switching four-eyes approval off ends the CORE delegation (only possible "
+"when no department exists)."
+msgstr ""
+"Vypnutie schvaľovania štyrmi očami ukončí delegovanie CORE (iba ak "
+"neexistuje žiadne oddelenie)."
+
+#: templates/netbox_user_pin/department.html:3
+#: templates/netbox_user_pin/departments.html:33
+msgid "Department"
+msgstr "Oddelenie"
+
+#: templates/netbox_user_pin/department.html:9
+#: templates/netbox_user_pin/departments.html:41
+msgid "you are the head"
+msgstr "ste správca"
+
+#: templates/netbox_user_pin/department.html:9
+#: templates/netbox_user_pin/departments.html:41
+msgid "you are a delegate"
+msgstr "ste delegát"
+
+#: templates/netbox_user_pin/department.html:12
+msgid "Manage PINs of the members"
+msgstr "Spravovať PINy členov"
+
+#: templates/netbox_user_pin/department.html:14
+msgid ""
+"Dissolve this department? All its roles end and the members are informed."
+msgstr ""
+"Zrušiť toto oddelenie? Všetky jeho roly skončia a členovia dostanú "
+"informáciu."
+
+#: templates/netbox_user_pin/department.html:15
+msgid "Dissolve"
+msgstr "Zrušiť"
+
+#: templates/netbox_user_pin/department.html:23
+msgid "Head and delegates"
+msgstr "Správca a delegáti"
+
+#: templates/netbox_user_pin/department.html:24
+msgid ""
+"The department has no active head – CORE manages it until a head accepts the "
+"invitation."
+msgstr ""
+"Oddelenie nemá aktívneho správcu – spravuje ho CORE, kým správca neprijme "
+"pozvánku."
+
+#: templates/netbox_user_pin/department.html:27
+msgid "Person"
+msgstr "Osoba"
+
+#: templates/netbox_user_pin/department.html:27
+#: templates/netbox_user_pin/department.html:78
+msgid "Role"
+msgstr "Rola"
+
+#: templates/netbox_user_pin/department.html:32
+msgid "temporary head"
+msgstr "dočasný správca"
+
+#: templates/netbox_user_pin/department.html:32
+#: templates/netbox_user_pin/department.html:86
+#: templates/netbox_user_pin/user_list.html:44
+msgid "head"
+msgstr "správca"
+
+#: templates/netbox_user_pin/department.html:32
+#: templates/netbox_user_pin/department.html:86
+#: templates/netbox_user_pin/user_list.html:44
+msgid "delegate"
+msgstr "delegát"
+
+#: templates/netbox_user_pin/department.html:33
+#, python-format
+msgid "instead of %(user)s"
+msgstr "namiesto %(user)s"
+
+#: templates/netbox_user_pin/department.html:47
+msgid "End the hand-over now? The rights return at once."
+msgstr "Ukončiť odovzdanie teraz? Práva sa hneď vrátia."
+
+#: templates/netbox_user_pin/department.html:48
+msgid "End hand-over"
+msgstr "Ukončiť odovzdanie"
+
+#: templates/netbox_user_pin/department.html:62
+msgid ""
+"A head is removed only together with a new head: the old head ends now, CORE "
+"manages the department until the new head accepts."
+msgstr ""
+"Správcu možno odobrať iba spolu s určením nového: starý končí hneď, "
+"oddelenie spravuje CORE, kým nový neprijme."
+
+#: templates/netbox_user_pin/department.html:62
+#, python-format
+msgid ""
+"At least %(min_delegates)s delegates must stay: then choose a replacement – "
+"the current delegate stays until the replacement accepts."
+msgstr ""
+"Musia ostať aspoň %(min_delegates)s delegáti: vtedy vyberte náhradu – "
+"súčasný delegát ostáva, kým náhrada neprijme."
+
+#: templates/netbox_user_pin/department.html:67
+msgid "No head and no delegates yet."
+msgstr "Zatiaľ žiadny správca ani delegáti."
+
+#: templates/netbox_user_pin/department.html:75
+#: templates/netbox_user_pin/departments.html:33
+msgid "Members"
+msgstr "Členovia"
+
+#: templates/netbox_user_pin/department.html:78
+#: templates/netbox_user_pin/my_pin.html:95
+#: templates/netbox_user_pin/user_list.html:36
+msgid "E-mail"
+msgstr "E-mail"
+
+#: templates/netbox_user_pin/department.html:82
+#: templates/netbox_user_pin/user_list.html:42
+msgid "you"
+msgstr "vy"
+
+#: templates/netbox_user_pin/department.html:83
+#: templates/netbox_user_pin/my_pin.html:39
+#: templates/netbox_user_pin/user_list.html:54
+msgid "Not set"
+msgstr "Nenastavený"
+
+#: templates/netbox_user_pin/department.html:84
+#: templates/netbox_user_pin/my_pin.html:91
+#: templates/netbox_user_pin/user_list.html:59
+msgid "On"
+msgstr "Zapnuté"
+
+#: templates/netbox_user_pin/department.html:84
+#: templates/netbox_user_pin/my_pin.html:91
+#: templates/netbox_user_pin/user_list.html:59
+msgid "Off"
+msgstr "Vypnuté"
+
+#: templates/netbox_user_pin/department.html:85
+#: templates/netbox_user_pin/my_pin.html:98
+#: templates/netbox_user_pin/user_list.html:61
+msgid "no e-mail"
+msgstr "bez e-mailu"
+
+#: templates/netbox_user_pin/department.html:85
+#: templates/netbox_user_pin/user_list.html:62
+msgid "domain"
+msgstr "doména"
+
+#: templates/netbox_user_pin/department.html:88
+msgid "Remove this user from the department?"
+msgstr "Odobrať tohto používateľa z oddelenia?"
+
+#: templates/netbox_user_pin/department.html:93
+msgid "No members yet."
+msgstr "Zatiaľ žiadni členovia."
+
+#: templates/netbox_user_pin/department.html:102
+msgid "Moves waiting"
+msgstr "Čakajúce presuny"
+
+#: templates/netbox_user_pin/department.html:104
+#: templates/netbox_user_pin/departments.html:10
+msgid "From"
+msgstr "Z"
+
+#: templates/netbox_user_pin/department.html:104
+#: templates/netbox_user_pin/departments.html:10
+msgid "To"
+msgstr "Do"
+
+#: templates/netbox_user_pin/department.html:112
+#: templates/netbox_user_pin/departments.html:18
+msgid "Approve"
+msgstr "Schváliť"
+
+#: templates/netbox_user_pin/department.html:118
+msgid "waiting for the other head"
+msgstr "čaká na druhého správcu"
+
+#: templates/netbox_user_pin/department.html:131
+msgid "temporary"
+msgstr "dočasne"
+
+#: templates/netbox_user_pin/department.html:140
+msgid "Replace the head"
+msgstr "Vymeniť správcu"
+
+#: templates/netbox_user_pin/department.html:140
+msgid "Appoint the head"
+msgstr "Určiť správcu"
+
+#: templates/netbox_user_pin/department.html:147
+msgid ""
+"The current head ends now; the whole department is informed when the new "
+"head accepts."
+msgstr ""
+"Súčasný správca končí hneď; celé oddelenie dostane informáciu, keď nový "
+"správca prijme."
+
+#: templates/netbox_user_pin/department.html:156
+msgid "Invite a delegate"
+msgstr "Pozvať delegáta"
+
+#: templates/netbox_user_pin/department.html:158
+msgid ""
+"As a delegate you need a second delegate (or the head / CORE) who confirms "
+"the invitation."
+msgstr ""
+"Ako delegát potrebujete druhého delegáta (alebo správcu / CORE), ktorý "
+"pozvánku potvrdí."
+
+#: templates/netbox_user_pin/department.html:171
+msgid "Temporary hand-over of the head"
+msgstr "Dočasné odovzdanie správcu"
+
+#: templates/netbox_user_pin/department.html:173
+#, python-format
+msgid ""
+"The head is not available? Two delegates together can hand the head's rights "
+"over for at most %(max_days)s days – a second delegate confirms."
+msgstr ""
+"Správca nie je dostupný? Dvaja delegáti spolu môžu jeho práva odovzdať "
+"najviac na %(max_days)s dní – druhý delegát potvrdí."
+
+#: templates/netbox_user_pin/department.html:173
+msgid ""
+"E.g. holiday or illness. The whole department is informed; after the date "
+"the rights return automatically."
+msgstr ""
+"Napr. dovolenka alebo choroba. Celé oddelenie dostane informáciu; po dátume "
+"sa práva vrátia automaticky."
+
+#: templates/netbox_user_pin/department.html:180
+msgid "Hand over"
+msgstr "Odovzdať"
+
+#: templates/netbox_user_pin/department.html:189
+msgid "Move to another department"
+msgstr "Presun do iného oddelenia"
+
+#: templates/netbox_user_pin/department.html:191
+#: templates/netbox_user_pin/department.html:203
+msgid "CORE moves directly."
+msgstr "CORE presúva priamo."
+
+#: templates/netbox_user_pin/department.html:191
+msgid "The head of the other department approves the move."
+msgstr "Presun schváli správca druhého oddelenia."
+
+#: templates/netbox_user_pin/department.html:195
+msgid "Move"
+msgstr "Presunúť"
+
+#: templates/netbox_user_pin/department.html:195
+#: templates/netbox_user_pin/department.html:207
+msgid "Ask for the move"
+msgstr "Požiadať o presun"
+
+#: templates/netbox_user_pin/department.html:201
+msgid "Get somebody into this department"
+msgstr "Získať niekoho do tohto oddelenia"
+
+#: templates/netbox_user_pin/department.html:203
+msgid ""
+"The head of the user's current department approves (CORE for users without a "
+"department)."
+msgstr ""
+"Schváli správca súčasného oddelenia používateľa (CORE pri používateľoch bez "
+"oddelenia)."
+
+#: templates/netbox_user_pin/department.html:207
+msgid "Move here"
+msgstr "Presunúť sem"
+
+#: templates/netbox_user_pin/departments.html:8
+msgid "Moves waiting for your decision"
+msgstr "Presuny čakajúce na vaše rozhodnutie"
+
+#: templates/netbox_user_pin/departments.html:33
+msgid "Head"
+msgstr "Správca"
+
+#: templates/netbox_user_pin/departments.html:33
+msgid "Delegates"
+msgstr "Delegáti"
+
+#: templates/netbox_user_pin/departments.html:38
+#: templates/netbox_user_pin/inc/role_status.html:1
+#: templates/netbox_user_pin/user_list.html:70
+msgid "until"
+msgstr "do"
+
+#: templates/netbox_user_pin/departments.html:38
+msgid "no head – managed by CORE"
+msgstr "bez správcu – spravuje CORE"
+
+#: templates/netbox_user_pin/departments.html:39
+msgid "Minimum 2 delegates"
+msgstr "Minimum 2 delegáti"
+
+#: templates/netbox_user_pin/departments.html:45
+msgid "No departments."
+msgstr "Žiadne oddelenia."
+
+#: templates/netbox_user_pin/departments.html:50
+#, python-format
+msgid ""
+"%(n)s active users are not in any department (only CORE manages their PINs)."
+msgstr ""
+"Aktívni používatelia bez oddelenia: %(n)s (ich PINy spravuje iba CORE)."
+
+#: templates/netbox_user_pin/departments.html:55
+msgid "New department"
+msgstr "Nové oddelenie"
+
+#: templates/netbox_user_pin/departments.html:60
+msgid "Create"
+msgstr "Vytvoriť"
+
+#: templates/netbox_user_pin/departments.html:65
+msgid "How departments work"
+msgstr "Ako fungujú oddelenia"
+
+#: templates/netbox_user_pin/departments.html:68
+msgid ""
+"CORE creates a department, adds its members and appoints its head (by "
+"invitation)."
+msgstr "CORE vytvorí oddelenie, pridá členov a určí správcu (pozvánkou)."
+
+#: templates/netbox_user_pin/departments.html:69
+msgid ""
+"The head manages the PINs of the members, invites the delegates (at least 2) "
+"and can hand the rights over temporarily until a date – the whole department "
+"is informed by e-mail and the rights return automatically."
+msgstr ""
+"Správca spravuje PINy členov, pozýva delegátov (aspoň 2) a môže práva "
+"dočasne odovzdať do dátumu – celé oddelenie dostane e-mail a práva sa vrátia "
+"automaticky."
+
+#: templates/netbox_user_pin/departments.html:70
+msgid ""
+"When the head is not available, two delegates together can hand the head's "
+"rights over to another delegate (at most 30 days) or invite another delegate."
+msgstr ""
+"Keď správca nie je dostupný, dvaja delegáti spolu môžu jeho práva odovzdať "
+"inému delegátovi (najviac na 30 dní) alebo pozvať ďalšieho delegáta."
+
+#: templates/netbox_user_pin/departments.html:71
+msgid ""
+"Heads ask each other to move people between departments; the head of the "
+"other department approves."
+msgstr ""
+"Správcovia sa navzájom žiadajú o presun ľudí medzi oddeleniami; schvaľuje "
+"správca druhého oddelenia."
+
+#: templates/netbox_user_pin/departments.html:72
+msgid ""
+"Heads and delegates see only their department, after confirming with their "
+"PIN + 2FA."
+msgstr ""
+"Správcovia a delegáti vidia iba svoje oddelenie, po potvrdení PINom + 2FA."
 
 #: templates/netbox_user_pin/event_list.html:3
 msgid "PIN audit log"
@@ -1453,12 +2706,12 @@ msgid "Filter"
 msgstr "Filtrovať"
 
 #: templates/netbox_user_pin/event_list.html:17
-#: templates/netbox_user_pin/my_pin.html:125
+#: templates/netbox_user_pin/my_pin.html:130
 msgid "Time"
 msgstr "Čas"
 
 #: templates/netbox_user_pin/event_list.html:17
-#: templates/netbox_user_pin/my_pin.html:125
+#: templates/netbox_user_pin/my_pin.html:130
 msgid "Event"
 msgstr "Udalosť"
 
@@ -1467,7 +2720,7 @@ msgid "By"
 msgstr "Vykonal"
 
 #: templates/netbox_user_pin/event_list.html:17
-#: templates/netbox_user_pin/my_pin.html:125
+#: templates/netbox_user_pin/my_pin.html:130
 msgid "Scope"
 msgstr "Oblasť"
 
@@ -1516,17 +2769,40 @@ msgstr "do %(until)s · obnovuje sa automaticky"
 msgid "approved and executed"
 msgstr "schválené a vykonané"
 
-#: templates/netbox_user_pin/inc/pin_form.html:14
-#: templates/netbox_user_pin/inc/step_up_modal.html:19
-#: templates/netbox_user_pin/show_backup_codes.html:41
-msgid "Cancel"
-msgstr "Zrušiť"
-
 #: templates/netbox_user_pin/inc/pin_form.html:15
 #: templates/netbox_user_pin/mail.html:34
 #: templates/netbox_user_pin/settings.html:55
 msgid "Save"
 msgstr "Uložiť"
+
+#: templates/netbox_user_pin/inc/role_person.html:1
+msgid "no PIN"
+msgstr "bez PINu"
+
+#: templates/netbox_user_pin/inc/role_person.html:1
+msgid "no 2FA"
+msgstr "bez 2FA"
+
+#: templates/netbox_user_pin/inc/role_person.html:1
+msgid "e-mail"
+msgstr "e-mail"
+
+#: templates/netbox_user_pin/inc/role_status.html:1
+msgid "Temporary hand-over"
+msgstr "Dočasné odovzdanie"
+
+#: templates/netbox_user_pin/inc/role_status.html:1
+#, python-format
+msgid "code valid until %(time)s"
+msgstr "kód platí do %(time)s"
+
+#: templates/netbox_user_pin/inc/role_status.html:1
+msgid "code expired – send again"
+msgstr "kód vypršal – pošlite znova"
+
+#: templates/netbox_user_pin/inc/role_status.html:1
+msgid "invitation not sent yet"
+msgstr "pozvánka ešte nebola odoslaná"
 
 #: templates/netbox_user_pin/inc/step_up_bar.html:3
 msgid "Administrative actions unlocked"
@@ -1557,6 +2833,102 @@ msgstr "Potvrdiť totožnosť"
 #: templates/netbox_user_pin/step_up.html:3
 msgid "Confirm your identity"
 msgstr "Potvrďte svoju totožnosť"
+
+#: templates/netbox_user_pin/invitation.html:3
+msgid "Invitation"
+msgstr "Pozvánka"
+
+#: templates/netbox_user_pin/invitation.html:9
+#, python-format
+msgid ""
+"<strong>%(by)s</strong> has chosen you for this role in the PIN "
+"administration."
+msgstr "<strong>%(by)s</strong> vás určil pre túto rolu v správe PIN."
+
+#: templates/netbox_user_pin/invitation.html:10
+#, python-format
+msgid ""
+"Temporary hand-over – the rights end on %(until)s and then return "
+"automatically."
+msgstr ""
+"Dočasné odovzdanie – práva končia %(until)s a potom sa automaticky vrátia."
+
+#: templates/netbox_user_pin/invitation.html:12
+msgid "What it means"
+msgstr "Čo to znamená"
+
+#: templates/netbox_user_pin/invitation.html:19
+#, python-format
+msgid ""
+"You manage the PINs of the people in the department %(d)s: allow / deny, "
+"resets (the user always confirms them), suspend."
+msgstr ""
+"Spravujete PINy ľudí v oddelení %(d)s: povolenie / zákaz, resety (používateľ "
+"ich vždy potvrdí), pozastavenie."
+
+#: templates/netbox_user_pin/invitation.html:23
+#, python-format
+msgid ""
+"Together with the head or another delegate you confirm changes in the "
+"department %(d)s (four eyes)."
+msgstr ""
+"Spolu so správcom alebo iným delegátom potvrdzujete zmeny v oddelení %(d)s "
+"(štyri oči)."
+
+#: templates/netbox_user_pin/invitation.html:24
+#, python-format
+msgid ""
+"You handle PIN and 2FA resets of the people in the department %(d)s (the "
+"user always confirms them)."
+msgstr ""
+"Riešite resety PINu a 2FA ľudí v oddelení %(d)s (používateľ ich vždy "
+"potvrdí)."
+
+#: templates/netbox_user_pin/invitation.html:29
+msgid "Your responsibility"
+msgstr "Vaša zodpovednosť"
+
+#: templates/netbox_user_pin/invitation.html:39
+msgid "The code is no longer valid. Ask for a new invitation."
+msgstr "Kód už neplatí. Požiadajte o novú pozvánku."
+
+#: templates/netbox_user_pin/invitation.html:39
+#, python-format
+msgid "This invitation is closed (%(status)s)."
+msgstr "Táto pozvánka je uzavretá (%(status)s)."
+
+#: templates/netbox_user_pin/invitation.html:42
+msgid "First set up"
+msgstr "Najprv nastavte"
+
+#: templates/netbox_user_pin/invitation.html:45
+#: templates/netbox_user_pin/set_pin.html:3
+msgid "Set your PIN"
+msgstr "Nastavenie PINu"
+
+#: templates/netbox_user_pin/invitation.html:46
+msgid "Set up 2FA (authenticator app)"
+msgstr "Nastaviť 2FA (aplikácia Authenticator)"
+
+#: templates/netbox_user_pin/invitation.html:47
+msgid "Come back here and accept."
+msgstr "Vráťte sa sem a prijmite."
+
+#: templates/netbox_user_pin/invitation.html:53
+msgid "Accept"
+msgstr "Prijať"
+
+#: templates/netbox_user_pin/invitation.html:61
+msgid "Accept the role"
+msgstr "Prijať rolu"
+
+#: templates/netbox_user_pin/invitation.html:67
+msgid "Decline the invitation?"
+msgstr "Odmietnuť pozvánku?"
+
+#: templates/netbox_user_pin/invitation.html:68
+msgid "Decline"
+msgstr "Odmietnuť"
 
 #: templates/netbox_user_pin/mail.html:8
 msgid "Read-only view."
@@ -1648,11 +3020,15 @@ msgstr "Odobrať @%(domain)s?"
 msgid "No domain – no e-mails are sent."
 msgstr "Žiadna doména – neposielajú sa žiadne e-maily."
 
+#: templates/netbox_user_pin/mail.html:87
+msgid "Add"
+msgstr "Pridať"
+
 #: templates/netbox_user_pin/mail.html:89
 msgid ""
-"e.g. @firma.sk. Only addresses ending exactly with this domain receive "
-"e-mails (not sub-domains or similar names). The domain is used only after it"
-" was verified with a code."
+"e.g. @firma.sk. Only addresses ending exactly with this domain receive e-"
+"mails (not sub-domains or similar names). The domain is used only after it "
+"was verified with a code."
 msgstr ""
 "napr. @firma.sk. E-maily dostanú iba adresy končiace presne touto doménou "
 "(nie subdomény ani podobné názvy). Doména sa použije až po overení kódom."
@@ -1686,11 +3062,11 @@ msgstr "Poslať testovací e-mail"
 
 #: templates/netbox_user_pin/mail.html:127
 msgid ""
-"No eligible recipient: a user must be permitted to use a PIN and have an "
-"e-mail in a verified domain."
+"No eligible recipient: a user must be permitted to use a PIN and have an e-"
+"mail in a verified domain."
 msgstr ""
-"Žiadny vhodný príjemca: používateľ musí mať povolený PIN a e-mail v overenej"
-" doméne."
+"Žiadny vhodný príjemca: používateľ musí mať povolený PIN a e-mail v overenej "
+"doméne."
 
 #: templates/netbox_user_pin/mail.html:149
 msgid "A code was already sent – enter it below or send a new one."
@@ -1716,12 +3092,23 @@ msgstr ""
 msgid "Confirm reset"
 msgstr "Potvrdiť reset"
 
-#: templates/netbox_user_pin/my_pin.html:14
-#: templates/netbox_user_pin/unlock.html:11 views.py:56
+#: templates/netbox_user_pin/my_pin.html:15
+#, python-format
+msgid ""
+"<strong>%(by)s</strong> invited you to a role in the PIN administration."
+msgstr "<strong>%(by)s</strong> vás pozval do roly v správe PIN."
+
+#: templates/netbox_user_pin/my_pin.html:16
+#: templates/netbox_user_pin/my_roles.html:12
+msgid "Open the invitation"
+msgstr "Otvoriť pozvánku"
+
+#: templates/netbox_user_pin/my_pin.html:19
+#: templates/netbox_user_pin/unlock.html:11 views.py:59
 msgid "Your PIN is suspended. Contact your administrator."
 msgstr "Váš PIN je pozastavený. Kontaktujte administrátora."
 
-#: templates/netbox_user_pin/my_pin.html:17
+#: templates/netbox_user_pin/my_pin.html:22
 #, python-format
 msgid ""
 "Your PIN expires in <strong>%(days_left)s days</strong> (%(date)s). <a "
@@ -1730,7 +3117,7 @@ msgstr ""
 "Váš PIN vyprší o <strong>%(days_left)s dní</strong> (%(date)s). <a "
 "href=\"%(change_url)s\">Zmeňte ho teraz</a>."
 
-#: templates/netbox_user_pin/my_pin.html:20
+#: templates/netbox_user_pin/my_pin.html:25
 #, python-format
 msgid ""
 "Two-factor authentication is not set up. It is needed for administrative "
@@ -1741,192 +3128,249 @@ msgstr ""
 "správcovských akcií a na obnovu zabudnutého PINu. <a "
 "href=\"%(setup_url)s\">Nastaviť</a>."
 
-#: templates/netbox_user_pin/my_pin.html:28
+#: templates/netbox_user_pin/my_pin.html:33
 msgid "Permitted to use a PIN"
 msgstr "Povolený PIN"
 
-#: templates/netbox_user_pin/my_pin.html:29
+#: templates/netbox_user_pin/my_pin.html:34
 msgid "No – ask an administrator"
 msgstr "Nie – obráťte sa na administrátora"
 
-#: templates/netbox_user_pin/my_pin.html:34
-#: templates/netbox_user_pin/user_list.html:52
-msgid "Active"
-msgstr "Aktívny"
-
-#: templates/netbox_user_pin/my_pin.html:34
-#: templates/netbox_user_pin/user_list.html:52
-msgid "Not set"
-msgstr "Nenastavený"
-
-#: templates/netbox_user_pin/my_pin.html:35
+#: templates/netbox_user_pin/my_pin.html:40
 msgid "Change required"
 msgstr "Vyžaduje sa zmena"
 
-#: templates/netbox_user_pin/my_pin.html:38
+#: templates/netbox_user_pin/my_pin.html:43
 msgid "Last changed"
 msgstr "Naposledy zmenený"
 
-#: templates/netbox_user_pin/my_pin.html:41
+#: templates/netbox_user_pin/my_pin.html:46
 #, python-format
 msgid "%(days_left)s days left"
 msgstr "zostáva %(days_left)s dní"
 
-#: templates/netbox_user_pin/my_pin.html:41
-#: templates/netbox_user_pin/user_list.html:64
+#: templates/netbox_user_pin/my_pin.html:46
+#: templates/netbox_user_pin/user_list.html:66
 msgid "expired"
 msgstr "vypršal"
 
-#: templates/netbox_user_pin/my_pin.html:41
+#: templates/netbox_user_pin/my_pin.html:46
 #: templates/netbox_user_pin/user_list.html:31
 #, python-format
 msgid "rotation every %(days)s days"
 msgstr "rotácia každých %(days)s dní"
 
-#: templates/netbox_user_pin/my_pin.html:43
+#: templates/netbox_user_pin/my_pin.html:48
 msgid "Last successful use"
 msgstr "Naposledy použitý"
 
-#: templates/netbox_user_pin/my_pin.html:45
+#: templates/netbox_user_pin/my_pin.html:50
 #: templates/netbox_user_pin/user_list.html:36
 msgid "Lockout"
 msgstr "Zablokovanie"
 
-#: templates/netbox_user_pin/my_pin.html:46
+#: templates/netbox_user_pin/my_pin.html:51
 msgid "Locked until"
 msgstr "Zablokovaný do"
 
-#: templates/netbox_user_pin/my_pin.html:49
+#: templates/netbox_user_pin/my_pin.html:54
 msgid "Unlocked now"
 msgstr "Práve odomknuté"
 
-#: templates/netbox_user_pin/my_pin.html:52
+#: templates/netbox_user_pin/my_pin.html:57
 msgid "everything"
 msgstr "všetko"
 
-#: templates/netbox_user_pin/my_pin.html:56
+#: templates/netbox_user_pin/my_pin.html:61
 msgid "Required length"
 msgstr "Požadovaná dĺžka"
 
-#: templates/netbox_user_pin/my_pin.html:56
+#: templates/netbox_user_pin/my_pin.html:61
 #, python-format
 msgid "%(n)s digits"
 msgstr "%(n)s číslic"
 
-#: templates/netbox_user_pin/my_pin.html:63
+#: templates/netbox_user_pin/my_pin.html:68
 #: templates/netbox_user_pin/test.html:9
 msgid "Lock now"
 msgstr "Zamknúť teraz"
 
-#: templates/netbox_user_pin/my_pin.html:67
+#: templates/netbox_user_pin/my_pin.html:72
 msgid "Simulate an expired PIN? You will have to change your PIN right away."
 msgstr "Simulovať vypršaný PIN? PIN budete musieť hneď zmeniť."
 
-#: templates/netbox_user_pin/my_pin.html:69
+#: templates/netbox_user_pin/my_pin.html:74
 msgid "Test rotation"
 msgstr "Test rotácie"
 
-#: templates/netbox_user_pin/my_pin.html:71
+#: templates/netbox_user_pin/my_pin.html:76
 msgid "Forgot PIN"
 msgstr "Zabudnutý PIN"
 
-#: templates/netbox_user_pin/my_pin.html:74
+#: templates/netbox_user_pin/my_pin.html:79
 #: templates/netbox_user_pin/set_pin.html:10
 msgid "Set PIN"
 msgstr "Nastaviť PIN"
 
-#: templates/netbox_user_pin/my_pin.html:82
+#: templates/netbox_user_pin/my_pin.html:87
 msgid "Two-factor authentication & recovery"
 msgstr "Dvojfaktorové overenie a obnova"
 
-#: templates/netbox_user_pin/my_pin.html:85
+#: templates/netbox_user_pin/my_pin.html:90
 msgid "2FA (authenticator app)"
 msgstr "2FA (aplikácia Authenticator)"
 
-#: templates/netbox_user_pin/my_pin.html:86
-#: templates/netbox_user_pin/user_list.html:57
-msgid "On"
-msgstr "Zapnuté"
-
-#: templates/netbox_user_pin/my_pin.html:86
+#: templates/netbox_user_pin/my_pin.html:91
 msgid "since"
 msgstr "od"
 
-#: templates/netbox_user_pin/my_pin.html:86
-#: templates/netbox_user_pin/user_list.html:57
-msgid "Off"
-msgstr "Vypnuté"
-
-#: templates/netbox_user_pin/my_pin.html:88
+#: templates/netbox_user_pin/my_pin.html:93
 msgid "Backup codes left"
 msgstr "Zostávajúce záložné kódy"
 
-#: templates/netbox_user_pin/my_pin.html:90
-#: templates/netbox_user_pin/user_list.html:36
-msgid "E-mail"
-msgstr "E-mail"
-
-#: templates/netbox_user_pin/my_pin.html:93
-#: templates/netbox_user_pin/user_list.html:59
-msgid "no e-mail"
-msgstr "bez e-mailu"
-
-#: templates/netbox_user_pin/my_pin.html:94
+#: templates/netbox_user_pin/my_pin.html:99
 msgid "domain not allowed"
 msgstr "nepovolená doména"
 
-#: templates/netbox_user_pin/my_pin.html:98
+#: templates/netbox_user_pin/my_pin.html:103
 msgid "Self-service recovery"
 msgstr "Samoobslužná obnova"
 
-#: templates/netbox_user_pin/my_pin.html:99
+#: templates/netbox_user_pin/my_pin.html:104
 msgid "Available"
 msgstr "Dostupná"
 
-#: templates/netbox_user_pin/my_pin.html:99
+#: templates/netbox_user_pin/my_pin.html:104
 msgid "e-mail code + 2FA"
 msgstr "kód z e-mailu + 2FA"
 
-#: templates/netbox_user_pin/my_pin.html:99
+#: templates/netbox_user_pin/my_pin.html:104
 msgid "Not available"
 msgstr "Nedostupná"
 
-#: templates/netbox_user_pin/my_pin.html:99
+#: templates/netbox_user_pin/my_pin.html:104
 msgid "an administrator can reset your PIN"
 msgstr "PIN vám môže resetovať administrátor"
 
-#: templates/netbox_user_pin/my_pin.html:105
+#: templates/netbox_user_pin/my_pin.html:110
 msgid "Lost your phone and all backup codes? Emergency reset on the server"
 msgstr "Stratili ste mobil aj všetky záložné kódy? Núdzový reset na serveri"
 
-#: templates/netbox_user_pin/my_pin.html:106
+#: templates/netbox_user_pin/my_pin.html:111
 msgid ""
 "Another administrator can start Reset 2FA for you. If nobody can, a server "
 "administrator runs:"
 msgstr ""
-"Iný administrátor vám môže spustiť Reset 2FA. Ak nemôže nikto, administrátor"
-" servera spustí:"
+"Iný administrátor vám môže spustiť Reset 2FA. Ak nemôže nikto, administrátor "
+"servera spustí:"
 
-#: templates/netbox_user_pin/my_pin.html:114
+#: templates/netbox_user_pin/my_pin.html:119
 msgid "Show backup codes"
 msgstr "Zobraziť záložné kódy"
 
-#: templates/netbox_user_pin/my_pin.html:115
+#: templates/netbox_user_pin/my_pin.html:120
 #: templates/netbox_user_pin/totp_manage.html:16
 msgid "Disable 2FA"
 msgstr "Vypnúť 2FA"
 
-#: templates/netbox_user_pin/my_pin.html:117
+#: templates/netbox_user_pin/my_pin.html:122
 msgid "Set up 2FA"
 msgstr "Nastaviť 2FA"
 
-#: templates/netbox_user_pin/my_pin.html:123
+#: templates/netbox_user_pin/my_pin.html:128
 msgid "Recent activity"
 msgstr "Posledná aktivita"
 
-#: templates/netbox_user_pin/my_pin.html:135
+#: templates/netbox_user_pin/my_pin.html:140
 msgid "No activity yet."
 msgstr "Zatiaľ žiadna aktivita."
+
+#: templates/netbox_user_pin/my_roles.html:5
+#, python-format
+msgid "You belong to the department <strong>%(name)s</strong>."
+msgstr "Patríte do oddelenia <strong>%(name)s</strong>."
+
+#: templates/netbox_user_pin/my_roles.html:5
+msgid "You do not belong to any department."
+msgstr "Nepatríte do žiadneho oddelenia."
+
+#: templates/netbox_user_pin/my_roles.html:11
+#, python-format
+msgid ""
+"<strong>%(by)s</strong> invited you. Accept it with the code from the e-"
+"mail, your PIN and 2FA."
+msgstr ""
+"<strong>%(by)s</strong> vás pozval. Prijmite to kódom z e-mailu, svojím "
+"PINom a 2FA."
+
+#: templates/netbox_user_pin/my_roles.html:14
+msgid ""
+"Your rights are handed over temporarily; they return automatically at the "
+"end of the hand-over."
+msgstr ""
+"Vaše práva sú dočasne odovzdané; na konci odovzdania sa vrátia automaticky."
+
+#: templates/netbox_user_pin/my_roles.html:15
+msgid ""
+"You asked to give the role up. It stays in force until a replacement accepts."
+msgstr "Požiadali ste o vzdanie sa roly. Platí, kým náhrada neprijme."
+
+#: templates/netbox_user_pin/my_roles.html:21
+msgid ""
+"You manage the PINs of the people in your department and invite its "
+"delegates."
+msgstr "Spravujete PINy ľudí vo svojom oddelení a pozývate jeho delegátov."
+
+#: templates/netbox_user_pin/my_roles.html:22
+msgid "You can hand over your rights temporarily and approve moves of people."
+msgstr "Svoje práva môžete dočasne odovzdať a schvaľujete presuny ľudí."
+
+#: templates/netbox_user_pin/my_roles.html:24
+msgid ""
+"Together with the head or another delegate you confirm changes in your "
+"department (four eyes) and handle resets."
+msgstr ""
+"Spolu so správcom alebo iným delegátom potvrdzujete zmeny vo svojom oddelení "
+"(štyri oči) a riešite resety."
+
+#: templates/netbox_user_pin/my_roles.html:26
+msgid ""
+"The PIN protects sensitive parts of NetBox and of other plugins that require "
+"it – you share responsibility for this protection."
+msgstr ""
+"PIN chráni citlivé časti NetBoxu aj ďalších pluginov, ktoré ho vyžadujú – za "
+"túto ochranu ste spoluzodpovedný."
+
+#: templates/netbox_user_pin/my_roles.html:27
+msgid ""
+"Never give your PIN, 2FA or backup codes to anybody. Every action you take "
+"is recorded in the audit log."
+msgstr ""
+"PIN, 2FA ani záložné kódy nikomu nedávajte. Každá vaša akcia sa zapisuje do "
+"auditného záznamu."
+
+#: templates/netbox_user_pin/my_roles.html:29
+#, python-format
+msgid "Accepted on %(date)s."
+msgstr "Prijaté %(date)s."
+
+#: templates/netbox_user_pin/my_roles.html:31
+msgid "Give up this role"
+msgstr "Vzdať sa tejto roly"
+
+#: templates/netbox_user_pin/my_roles.html:33
+msgid ""
+"Without you the minimum would not be met: the role stays in force until a "
+"replacement accepts."
+msgstr "Bez vás by nebolo splnené minimum: rola platí, kým náhrada neprijme."
+
+#: templates/netbox_user_pin/my_roles.html:39
+msgid "Give up"
+msgstr "Vzdať sa"
+
+#: templates/netbox_user_pin/my_roles.html:47
+msgid "You have no role in the PIN administration."
+msgstr "V správe PIN nemáte žiadnu rolu."
 
 #: templates/netbox_user_pin/not_allowed.html:3
 msgid "PIN suspended"
@@ -1964,7 +3408,7 @@ msgstr "Samoobslužná obnova nie je pre váš účet dostupná:"
 msgid "Self-service recovery is turned off."
 msgstr "Samoobslužná obnova je vypnutá."
 
-#: templates/netbox_user_pin/recover.html:12 views.py:58
+#: templates/netbox_user_pin/recover.html:12 views.py:61
 msgid "You are not permitted to use a PIN."
 msgstr "Nemáte povolený PIN."
 
@@ -2002,11 +3446,6 @@ msgstr "Poslať kód na <code>%(email)s</code>"
 msgid "code sent"
 msgstr "kód odoslaný"
 
-#: templates/netbox_user_pin/recover.html:28
-#: templates/netbox_user_pin/show_backup_codes.html:30
-msgid "Send again"
-msgstr "Poslať znova"
-
 #: templates/netbox_user_pin/recover.html:33
 #, python-format
 msgid ""
@@ -2031,8 +3470,8 @@ msgstr "Potvrdenie resetu 2FA"
 #: templates/netbox_user_pin/reset_confirm.html:9
 #, python-format
 msgid ""
-"<strong>%(by)s</strong> started a reset of your PIN (valid until %(until)s)."
-" Confirm with a code from your authenticator app (or a backup code) and "
+"<strong>%(by)s</strong> started a reset of your PIN (valid until %(until)s). "
+"Confirm with a code from your authenticator app (or a backup code) and "
 "choose a new PIN (%(n)s digits)."
 msgstr ""
 "<strong>%(by)s</strong> spustil reset vášho PINu (platí do %(until)s). "
@@ -2043,21 +3482,16 @@ msgstr ""
 #, python-format
 msgid ""
 "<strong>%(by)s</strong> started a reset of your two-factor authentication "
-"(valid until %(until)s). Confirm with your PIN; afterwards you set up 2FA on"
-" your new phone."
+"(valid until %(until)s). Confirm with your PIN; afterwards you set up 2FA on "
+"your new phone."
 msgstr ""
 "<strong>%(by)s</strong> spustil reset vášho dvojfaktorového overenia (platí "
-"do %(until)s). Potvrďte svojím PINom; potom si nastavíte 2FA na novom "
-"mobile."
+"do %(until)s). Potvrďte svojím PINom; potom si nastavíte 2FA na novom mobile."
 
 #: templates/netbox_user_pin/reset_confirm.html:14
 msgid ""
 "If you did not ask for this, do not continue and contact your administrator."
 msgstr "Ak ste o to nežiadali, nepokračujte a kontaktujte administrátora."
-
-#: templates/netbox_user_pin/set_pin.html:3
-msgid "Set your PIN"
-msgstr "Nastavenie PINu"
 
 #: templates/netbox_user_pin/set_pin.html:6
 #, python-format
@@ -2074,8 +3508,8 @@ msgstr "Opakované číslice, postupnosti a jednoduché vzory nie sú povolené.
 
 #: templates/netbox_user_pin/set_pin.html:8
 msgid ""
-"Nobody – not even an administrator – can read your PIN; an administrator can"
-" only reset it."
+"Nobody – not even an administrator – can read your PIN; an administrator can "
+"only reset it."
 msgstr ""
 "Váš PIN nikto nevie prečítať – ani administrátor; administrátor ho môže iba "
 "resetovať."
@@ -2135,10 +3569,9 @@ msgstr "Nastavené kľúče"
 
 #: templates/netbox_user_pin/settings.html:70
 msgid ""
-"The key is stored only in the NetBox configuration "
-"(<code>PLUGINS_CONFIG</code>), never in the database. Compare the "
-"fingerprint with your offline backup. Rotate with <code>manage.py "
-"userpin_rotate_key</code>."
+"The key is stored only in the NetBox configuration (<code>PLUGINS_CONFIG</"
+"code>), never in the database. Compare the fingerprint with your offline "
+"backup. Rotate with <code>manage.py userpin_rotate_key</code>."
 msgstr ""
 "Kľúč je uložený iba v konfigurácii NetBoxu (<code>PLUGINS_CONFIG</code>), "
 "nikdy v databáze. Porovnajte odtlačok so zálohou. Výmena: <code>manage.py "
@@ -2181,12 +3614,12 @@ msgstr "O tomto zobrazení vám bol poslaný e-mail a je zapísané v audit logu
 #: templates/netbox_user_pin/show_backup_codes.html:24
 msgid ""
 "Confirm with your PIN and either a code from your authenticator app or a "
-"verification code sent to your e-mail. The backup codes are shown only here,"
-" never sent by e-mail."
+"verification code sent to your e-mail. The backup codes are shown only here, "
+"never sent by e-mail."
 msgstr ""
 "Potvrďte svojím PINom a kódom z aplikácie Authenticator alebo overovacím "
-"kódom z e-mailu. Záložné kódy sa zobrazujú iba tu, nikdy sa neposielajú "
-"e-mailom."
+"kódom z e-mailu. Záložné kódy sa zobrazujú iba tu, nikdy sa neposielajú e-"
+"mailom."
 
 #: templates/netbox_user_pin/show_backup_codes.html:28
 msgid "No phone at hand? Get a verification code by e-mail"
@@ -2198,7 +3631,8 @@ msgstr "Zobraziť kódy"
 
 #: templates/netbox_user_pin/step_up.html:9
 #, python-format
-msgid "Administrative actions require a PIN. <a href=\"%(url)s\">Set a PIN</a>."
+msgid ""
+"Administrative actions require a PIN. <a href=\"%(url)s\">Set a PIN</a>."
 msgstr "Správcovské akcie vyžadujú PIN. <a href=\"%(url)s\">Nastaviť PIN</a>."
 
 #: templates/netbox_user_pin/step_up.html:11
@@ -2212,8 +3646,8 @@ msgstr ""
 
 #: templates/netbox_user_pin/step_up.html:16
 msgid ""
-"This is an administrative action. Confirm with your PIN and a code from your"
-" authenticator app."
+"This is an administrative action. Confirm with your PIN and a code from your "
+"authenticator app."
 msgstr ""
 "Ide o správcovskú akciu. Potvrďte svojím PINom a kódom z aplikácie "
 "Authenticator."
@@ -2242,11 +3676,11 @@ msgstr "Nové záložné kódy"
 
 #: templates/netbox_user_pin/totp_manage.html:8
 msgid ""
-"Without 2FA you cannot confirm administrative actions or recover a forgotten"
-" PIN yourself."
+"Without 2FA you cannot confirm administrative actions or recover a forgotten "
+"PIN yourself."
 msgstr ""
-"Bez 2FA nemôžete potvrdzovať správcovské akcie ani si sami obnoviť zabudnutý"
-" PIN."
+"Bez 2FA nemôžete potvrdzovať správcovské akcie ani si sami obnoviť zabudnutý "
+"PIN."
 
 #: templates/netbox_user_pin/totp_manage.html:10
 #, python-format
@@ -2296,8 +3730,8 @@ msgid ""
 "An administrator started a reset of your 2FA. <a "
 "href=\"%(reset_url)s\">Confirm it here</a>."
 msgstr ""
-"Administrátor spustil reset vášho 2FA. <a href=\"%(reset_url)s\">Potvrďte ho"
-" tu</a>."
+"Administrátor spustil reset vášho 2FA. <a href=\"%(reset_url)s\">Potvrďte ho "
+"tu</a>."
 
 #: templates/netbox_user_pin/unlock.html:13
 #, python-format
@@ -2362,8 +3796,8 @@ msgid "Not permitted"
 msgstr "Bez povolenia"
 
 #: templates/netbox_user_pin/user_list.html:17
-msgid "Name, username or e-mail"
-msgstr "Meno, používateľ alebo e-mail"
+msgid "Name, username, e-mail or department"
+msgstr "Meno, účet, e-mail alebo oddelenie"
 
 #: templates/netbox_user_pin/user_list.html:20
 msgid "All users"
@@ -2389,230 +3823,218 @@ msgstr "Povolený"
 msgid "Last used"
 msgstr "Naposledy použitý"
 
-#: templates/netbox_user_pin/user_list.html:42
-msgid "you"
-msgstr "vy"
-
 #: templates/netbox_user_pin/user_list.html:43
 msgid "master"
 msgstr "master"
 
-#: templates/netbox_user_pin/user_list.html:43
-msgid "delegate"
-msgstr "delegát"
-
 #: templates/netbox_user_pin/user_list.html:44
+msgid "invited"
+msgstr "pozvaný"
+
+#: templates/netbox_user_pin/user_list.html:45
 msgid "inactive"
 msgstr "neaktívny"
 
-#: templates/netbox_user_pin/user_list.html:48
+#: templates/netbox_user_pin/user_list.html:50
 msgid "No"
 msgstr "Nie"
 
-#: templates/netbox_user_pin/user_list.html:49
+#: templates/netbox_user_pin/user_list.html:51
 msgid "allowed"
 msgstr "povolený"
 
-#: templates/netbox_user_pin/user_list.html:49
+#: templates/netbox_user_pin/user_list.html:51
 msgid "denied"
 msgstr "zakázaný"
 
-#: templates/netbox_user_pin/user_list.html:53
+#: templates/netbox_user_pin/user_list.html:55
 msgid "must change"
 msgstr "musí zmeniť"
 
-#: templates/netbox_user_pin/user_list.html:54
+#: templates/netbox_user_pin/user_list.html:56
 msgid "suspended"
 msgstr "pozastavený"
 
-#: templates/netbox_user_pin/user_list.html:55
+#: templates/netbox_user_pin/user_list.html:57
 msgid "PIN reset pending"
 msgstr "čaká reset PINu"
 
-#: templates/netbox_user_pin/user_list.html:55
+#: templates/netbox_user_pin/user_list.html:57
 msgid "2FA reset pending"
 msgstr "čaká reset 2FA"
 
-#: templates/netbox_user_pin/user_list.html:60
-msgid "domain"
-msgstr "doména"
-
-#: templates/netbox_user_pin/user_list.html:68
-msgid "until"
-msgstr "do"
-
-#: templates/netbox_user_pin/user_list.html:73
+#: templates/netbox_user_pin/user_list.html:75
 msgid "Actions"
 msgstr "Akcie"
 
-#: templates/netbox_user_pin/user_list.html:75
+#: templates/netbox_user_pin/user_list.html:77
 msgid "Allow PIN"
 msgstr "Povoliť PIN"
 
-#: templates/netbox_user_pin/user_list.html:76
+#: templates/netbox_user_pin/user_list.html:78
 msgid "Deny PIN"
 msgstr "Zakázať PIN"
 
-#: templates/netbox_user_pin/user_list.html:77
+#: templates/netbox_user_pin/user_list.html:79
 msgid "Back to default"
 msgstr "Späť na predvolené"
 
-#: templates/netbox_user_pin/user_list.html:78
+#: templates/netbox_user_pin/user_list.html:80
 msgid "Force PIN change"
 msgstr "Vynútiť zmenu PINu"
 
-#: templates/netbox_user_pin/user_list.html:79
+#: templates/netbox_user_pin/user_list.html:81
 msgid "Clear lockout"
 msgstr "Zrušiť zablokovanie"
 
-#: templates/netbox_user_pin/user_list.html:81
+#: templates/netbox_user_pin/user_list.html:83
 msgid "Lift suspension"
 msgstr "Zrušiť pozastavenie"
 
-#: templates/netbox_user_pin/user_list.html:82
+#: templates/netbox_user_pin/user_list.html:84
 msgid "Suspend PIN (block now)"
 msgstr "Pozastaviť PIN (zablokovať hneď)"
 
-#: templates/netbox_user_pin/user_list.html:83
+#: templates/netbox_user_pin/user_list.html:85
 msgid "Cancel pending reset"
 msgstr "Zrušiť čakajúci reset"
 
-#: templates/netbox_user_pin/user_list.html:85
+#: templates/netbox_user_pin/user_list.html:87
 msgid "Reset PIN (user confirms with 2FA)"
 msgstr "Reset PINu (používateľ potvrdí cez 2FA)"
 
-#: templates/netbox_user_pin/user_list.html:86
+#: templates/netbox_user_pin/user_list.html:88
 msgid "Reset 2FA (user confirms with PIN)"
 msgstr "Reset 2FA (používateľ potvrdí PINom)"
 
-#: templates/netbox_user_pin/user_list.html:87
+#: templates/netbox_user_pin/user_list.html:89
 msgid "Reset needs the user's 2FA"
 msgstr "Reset vyžaduje 2FA používateľa"
 
-#: templates/netbox_user_pin/user_list.html:90
+#: templates/netbox_user_pin/user_list.html:92
 msgid "Emergency: server command (2FA)"
 msgstr "Núdza: príkaz na serveri (2FA)"
 
-#: templates/netbox_user_pin/user_list.html:94
+#: templates/netbox_user_pin/user_list.html:96
 msgid ""
-"Nobody manages themselves here; delegates cannot manage the master or other "
-"delegates"
+"Nobody manages themselves here; CORE deputies cannot manage the master or "
+"other CORE deputies; heads and delegates manage only their department"
 msgstr ""
-"Tu nikto nespravuje sám seba; delegáti nemôžu zasahovať do mastera ani iných"
-" delegátov"
+"Nikto tu nespravuje sám seba; zástupcovia CORE nespravujú mastera ani iných "
+"zástupcov CORE; správcovia a delegáti spravujú iba svoje oddelenie"
 
-#: templates/netbox_user_pin/user_list.html:99
+#: templates/netbox_user_pin/user_list.html:101
 msgid "No users."
 msgstr "Žiadni používatelia."
 
-#: templates/netbox_user_pin/user_list.html:109
+#: templates/netbox_user_pin/user_list.html:111
 msgid "Emergency 2FA reset"
 msgstr "Núdzový reset 2FA"
 
-#: templates/netbox_user_pin/user_list.html:111
+#: templates/netbox_user_pin/user_list.html:113
 msgid ""
-"Only if the normal way (Reset 2FA confirmed by the user with the PIN) is not"
-" possible. Run as root on the NetBox server – the 2FA is removed immediately"
-" and the action is recorded in the audit log."
+"Only if the normal way (Reset 2FA confirmed by the user with the PIN) is not "
+"possible. Run as root on the NetBox server – the 2FA is removed immediately "
+"and the action is recorded in the audit log."
 msgstr ""
-"Iba ak nie je možný bežný postup (Reset 2FA potvrdený používateľom cez PIN)."
-" Spustite ako root na serveri NetBoxu – 2FA sa okamžite zruší a akcia sa "
+"Iba ak nie je možný bežný postup (Reset 2FA potvrdený používateľom cez PIN). "
+"Spustite ako root na serveri NetBoxu – 2FA sa okamžite zruší a akcia sa "
 "zapíše do audit logu."
 
-#: views.py:46
+#: views.py:49
 #, python-brace-format
 msgid "Too many failed attempts. You are locked out until {time}."
 msgstr "Príliš veľa chybných pokusov. Ste zablokovaný do {time}."
 
-#: views.py:50
+#: views.py:53
 #, python-brace-format
 msgid "Wrong 2FA code. Remaining attempts: {n}."
 msgstr "Nesprávny 2FA kód. Zostávajúce pokusy: {n}."
 
-#: views.py:52
+#: views.py:55
 #, python-brace-format
 msgid "Wrong PIN. Remaining attempts: {n}."
 msgstr "Nesprávny PIN. Zostávajúce pokusy: {n}."
 
-#: views.py:54 views.py:491
+#: views.py:57 views.py:502
 msgid "Two-factor authentication must be set up first (My PIN > Two-factor)."
 msgstr "Najprv si nastavte dvojfaktorové overenie (Môj PIN > 2FA)."
 
-#: views.py:60
+#: views.py:63
 msgid "No PIN is set."
 msgstr "PIN nie je nastavený."
 
-#: views.py:74
+#: views.py:77
 msgid "No changes."
 msgstr "Žiadne zmeny."
 
-#: views.py:87
+#: views.py:96
 msgid "Settings saved."
 msgstr "Nastavenia uložené."
 
-#: views.py:99
+#: views.py:108
 msgid ""
-"This change needs a second person. Confirm it with your PIN and 2FA; another"
-" administrator or delegate confirms it in their session."
+"This change needs a second person. Confirm it with your PIN and 2FA; another "
+"administrator or delegate confirms it in their session."
 msgstr ""
 "Táto zmena vyžaduje druhú osobu. Potvrďte ju svojím PINom a 2FA; iný "
 "administrátor alebo delegát ju potvrdí vo svojej relácii."
 
-#: views.py:172
+#: views.py:183
 msgid "Your PIN has been set."
 msgstr "Váš PIN bol nastavený."
 
-#: views.py:208
+#: views.py:219
 msgid "Your PIN has been changed."
 msgstr "Váš PIN bol zmenený."
 
-#: views.py:254
+#: views.py:265
 msgid "Locked. You will be asked for your PIN again."
 msgstr "Zamknuté. PIN budete zadávať znova."
 
-#: views.py:263
+#: views.py:274
 msgid "PIN rotation test: you will be asked to change your PIN now."
 msgstr "Test rotácie PINu: teraz budete vyzvaný na zmenu PINu."
 
-#: views.py:296
+#: views.py:307
 msgid "Two-factor authentication is already enabled."
 msgstr "Dvojfaktorové overenie už je zapnuté."
 
-#: views.py:346
+#: views.py:357
 msgid "Two-factor authentication has been disabled."
 msgstr "Dvojfaktorové overenie bolo vypnuté."
 
-#: views.py:387
+#: views.py:398
 #, python-brace-format
 msgid "A recovery code has been sent to {email}."
 msgstr "Kód na obnovu bol odoslaný na {email}."
 
-#: views.py:401 views.py:443
+#: views.py:412 views.py:454
 msgid "Your new PIN has been set."
 msgstr "Váš nový PIN bol nastavený."
 
-#: views.py:422
+#: views.py:433
 msgid "There is no reset waiting for you."
 msgstr "Nečaká na vás žiadny reset."
 
-#: views.py:445
+#: views.py:456
 msgid "Your old 2FA was removed. Set it up again now."
 msgstr "Vaše staré 2FA bolo odstránené. Nastavte ho teraz znova."
 
-#: views.py:492
+#: views.py:503
 msgid "Confirmation failed."
 msgstr "Potvrdenie zlyhalo."
 
-#: views.py:597
+#: views.py:649
 msgid "Delegates cannot manage the master, other delegates or themselves."
 msgstr "Delegáti nemôžu zasahovať do mastera, iných delegátov ani do seba."
 
-#: views.py:614
+#: views.py:667
 #, python-brace-format
 msgid "PIN access of {user} set to {access}."
 msgstr "Povolenie PINu pre {user}: {access}."
 
-#: views.py:618
+#: views.py:671
 #, python-brace-format
 msgid ""
 "PIN reset of {user} started. The user confirms it with 2FA in their own "
@@ -2621,7 +4043,7 @@ msgstr ""
 "Reset PINu pre {user} spustený. Používateľ ho potvrdí cez 2FA vo svojej "
 "relácii a zvolí si nový PIN."
 
-#: views.py:622
+#: views.py:675
 #, python-brace-format
 msgid ""
 "2FA reset of {user} started. The user confirms it with the PIN and sets up "
@@ -2630,85 +4052,238 @@ msgstr ""
 "Reset 2FA pre {user} spustený. Používateľ ho potvrdí PINom a nastaví si 2FA "
 "znova."
 
-#: views.py:626
+#: views.py:679
 #, python-brace-format
 msgid "Reset of {user} cancelled."
 msgstr "Reset pre {user} zrušený."
 
-#: views.py:629
+#: views.py:682
 #, python-brace-format
 msgid "PIN of {user} suspended."
 msgstr "PIN používateľa {user} pozastavený."
 
-#: views.py:632
+#: views.py:685
 #, python-brace-format
 msgid "Suspension of {user} lifted."
 msgstr "Pozastavenie používateľa {user} zrušené."
 
-#: views.py:635
+#: views.py:688
 #, python-brace-format
 msgid "Lockout of {user} has been cleared."
 msgstr "Zablokovanie používateľa {user} zrušené."
 
-#: views.py:638
+#: views.py:691
 #, python-brace-format
 msgid "{user} must change the PIN at next use."
 msgstr "{user} musí pri najbližšom použití zmeniť PIN."
 
-#: views.py:774
+#: views.py:832
 msgid "Test e-mail"
 msgstr "Testovací e-mail"
 
-#: views.py:775
+#: views.py:833
 #, python-brace-format
 msgid "This is a test e-mail from NetBox User PIN, sent by {actor}."
 msgstr "Toto je testovací e-mail z NetBox User PIN, odoslal {actor}."
 
-#: views.py:777
+#: views.py:835
 #, python-brace-format
 msgid "Test e-mail sent to {email}."
 msgstr "Testovací e-mail odoslaný na {email}."
 
-#: views.py:779
+#: views.py:837
 msgid "The test e-mail could not be sent – see the audit log for the error."
 msgstr "Testovací e-mail sa nepodarilo odoslať – chybu nájdete v audit logu."
 
-#: views.py:799
+#: views.py:857
 #, python-brace-format
 msgid "Domain @{domain} added. Verify it now."
 msgstr "Doména @{domain} pridaná. Teraz ju overte."
 
-#: views.py:806
+#: views.py:864
 #, python-brace-format
 msgid "Domain @{domain} removed."
 msgstr "Doména @{domain} odobratá."
 
-#: views.py:819
+#: views.py:877
 #, python-brace-format
 msgid "A verification code was sent to {address}."
 msgstr "Overovací kód bol odoslaný na {address}."
 
-#: views.py:834
+#: views.py:892
 #, python-brace-format
 msgid "Domain @{domain} is verified."
 msgstr "Doména @{domain} je overená."
 
-#: views.py:891
-msgid "Delegates updated."
-msgstr "Delegáti upravení."
+#: views.py:920
+#, python-brace-format
+msgid "Invitation sent to {user}. The role starts when the user accepts it."
+msgstr ""
+"Pozvánka odoslaná používateľovi {user}. Rola začne platiť, keď ju prijme."
 
-#: views.py:912
-msgid "Delegate added."
-msgstr "Delegát pridaný."
+#: views.py:937
+#, python-brace-format
+msgid "Invitation sent to {user}. {old} stays until it is accepted."
+msgstr "Pozvánka odoslaná používateľovi {user}. {old} ostáva, kým ju neprijme."
 
-#: views.py:1051
+#: views.py:940
+msgid "Role ended."
+msgstr "Rola ukončená."
+
+#: views.py:998 views.py:1250
+#, python-brace-format
+msgid "Invitation sent again to {user}."
+msgstr "Pozvánka znova odoslaná používateľovi {user}."
+
+#: views.py:1002 views.py:1256
+msgid "invitation cancelled"
+msgstr "pozvánka zrušená"
+
+#: views.py:1003 views.py:1257
+msgid "Invitation cancelled."
+msgstr "Pozvánka zrušená."
+
+#: views.py:1014
+msgid "Role updated."
+msgstr "Rola upravená."
+
+#: views.py:1086
+#, python-brace-format
+msgid "Department {department} created. Appoint its head now."
+msgstr "Oddelenie {department} vytvorené. Teraz určte jeho správcu."
+
+#: views.py:1092 views.py:1331
+msgid "Move approved."
+msgstr "Presun schválený."
+
+#: views.py:1093 views.py:1336
+msgid "Move rejected."
+msgstr "Presun zamietnutý."
+
+#: views.py:1279
+#, python-brace-format
+msgid "Invitation sent to {user}. The rights pass over when it is accepted."
+msgstr "Pozvánka odoslaná používateľovi {user}. Práva prejdú po jej prijatí."
+
+#: views.py:1286
+#, python-brace-format
+msgid "hand-over ended early by {user}"
+msgstr "odovzdanie predčasne ukončil {user}"
+
+#: views.py:1288
+msgid "The hand-over ended; the rights returned."
+msgstr "Odovzdanie skončilo; práva sa vrátili."
+
+#: views.py:1299
+#, python-brace-format
+msgid "{user} added."
+msgstr "{user} pridaný."
+
+#: views.py:1306
+#, python-brace-format
+msgid "{user} removed from the department."
+msgstr "{user} odobratý z oddelenia."
+
+#: views.py:1323
+#, python-brace-format
+msgid "{user} moved to {department}."
+msgstr "{user} presunutý do {department}."
+
+#: views.py:1326
+#, python-brace-format
+msgid "The move of {user} is waiting for the other head."
+msgstr "Presun používateľa {user} čaká na druhého správcu."
+
+#: views.py:1342
+msgid "Move cancelled."
+msgstr "Presun zrušený."
+
+#: views.py:1351
+msgid "Department dissolved."
+msgstr "Oddelenie zrušené."
+
+#: views.py:1390
+msgid ""
+"Your resignation is recorded. The role stays in force until a replacement "
+"accepts it."
+msgstr "Vaše vzdanie sa je zaznamenané. Rola platí, kým ju náhrada neprijme."
+
+#: views.py:1393
+msgid "You gave up the role."
+msgstr "Vzdali ste sa roly."
+
+#: views.py:1441
+msgid "You declined the invitation."
+msgstr "Odmietli ste pozvánku."
+
+#: views.py:1451
+#, python-brace-format
+msgid "You accepted the role: {role}."
+msgstr "Prijali ste rolu: {role}."
+
+#: views.py:1601
 #, python-brace-format
 msgid "A verification code was sent to {email}."
 msgstr "Overovací kód bol odoslaný na {email}."
 
-#: views.py:1056
+#: views.py:1606
 msgid "Please verify again."
 msgstr "Overte sa prosím znova."
+
+#~ msgid ""
+#~ "There is no other administrator or delegate with PIN and 2FA who could "
+#~ "confirm."
+#~ msgstr ""
+#~ "Nie je žiadny iný administrátor ani delegát s PINom a 2FA, ktorý by mohol "
+#~ "potvrdiť."
+
+#~ msgid "or group"
+#~ msgstr "alebo skupina"
+
+#~ msgid "Select either a user or a group."
+#~ msgstr "Vyberte buď používateľa, alebo skupinu."
+
+#~ msgid "… for delegates (add / remove / change)"
+#~ msgstr "… pre delegátov (pridať / odobrať / zmeniť)"
+
+#~ msgid "Delegate"
+#~ msgstr "Delegát"
+
+#~ msgid "Added"
+#~ msgstr "Pridaný"
+
+#~ msgid "What delegates can do"
+#~ msgstr "Čo môžu delegáti"
+
+#~ msgid "See all users' PIN status, the audit log and the settings."
+#~ msgstr "Vidieť stav PINov všetkých používateľov, audit log a nastavenia."
+
+#~ msgid ""
+#~ "Allow / deny PIN use, suspend, start PIN or 2FA resets, force a PIN "
+#~ "change, clear lockouts – after confirming with their own PIN + 2FA."
+#~ msgstr ""
+#~ "Povoliť / zakázať PIN, pozastaviť, spustiť reset PINu alebo 2FA, vynútiť "
+#~ "zmenu PINu, zrušiť zablokovanie – po potvrdení vlastným PINom + 2FA."
+
+#~ msgid "Edit settings only when \"Can edit settings\" is on."
+#~ msgstr "Meniť nastavenia iba ak je zapnuté „Môže meniť nastavenia“."
+
+#~ msgid ""
+#~ "They cannot manage the master, other delegates or themselves, and cannot "
+#~ "manage delegates."
+#~ msgstr ""
+#~ "Nemôžu zasahovať do mastera, iných delegátov ani do seba a nemôžu "
+#~ "spravovať delegátov."
+
+#~ msgid ""
+#~ "Implemented as NetBox object permissions \"User PIN: delegates …\" (kept "
+#~ "in sync automatically)."
+#~ msgstr ""
+#~ "Realizované ako oprávnenia NetBoxu „User PIN: delegates "
+#~ "…“ (synchronizované automaticky)."
+
+#~ msgid "Delegate added."
+#~ msgstr "Delegát pridaný."
 
 #, python-format
 #~ msgid "2. Enter the code sent to %(email)s"

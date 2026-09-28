@@ -1,58 +1,93 @@
 {% extends 'generic/_base.html' %}
 {% load form_helpers i18n %}
-{% block title %}{% trans "PIN delegates" %}{% endblock %}
+{% block title %}{% trans "CORE – deputies of the master" %}{% endblock %}
 {% block content %}
 {% include 'netbox_user_pin/inc/step_up_bar.html' %}
+<div class="alert {% if active_count >= min_core %}alert-success{% else %}alert-info{% endif %}"><div>
+  <i class="mdi mdi-account-supervisor"></i>
+  {% blocktrans with n=active_count m=min_core %}Active CORE deputies: <strong>{{ n }}</strong> (four-eyes approval needs at least {{ m }}).{% endblocktrans %}
+  {% if settings.four_eyes %}<span class="badge text-bg-green">{% trans "Four-eyes approval is on" %}</span>{% else %}<span class="badge text-bg-secondary">{% trans "Four-eyes approval is off" %}</span>{% endif %}
+</div></div>
 <div class="row">
-  <div class="col-12 col-lg-7">
+  <div class="col-12 col-xl-8">
     <div class="card">
-      <h2 class="card-header">{% trans "Delegates" %}</h2>
+      <h2 class="card-header">{% trans "CORE deputies" %}</h2>
+      <div class="table-responsive">
       <table class="table table-hover">
-        <thead><tr><th>{% trans "Delegate" %}</th><th>{% trans "Can edit settings" %}</th><th>{% trans "Added" %}</th><th></th></tr></thead>
+        <thead><tr><th>{% trans "Deputy" %}</th><th>{% trans "Status" %}</th><th>{% trans "Can edit settings" %}</th><th>{% trans "Invited" %}</th><th></th></tr></thead>
         <tbody>
-          {% for d, name in delegates %}
+          {% for row in rows %}{% with d=row.role %}
             <tr>
-              <td>{% if d.user %}<i class="mdi mdi-account"></i> {{ d.user.username }}{% if name %}<div class="small text-secondary">{{ name }}</div>{% endif %}{% else %}<i class="mdi mdi-account-group"></i> {{ d.group.name }}{% endif %}</td>
+              <td>{% include 'netbox_user_pin/inc/role_person.html' %}</td>
+              <td>{% include 'netbox_user_pin/inc/role_status.html' with role=d %}{% if d.end_reason and d.status == 'resigning' %}<div class="small text-secondary">{{ d.end_reason }}</div>{% endif %}</td>
               <td>{% if d.can_edit_settings %}<span class="badge text-bg-green">{% trans "Yes" %}</span>{% else %}<span class="badge text-bg-secondary">{% trans "No (read only)" %}</span>{% endif %}</td>
-              <td class="small text-secondary">{{ d.created|date:"Y-m-d" }} · {{ d.created_by|default:"—" }}</td>
+              <td class="small text-secondary">{{ d.created|date:"Y-m-d" }} · {{ d.invited_by|default:"—" }}</td>
               <td class="text-end text-nowrap">
-                <form method="post" class="d-inline" data-step-up>{% csrf_token %}<input type="hidden" name="pk" value="{{ d.pk }}"><input type="hidden" name="action" value="toggle">
-                  <button class="btn btn-sm btn-outline-secondary" type="submit">{% if d.can_edit_settings %}{% trans "Make read-only" %}{% else %}{% trans "Allow settings" %}{% endif %}</button></form>
-                <form method="post" class="d-inline" data-step-up data-confirm="{% trans 'Remove this delegate?' %}">{% csrf_token %}<input type="hidden" name="pk" value="{{ d.pk }}"><input type="hidden" name="action" value="remove">
-                  <button class="btn btn-sm btn-danger" type="submit"><i class="mdi mdi-delete"></i></button></form>
+                {% if d.status == 'pending' %}
+                  <form method="post" class="d-inline" data-step-up>{% csrf_token %}<input type="hidden" name="pk" value="{{ d.pk }}"><input type="hidden" name="action" value="resend">
+                    {% include 'netbox_user_pin/inc/hours_select.html' %}
+                    <button class="btn btn-sm btn-outline-primary" type="submit"><i class="mdi mdi-email-fast"></i> {% if d.invite_sent %}{% trans "Send again" %}{% else %}{% trans "Send invitation" %}{% endif %}</button></form>
+                  <form method="post" class="d-inline" data-step-up data-confirm="{% trans 'Cancel this invitation?' %}">{% csrf_token %}<input type="hidden" name="pk" value="{{ d.pk }}"><input type="hidden" name="action" value="cancel">
+                    <button class="btn btn-sm btn-outline-danger" type="submit">{% trans "Cancel" %}</button></form>
+                {% else %}
+                  <form method="post" class="d-inline" data-step-up>{% csrf_token %}<input type="hidden" name="pk" value="{{ d.pk }}"><input type="hidden" name="action" value="toggle">
+                    <button class="btn btn-sm btn-outline-secondary" type="submit">{% if d.can_edit_settings %}{% trans "Make read-only" %}{% else %}{% trans "Allow settings" %}{% endif %}</button></form>
+                  <button class="btn btn-sm btn-danger" type="button" data-bs-toggle="collapse" data-bs-target="#remove-{{ d.pk }}"><i class="mdi mdi-account-remove"></i> {% trans "Remove / replace" %}</button>
+                {% endif %}
               </td>
             </tr>
-          {% empty %}
-            <tr><td colspan="4" class="text-secondary">{% trans "No delegates. Only the master (superusers) manages PINs." %}</td></tr>
+            {% if d.status != 'pending' %}
+            <tr class="collapse" id="remove-{{ d.pk }}"><td colspan="5">
+              <form method="post" class="row g-2 align-items-end" data-step-up>{% csrf_token %}<input type="hidden" name="pk" value="{{ d.pk }}"><input type="hidden" name="action" value="remove">
+                <div class="col-md-4"><label class="form-label">{{ replace_form.replacement.label }}</label>{{ replace_form.replacement }}</div>
+                <div class="col-md-2"><label class="form-label">{{ replace_form.hours.label }}</label>{{ replace_form.hours }}</div>
+                <div class="col-md-4"><label class="form-label">{{ replace_form.reason.label }}</label>{{ replace_form.reason }}</div>
+                <div class="col-md-2"><button type="submit" class="btn btn-danger w-100">{% trans "Confirm" %}</button></div>
+                <div class="col-12 small text-secondary">{% blocktrans %}With four-eyes approval on, at least {{ min_core }} CORE deputies must stay: then choose a replacement – the current deputy stays until the replacement accepts.{% endblocktrans %}</div>
+              </form>
+            </td></tr>
+            {% endif %}
+          {% endwith %}{% empty %}
+            <tr><td colspan="5" class="text-secondary">{% trans "No CORE deputies. Only the master (superusers) manages PINs." %}</td></tr>
           {% endfor %}
         </tbody>
       </table>
+      </div>
     </div>
-  </div>
-  <div class="col-12 col-lg-5">
+    {% if history %}
     <div class="card">
-      <h2 class="card-header">{% trans "Add delegate" %}</h2>
+      <h2 class="card-header">{% trans "History" %}</h2>
+      <table class="table table-sm">
+        <tbody>{% for row in history %}<tr><td>{{ row.role.user.username }}</td><td>{% include 'netbox_user_pin/inc/role_status.html' with role=row.role %}</td><td class="small text-secondary">{{ row.role.ended|date:"Y-m-d H:i"|default:"" }} {{ row.role.end_reason }}</td></tr>{% endfor %}</tbody>
+      </table>
+    </div>
+    {% endif %}
+  </div>
+  <div class="col-12 col-xl-4">
+    <div class="card">
+      <h2 class="card-header">{% trans "Invite a CORE deputy" %}</h2>
       <div class="card-body">
         <form method="post" class="object-edit" data-step-up>
-          {% csrf_token %}
+          {% csrf_token %}<input type="hidden" name="action" value="invite">
           {% if form.non_field_errors %}<div class="alert alert-danger"><div>{{ form.non_field_errors|join:" " }}</div></div>{% endif %}
           {% render_field form.user %}
-          {% render_field form.group %}
+          {% render_field form.hours %}
           {% render_field form.can_edit_settings %}
-          <div class="text-end"><button type="submit" class="btn btn-primary"><i class="mdi mdi-plus"></i> {% trans "Add" %}</button></div>
+          {% render_field form.reason %}
+          <div class="text-end"><button type="submit" class="btn btn-primary"><i class="mdi mdi-email-fast"></i> {% trans "Send invitation" %}</button></div>
         </form>
       </div>
     </div>
     <div class="card">
-      <h2 class="card-header">{% trans "What delegates can do" %}</h2>
+      <h2 class="card-header">{% trans "How it works" %}</h2>
       <div class="card-body small">
         <ul class="mb-0">
-          <li>{% trans "See all users' PIN status, the audit log and the settings." %}</li>
-          <li>{% trans "Allow / deny PIN use, suspend, start PIN or 2FA resets, force a PIN change, clear lockouts – after confirming with their own PIN + 2FA." %}</li>
-          <li>{% trans 'Edit settings only when "Can edit settings" is on.' %}</li>
-          <li>{% trans "They cannot manage the master, other delegates or themselves, and cannot manage delegates." %}</li>
+          <li>{% trans "The invited user gets an e-mail with a link and a code. The role starts only after they accept it with the code, their PIN and 2FA (they set them up first if needed)." %}</li>
+          <li>{% trans "CORE deputies see all users and departments after confirming with their PIN + 2FA, create departments and appoint their heads." %}</li>
+          <li>{% trans "They cannot manage the master or other CORE deputies." %}</li>
+          <li>{% trans "A deputy can resign under My roles; below the minimum the role stays until a replacement accepts." %}</li>
+          <li>{% trans "Switching four-eyes approval off ends the CORE delegation (only possible when no department exists)." %}</li>
         </ul>
-        <p class="mt-2 mb-0 text-secondary">{% trans 'Implemented as NetBox object permissions "User PIN: delegates …" (kept in sync automatically).' %}</p>
       </div>
     </div>
   </div>

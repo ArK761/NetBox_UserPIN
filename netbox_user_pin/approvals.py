@@ -1,7 +1,7 @@
 """
 Four-eyes approval of administrative changes.
 
-The requester and one other administrator / delegate both confirm with their own PIN (+ 2FA). They can do it
+The requester and one other person (CORE, or for a department request also its head / delegates) both confirm with their own PIN (+ 2FA). They can do it
 live at the same time (each in their own session, the request page refreshes itself) or one after another until
 the request expires. Only then the change is executed. Optionally the master may execute alone ("break-glass")
 with a reason; all administrators are informed.
@@ -9,17 +9,16 @@ with a reason; all administrators are informed.
 import logging
 from datetime import timedelta
 
-from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
 from django.utils.translation import gettext as _
 from utilities.request import get_client_ip
 
-from . import delegation, service
+from . import roles, service
 from .models import (
-    ApprovalAction, ApprovalRequest, ApprovalStatus, ApprovalVote, PinAccess, PinDelegate, PinEventAction,
-    PinSettings,
+    ApprovalAction, ApprovalRequest, ApprovalStatus, ApprovalVote, Department, PinAccess, PinDelegate,
+    PinEventAction, PinSettings, RoleKind,
 )
 
 __all__ = (
@@ -46,6 +45,7 @@ CATEGORY = {
     ApprovalAction.MAIL_SETTINGS: 'four_eyes_settings',
     ApprovalAction.ACCESS: 'four_eyes_access',
     ApprovalAction.DOMAIN_ADD: 'four_eyes_settings',
+    ApprovalAction.DEPARTMENT_DELETE: 'four_eyes_delegates',
 }
 
 
@@ -54,12 +54,20 @@ def required_for(action, settings=None):
     return bool(settings.four_eyes and getattr(settings, CATEGORY[action]))
 
 
-def eligible_approvers(settings=None):
-    """Active masters and delegates who are able to confirm (PIN, and 2FA when required, not suspended)."""
+def eligible_approvers(settings=None, department=None):
+    """
+    People able to confirm (PIN, and 2FA when required, not suspended): the master and CORE deputies; for a
+    department request also the department's head and delegates.
+    """
     settings = settings or service.get_settings()
+    candidates = roles.core_users()
+    if department is not None:
+        head = roles.effective_head(department)
+        candidates += [head.user] if head else []
+        candidates += [r.user for r in roles.department_delegates(department)]
     result = []
-    for user in get_user_model().objects.filter(is_active=True).select_related('user_pin'):
-        if not service.is_pin_admin(user):
+    for user in candidates:
+        if user in result:
             continue
         user_pin = getattr(user, 'user_pin', None)
         if not user_pin or not user_pin.is_set or user_pin.suspended:
@@ -102,18 +110,19 @@ def refresh(req):
     return req
 
 
-def create(action, payload, summary, requester, approver=None, reason='', request=None):
+def create(action, payload, summary, requester, approver=None, reason='', request=None, department=None):
     settings = service.get_settings()
-    others = [u for u in eligible_approvers(settings) if u.pk != requester.pk]
+    others = [u for u in eligible_approvers(settings, department) if u.pk != requester.pk]
     if approver is not None:
         if approver not in others:
             raise ValidationError(_('{user} cannot confirm this request.').format(user=approver))
         others = [approver]
     if not others:
-        raise ValidationError(_('There is no other administrator or delegate with PIN and 2FA who could confirm.'))
+        raise ValidationError(_('There is no other person with PIN and 2FA who could confirm (CORE, or the head / '
+                                'delegates of the department).'))
     req = ApprovalRequest.objects.create(
         action=action, payload=payload, summary=summary[:500], reason=reason[:500], requested_by=requester,
-        requested_by_name=requester.username, approver=approver,
+        requested_by_name=requester.username, approver=approver, department=department,
         expires=timezone.now() + timedelta(minutes=settings.approval_valid_minutes),
     )
     service.log_event(PinEventAction.APPROVAL_REQUESTED, actor=requester, request=request,
@@ -140,7 +149,7 @@ def can_vote(req, user):
         return True
     if req.approver_id and req.approver_id != user.pk:
         return False
-    return user in eligible_approvers()
+    return user in eligible_approvers(department=req.department)
 
 
 def vote(req, user, approve, pin, otp=None, reason=None, request=None):
@@ -196,7 +205,7 @@ def break_glass(req, user, reason, pin, otp=None, request=None):
     service.log_event(PinEventAction.BREAK_GLASS, actor=user, request=request,
                       detail=f'#{req.pk} {req.summary} – reason: {reason.strip()}')
     _execute(req, request=request)
-    admins = [u for u in eligible_approvers() if u.pk != user.pk]
+    admins = [u for u in eligible_approvers(department=req.department) if u.pk != user.pk]
     _notify(req, admins, _('BREAK-GLASS: {user} executed alone: {summary}\nReason: {reason}').format(
         user=user, summary=req.summary, reason=reason.strip()))
     return req
@@ -223,37 +232,56 @@ def _execute(req, request=None):
                              f'{" – " + req.result if req.result else ""}')
 
 
+def _user(pk):
+    from django.contrib.auth import get_user_model
+    return get_user_model().objects.get(pk=pk) if pk else None
+
+
 def _delegate_add(payload, actor, request):
-    user_model = get_user_model()
-    user = user_model.objects.get(pk=payload['user_id']) if payload.get('user_id') else None
-    from users.models import Group
-    group = Group.objects.get(pk=payload['group_id']) if payload.get('group_id') else None
-    delegate = PinDelegate.objects.create(user=user, group=group, can_edit_settings=payload.get('can_edit', False),
-                                          created_by=getattr(actor, 'username', ''))
-    delegation.sync_permissions()
-    service.log_event(PinEventAction.DELEGATE_ADDED, user=user, actor=actor, request=request,
-                      detail=f'{delegate}, can edit settings = {delegate.can_edit_settings}')
-    return f'{delegate} added'
+    """Invite to a role (CORE deputy, head, temporary head or department delegate)."""
+    from django.utils.dateparse import parse_datetime
+    if not payload.get('user_id'):
+        raise ValidationError('Delegating to a group is no longer supported; invite the members one by one.')
+    user = _user(payload['user_id'])
+    department = Department.objects.get(pk=payload['department_id']) if payload.get('department_id') else None
+    replaces = PinDelegate.objects.filter(pk=payload.get('replaces_id')).first() if payload.get('replaces_id') else None
+    kind = payload.get('role') or RoleKind.CORE
+    until = parse_datetime(payload['temporary_until']) if payload.get('temporary_until') else None
+    if until is not None:
+        role = roles.hand_over(department, user, until, actor, hours=payload.get('hours', 24),
+                               reason=payload.get('reason', ''), request=request)
+    elif replaces is not None:
+        role = roles.remove_role(replaces, actor, replacement=user, hours=payload.get('hours', 24),
+                                 reason=payload.get('reason', ''), request=request)
+    else:
+        role = roles.invite(user, kind, actor, department=department, hours=payload.get('hours', 24),
+                            can_edit=payload.get('can_edit', False), reason=payload.get('reason', ''),
+                            request=request)
+    return f'{role}: invitation sent'
 
 
 def _delegate_remove(payload, actor, request):
-    delegate = PinDelegate.objects.get(pk=payload['delegate_id'])
-    text = str(delegate)
-    user = delegate.user
-    delegate.delete()
-    delegation.sync_permissions()
-    service.log_event(PinEventAction.DELEGATE_REMOVED, user=user, actor=actor, request=request, detail=text)
-    return f'{text} removed'
+    role = PinDelegate.objects.get(pk=payload['delegate_id'])
+    text = str(role)
+    roles.remove_role(role, actor, reason=payload.get('reason', ''), request=request)
+    return f'{text} ended'
 
 
 def _delegate_toggle(payload, actor, request):
     delegate = PinDelegate.objects.get(pk=payload['delegate_id'])
     delegate.can_edit_settings = bool(payload['can_edit'])
     delegate.save()
-    delegation.sync_permissions()
+    roles._sync()
     service.log_event(PinEventAction.DELEGATE_CHANGED, user=delegate.user, actor=actor, request=request,
                       detail=f'{delegate}: can edit settings = {delegate.can_edit_settings}')
     return str(delegate)
+
+
+def _department_delete(payload, actor, request):
+    department = Department.objects.get(pk=payload['department_id'])
+    name = department.name
+    roles.delete_department(department, actor, request=request)
+    return f'{name} dissolved'
 
 
 def _settings(payload, actor, request):
@@ -263,14 +291,17 @@ def _settings(payload, actor, request):
         old = getattr(settings, name)
         setattr(settings, name, value)
         changes.append(f'{name}: changed' if 'password' in name else f'{name}: {old!r} -> {value!r}')
+    four_eyes_before = PinSettings.load().four_eyes
     settings.full_clean()
     settings.save()
     service.log_event(PinEventAction.SETTINGS_CHANGED, actor=actor, request=request, detail='\n'.join(changes))
+    if settings.four_eyes != four_eyes_before:
+        roles.four_eyes_changed(settings.four_eyes, actor, request=request)
     return '; '.join(changes)
 
 
 def _access(payload, actor, request):
-    user = get_user_model().objects.get(pk=payload['user_id'])
+    user = _user(payload['user_id'])
     service.set_access(user, payload['access'], actor=actor, request=request)
     return f'{user}: {PinAccess(payload["access"]).label}'
 
@@ -288,4 +319,5 @@ EXECUTORS = {
     ApprovalAction.SETTINGS: _settings,
     ApprovalAction.MAIL_SETTINGS: _settings,
     ApprovalAction.ACCESS: _access,
+    ApprovalAction.DEPARTMENT_DELETE: _department_delete,
 }

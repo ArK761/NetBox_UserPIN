@@ -1,6 +1,6 @@
 from netbox.plugins import PluginConfig
 
-__version__ = '0.9.0'
+__version__ = '0.10.0'
 
 
 class UserPinConfig(PluginConfig):
@@ -32,6 +32,7 @@ class UserPinConfig(PluginConfig):
         from . import crypto
         crypto.validate_configuration()
         self._register_event_types()
+        from . import jobs  # noqa: F401  (registers the hourly system job)
 
     @staticmethod
     def _register_event_types():
@@ -39,8 +40,11 @@ class UserPinConfig(PluginConfig):
         from netbox.registry import registry
 
         from .approvals import EVENT_TYPE
+        from .roles import EVENT_TYPE as ROLE_EVENT_TYPE
         if EVENT_TYPE not in registry['event_types']:
             EventType(EVENT_TYPE, 'PIN four-eyes approval requested', kind=EVENT_TYPE_KIND_WARNING).register()
+        if ROLE_EVENT_TYPE not in registry['event_types']:
+            EventType(ROLE_EVENT_TYPE, 'PIN role / department change', kind=EVENT_TYPE_KIND_WARNING).register()
 
 
 config = UserPinConfig
