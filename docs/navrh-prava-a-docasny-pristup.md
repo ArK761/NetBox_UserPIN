@@ -1,6 +1,6 @@
 # Návrh: práva k obsahu a dočasný prístup na požiadanie
 
-Stav: **NÁVRH na pripomienkovanie (verzia 2 – ID objektov)** – zatiaľ nič z tohto nie je naprogramované.
+Stav: **NÁVRH na pripomienkovanie (verzia 3 – ID objektov, kto udeľuje)** – zatiaľ nič z tohto nie je naprogramované.
 Nadväzuje na [navrh-delegovanie-pracoviska.md](navrh-delegovanie-pracoviska.md) (CORE, oddelenia, roly).
 
 ---
@@ -79,22 +79,29 @@ neschváli, a iba na určitý čas.
 
 1. **Žiadateľ** (napr. ty z CORE) vojde do pluginu a vidí **štruktúru** (priečinky, súbory, zoznam mailov),
    ale obsah neotvorí – tlačidlá sú sivé, s ponukou **„Požiadať o prístup“**.
-2. Správca oddelenia ti zavolá: *„problém je so súborom **DOC-000482**“*. Každý objekt má v plugine jedinečné
+2. Niekto z oddelenia ti zavolá: *„problém je so súborom **DOC-000482**“*. Každý objekt má v plugine jedinečné
    **ID** – je smerodajné a vidí ho aj člen oddelenia. Vyhľadáš ID (vidíš iba ID + typ, veľkosť, dátum, nie
-   názov ani obsah) → **Požiadať o prístup** a napíšeš **iba dôvod**. Akcie ani čas nevyberáš.
-3. **Správcovi oddelenia** sa v jeho relácii zobrazí okno:
+   názov ani obsah) → **Požiadať o prístup**. **Dôvod netreba** – na druhej strane je človek, ktorý o probléme
+   vie. Akcie ani čas nevyberáš.
+3. Žiadosť sa zobrazí v okne ľuďom z oddelenia, ktoré objekt vlastní. **Udeliť ju môže:**
+
+   | Kto | Čo môže udeliť |
+   |---|---|
+   | správca oddelenia | všetko (čítať, upraviť, presunúť, zmazať) |
+   | delegát oddelenia | všetko (čítať, upraviť, presunúť, zmazať) |
+   | člen oddelenia | **iba čítať** – a iba ak sám ten objekt čítať smie |
 
    > **Peter Knotek žiada prístup**
-   > Súbor: **DOC-000482** – *faktura_0925.pdf* (Účtovníctvo; názov vidí iba správca)
-   > Dôvod: poškodený súbor, telefonát s Evou
+   > Súbor: **DOC-000482** – *faktura_0925.pdf* (Účtovníctvo)
    >
-   > Udeliť: ☐ čítať ☐ upraviť ☐ presunúť ☐ zmazať
+   > Udeliť: ☐ čítať ☐ upraviť ☐ presunúť ☐ zmazať   *(členovi sa ponúkne iba „čítať“)*
    > Na ako dlho: 15 min / 1 h / 4 h / …
    > [ Udeliť ] [ Zamietnuť ]
 
-   **Správca určí rozsah aj čas** a potvrdí **PINom** (nastaviteľné: iba PIN – predvolené / PIN + 2FA;
-   voliteľne „pri zmazaní vždy PIN + 2FA“).
-4. **Žiadateľ vidí naživo** výsledok: „udelené: čítať, presunúť – do 14:35“. Nepovolené tlačidlá ostanú sivé.
+   Kto udeľuje, **určí rozsah aj čas** a potvrdí **PINom** (nastaviteľné: iba PIN – predvolené / PIN + 2FA;
+   voliteľne „pri zmazaní vždy PIN + 2FA“). Prvý, kto žiadosť vybaví, ju uzavrie – ostatným zmizne.
+4. **Žiadateľ vidí naživo** výsledok: „udelené: čítať, presunúť – do 14:35 (udelila Eva)“. Nepovolené tlačidlá
+   ostanú sivé.
 
 ### 7.2 Pravidlá udeleného prístupu
 
@@ -146,7 +153,7 @@ rozoberali pri Projektoch.
 | 1 | Má CORE vidieť **názvy súborov a predmety mailov**? | **ROZHODNUTÉ:** každý objekt má v plugine jedinečné **ID**, ktoré je smerodajné. ID vidí aj člen oddelenia a povie ho po telefóne; žiadateľ si ID vyhľadá (vidí iba ID + neutrálne údaje: typ, veľkosť, dátum), dá žiadosť a správca ju vybaví |
 | 2 | Profily: stačia Čitateľ / Editor / Správca obsahu, alebo vlastné profily v UI? | začať s tromi, vlastné neskôr |
 | 3 | Prideľovať per oddelenie aj per konkrétny objekt, alebo zatiaľ iba per oddelenie? | oboje |
-| 4 | Udeľovať dočasný prístup môže **správca aj delegát**, alebo iba správca? | správca alebo jeden delegát |
+| 4 | Kto udeľuje dočasný prístup? | **ROZHODNUTÉ:** správca a delegát – všetko; člen – iba čítanie (a iba čo sám smie čítať); žiadosť je bez dôvodu |
 | 5 | **Maximálna dĺžka** dočasného prístupu? | 24 h |
 | 6 | **Núdzový prístup** cez dvoch ľudí z CORE, keď nikto z oddelenia nereaguje? | áno: dvaja z CORE + dôvod, max. 24 h, mail celému oddeleniu |
 | 7 | Smie správca dať trvalé právo človeku z **iného oddelenia**? | iba so súhlasom správcu toho oddelenia |
