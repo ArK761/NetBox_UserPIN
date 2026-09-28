@@ -1,10 +1,10 @@
 {% extends 'generic/_base.html' %}
-{% block title %}Your backup codes{% endblock %}
+{% load i18n %}
+{% block title %}{% trans "Your backup codes" %}{% endblock %}
 {% block content %}
 <div class="row"><div class="col-12 col-md-8 col-lg-5">
   <div class="alert alert-warning"><div>
-    <strong>Save these codes now</strong> (password manager or printed in a safe place). They are shown only once.
-    Each code works one time instead of the authenticator app, e.g. when your phone is lost.
+    {% trans "Save these codes now (password manager or printed in a safe place). Each code works one time instead of the authenticator app, e.g. when your phone is lost. You can view them later under My PIN > Show backup codes." %}
   </div></div>
   <div class="card">
     <div class="card-body">
@@ -12,8 +12,8 @@
 {% endfor %}</pre>
     </div>
     <div class="card-footer text-end">
-      <button type="button" class="btn btn-outline-secondary" onclick="navigator.clipboard.writeText(document.getElementById('backup-codes').innerText)"><i class="mdi mdi-content-copy"></i> Copy</button>
-      <a href="{{ next }}" class="btn btn-primary">I have saved them</a>
+      <button type="button" class="btn btn-outline-secondary" onclick="navigator.clipboard.writeText(document.getElementById('backup-codes').innerText)"><i class="mdi mdi-content-copy"></i> {% trans "Copy" %}</button>
+      <a href="{{ next }}" class="btn btn-primary">{% trans "I have saved them" %}</a>
     </div>
   </div>
 </div></div>

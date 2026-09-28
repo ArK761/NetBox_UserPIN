@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "netbox-user-pin"
-version = "0.6.0"
+version = "0.7.0"
 description = "Reusable personal PIN (second factor / unlock) for NetBox and NetBox plugins"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -28,7 +28,7 @@ Source = "https://github.com/ArK761/NetBox_UserPIN"
 include = ["netbox_user_pin*"]
 
 [tool.setuptools.package-data]
-netbox_user_pin = ["templates/**/*"]
+netbox_user_pin = ["templates/**/*", "locale/**/*"]
 
 [tool.ruff]
 line-length = 120

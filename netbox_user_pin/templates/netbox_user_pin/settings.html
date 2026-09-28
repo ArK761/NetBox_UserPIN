@@ -1,34 +1,39 @@
 {% extends 'generic/_base.html' %}
-{% load form_helpers %}
-{% block title %}PIN settings{% endblock %}
+{% load form_helpers i18n %}
+{% block title %}{% trans "PIN settings" %}{% endblock %}
 {% block content %}
 {% if can_edit %}{% include 'netbox_user_pin/inc/step_up_bar.html' %}{% endif %}
 <div class="row">
   <div class="col-12 col-lg-7">
-    {% if not can_edit %}<div class="alert alert-info"><div>Read-only view. Only the master or delegates allowed to edit settings can change them.</div></div>{% endif %}
-    <form method="post" class="object-edit">
+    {% if not can_edit %}<div class="alert alert-info"><div>{% trans "Read-only view. Only the master or delegates allowed to edit settings can change them." %}</div></div>{% endif %}
+    <form method="post" class="object-edit" data-step-up>
       {% csrf_token %}
+      {% if form.non_field_errors %}<div class="alert alert-danger"><div>{{ form.non_field_errors|join:" " }}</div></div>{% endif %}
       <div class="field-group mb-4">
-        <h2 class="mb-3">Access &amp; PIN policy</h2>
+        <h2 class="mb-3">{% trans "General" %}</h2>
+        {% render_field form.language %}
+      </div>
+      <div class="field-group mb-4">
+        <h2 class="mb-3">{% trans "Access & PIN policy" %}</h2>
         {% render_field form.access_mode %}
         {% render_field form.pin_length %}
         {% render_field form.block_weak_pins %}
         {% render_field form.blocked_pins %}
       </div>
       <div class="field-group mb-4">
-        <h2 class="mb-3">Rotation</h2>
+        <h2 class="mb-3">{% trans "Rotation" %}</h2>
         {% render_field form.max_age_days %}
         {% render_field form.warn_days %}
       </div>
       <div class="field-group mb-4">
-        <h2 class="mb-3">Unlock</h2>
+        <h2 class="mb-3">{% trans "Unlock" %}</h2>
         {% render_field form.unlock_minutes %}
         {% render_field form.sliding_unlock %}
         {% render_field form.scope_mode %}
         {% render_field form.require_2fa_unlock %}
       </div>
       <div class="field-group mb-4">
-        <h2 class="mb-3">Protection</h2>
+        <h2 class="mb-3">{% trans "Protection" %}</h2>
         {% render_field form.max_attempts %}
         {% render_field form.lockout_minutes %}
         {% render_field form.require_2fa_admin %}
@@ -36,7 +41,7 @@
         {% render_field form.reset_valid_hours %}
       </div>
       <div class="field-group mb-4">
-        <h2 class="mb-3">Four-eyes approval</h2>
+        <h2 class="mb-3">{% trans "Four-eyes approval" %}</h2>
         {% render_field form.four_eyes %}
         {% render_field form.four_eyes_delegates %}
         {% render_field form.four_eyes_settings %}
@@ -44,24 +49,23 @@
         {% render_field form.approval_valid_minutes %}
         {% render_field form.break_glass %}
       </div>
-      <p class="text-secondary small">E-mail, notifications and self-service recovery are configured under <a href="{% url 'plugins:netbox_user_pin:mail' %}">Mail</a>.</p>
-      {% if can_edit %}<div class="text-end"><button type="submit" class="btn btn-primary">Save</button></div>{% endif %}
+      <p class="text-secondary small">{% url 'plugins:netbox_user_pin:mail' as mail_url %}{% blocktrans %}E-mail, notifications and self-service recovery are configured under <a href="{{ mail_url }}">Mail</a>.{% endblocktrans %}</p>
+      {% if can_edit %}<div class="text-end"><button type="submit" class="btn btn-primary">{% trans "Save" %}</button></div>{% endif %}
     </form>
   </div>
   <div class="col-12 col-lg-5">
     <div class="card">
-      <h2 class="card-header">Encryption key</h2>
+      <h2 class="card-header">{% trans "Encryption key" %}</h2>
       {% if key_info.error %}
         <div class="card-body"><div class="alert alert-danger mb-0"><div>{{ key_info.error }}</div></div></div>
       {% else %}
         <table class="table attr-table">
-          <tr><th scope="row">Active key</th><td><code>{{ key_info.active }}</code></td></tr>
-          <tr><th scope="row">Fingerprint</th><td><code>{{ key_info.fingerprint }}</code></td></tr>
-          <tr><th scope="row">Configured keys</th><td>{% for k in key_info.configured %}<code>{{ k }}</code> {% endfor %}</td></tr>
+          <tr><th scope="row">{% trans "Active key" %}</th><td><code>{{ key_info.active }}</code></td></tr>
+          <tr><th scope="row">{% trans "Fingerprint" %}</th><td><code>{{ key_info.fingerprint }}</code></td></tr>
+          <tr><th scope="row">{% trans "Configured keys" %}</th><td>{% for k in key_info.configured %}<code>{{ k }}</code> {% endfor %}</td></tr>
         </table>
         <div class="card-body small text-secondary">
-          The key is stored only in the NetBox configuration (<code>PLUGINS_CONFIG</code>), never in the database.
-          Compare the fingerprint with your offline backup. Rotate with <code>manage.py userpin_rotate_key</code>.
+          {% blocktrans %}The key is stored only in the NetBox configuration (<code>PLUGINS_CONFIG</code>), never in the database. Compare the fingerprint with your offline backup. Rotate with <code>manage.py userpin_rotate_key</code>.{% endblocktrans %}
         </div>
       {% endif %}
     </div>

@@ -1,14 +1,14 @@
 {% extends 'generic/_base.html' %}
-{% load form_helpers %}
-{% block title %}<i class="mdi mdi-account-multiple-check"></i> Four-eyes request #{{ req.pk }}{% endblock %}
+{% load form_helpers i18n %}
+{% block title %}<i class="mdi mdi-account-multiple-check"></i> {% blocktrans with pk=req.pk %}Four-eyes request #{{ pk }}{% endblocktrans %}{% endblock %}
 {% block content %}
 <div class="row">
   <div class="col-12 col-lg-7">
     <div class="card">
       <h2 class="card-header">{{ req.summary }}</h2>
       <div class="card-body pb-0 small text-secondary">
-        {{ req.get_action_display }} · requested {{ req.created|date:"Y-m-d H:i" }} by {{ req.requested_by_name }}
-        {% if req.reason %}<div class="mt-1 text-body"><strong>Reason:</strong> {{ req.reason }}</div>{% endif %}
+        {{ req.get_action_display }} · {% blocktrans with time=req.created|date:"Y-m-d H:i" user=req.requested_by_name %}requested {{ time }} by {{ user }}{% endblocktrans %}
+        {% if req.reason %}<div class="mt-1 text-body"><strong>{% trans "Reason" %}:</strong> {{ req.reason }}</div>{% endif %}
       </div>
       {% include 'netbox_user_pin/inc/approval_status.html' %}
     </div>
@@ -16,36 +16,36 @@
   <div class="col-12 col-lg-5">
     {% if can_vote %}
       <div class="card">
-        <h2 class="card-header">{% if is_requester %}Confirm your request{% else %}Your decision{% endif %}</h2>
+        <h2 class="card-header">{% if is_requester %}{% trans "Confirm your request" %}{% else %}{% trans "Your decision" %}{% endif %}</h2>
         <div class="card-body">
           <form method="post" class="object-edit" autocomplete="off">
             {% csrf_token %}
             {% if form.non_field_errors %}<div class="alert alert-danger"><div>{{ form.non_field_errors|join:" " }}</div></div>{% endif %}
             {% for field in form %}{% render_field field %}{% endfor %}
             <div class="text-end">
-              <button type="submit" name="action" value="reject" class="btn btn-outline-danger"><i class="mdi mdi-close"></i> Reject</button>
-              <button type="submit" name="action" value="confirm" class="btn btn-primary"><i class="mdi mdi-check"></i> Confirm</button>
+              <button type="submit" name="action" value="reject" class="btn btn-outline-danger"><i class="mdi mdi-close"></i> {% trans "Reject" %}</button>
+              <button type="submit" name="action" value="confirm" class="btn btn-primary"><i class="mdi mdi-check"></i> {% trans "Confirm" %}</button>
             </div>
           </form>
         </div>
       </div>
     {% elif req.is_open %}
-      <div class="alert alert-info"><div>You have confirmed. Waiting for the second person – this page updates by itself.</div></div>
+      <div class="alert alert-info"><div>{% trans "You have confirmed. Waiting for the second person – this page updates by itself." %}</div></div>
     {% endif %}
     {% if can_cancel %}
       <form method="post" class="mb-3">{% csrf_token %}<input type="hidden" name="action" value="cancel">
-        <button type="submit" class="btn btn-outline-secondary w-100"><i class="mdi mdi-cancel"></i> Cancel request</button></form>
+        <button type="submit" class="btn btn-outline-secondary w-100"><i class="mdi mdi-cancel"></i> {% trans "Cancel request" %}</button></form>
     {% endif %}
     {% if can_break_glass %}
       <div class="card border-danger">
-        <h2 class="card-header text-danger"><i class="mdi mdi-alert"></i> Break-glass (emergency)</h2>
+        <h2 class="card-header text-danger"><i class="mdi mdi-alert"></i> {% trans "Break-glass (emergency)" %}</h2>
         <div class="card-body">
-          <p class="small text-secondary">Execute alone without the second person. All administrators and delegates are informed by e-mail and it is marked in the audit log.</p>
+          <p class="small text-secondary">{% trans "Execute alone without the second person. All administrators and delegates are informed by e-mail and it is marked in the audit log." %}</p>
           <form method="post" class="object-edit" autocomplete="off">
             {% csrf_token %}<input type="hidden" name="action" value="break-glass">
             {% if bg_form.non_field_errors %}<div class="alert alert-danger"><div>{{ bg_form.non_field_errors|join:" " }}</div></div>{% endif %}
             {% for field in bg_form %}{% render_field field %}{% endfor %}
-            <div class="text-end"><button type="submit" class="btn btn-danger" onclick="return confirm('Execute alone (break-glass)?');">Execute alone</button></div>
+            <div class="text-end"><button type="submit" class="btn btn-danger" onclick="return confirm('{% trans "Execute alone (break-glass)?" as q %}{{ q|escapejs }}');">{% trans "Execute alone" %}</button></div>
           </form>
         </div>
       </div>

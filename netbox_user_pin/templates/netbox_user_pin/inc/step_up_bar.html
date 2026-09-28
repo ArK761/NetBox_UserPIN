@@ -1,10 +1,12 @@
+{% load i18n %}
 {% if step_up_active %}
-  <div class="alert alert-success d-flex justify-content-between align-items-center"><div><i class="mdi mdi-shield-check"></i> Administrative actions unlocked{% if step_up_left %} for {% widthratio step_up_left 60 1 %} more minute(s){% endif %}.</div>
+  <div class="alert alert-success d-flex justify-content-between align-items-center"><div><i class="mdi mdi-shield-check"></i> {% trans "Administrative actions unlocked" %}{% if step_up_left %} ({% blocktrans with seconds=step_up_left %}{{ seconds }} s left{% endblocktrans %}){% endif %}.</div>
     <form method="post" action="{% url 'plugins:netbox_user_pin:lock' %}" class="ms-3">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
-      <button type="submit" class="btn btn-sm btn-outline-secondary"><i class="mdi mdi-lock"></i> Lock</button></form>
+      <button type="submit" class="btn btn-sm btn-outline-secondary"><i class="mdi mdi-lock"></i> {% trans "Lock" %}</button></form>
   </div>
 {% else %}
-  <div class="alert alert-info d-flex justify-content-between align-items-center"><div><i class="mdi mdi-shield-key"></i> Changes require a confirmation of your identity (PIN + 2FA).</div>
-    <a class="btn btn-sm btn-primary ms-3" href="{% url 'plugins:netbox_user_pin:step_up' %}?next={{ request.get_full_path|urlencode }}"><i class="mdi mdi-shield-key"></i> Confirm identity</a>
+  <div class="alert alert-info d-flex justify-content-between align-items-center"><div><i class="mdi mdi-shield-key"></i> {% trans "Changes require a confirmation of your identity (PIN + 2FA)." %}</div>
+    <a class="btn btn-sm btn-primary ms-3" href="{% url 'plugins:netbox_user_pin:step_up' %}?next={{ request.get_full_path|urlencode }}" data-step-up-open><i class="mdi mdi-shield-key"></i> {% trans "Confirm identity" %}</a>
   </div>
 {% endif %}
+{% include 'netbox_user_pin/inc/step_up_modal.html' %}

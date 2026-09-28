@@ -23,6 +23,9 @@ sensitive pages ("enter your PIN to continue"), so the PIN logic exists only onc
 - **Backup codes** stored encrypted; *Show backup codes* after PIN + 2FA or PIN + an e-mailed verification code
   (the codes themselves are never e-mailed)
 - Emergency server command for a 2FA reset shown at each account
+- **Languages: English / Slovenčina** (Settings → General) for the plugin pages and e-mails
+- Administrative confirmation (PIN + 2FA) in a **pop-up** directly on the page – the action continues
+  without leaving it; connection and test e-mail need no confirmation
 - **Mail** page: own SMTP server (server, port, encryption off / STARTTLS / SSL, automatic TLS, SMTP
   authentication with a service account; password encrypted, never shown), connection test; **allowed e-mail
   domains must be verified** with a code sent to an address in the domain before any e-mail goes there

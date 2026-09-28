@@ -1,19 +1,20 @@
 {% extends 'generic/_base.html' %}
-{% block title %}PIN audit log{% endblock %}
+{% load i18n %}
+{% block title %}{% trans "PIN audit log" %}{% endblock %}
 {% block content %}
 <form method="get" class="row g-2 mb-3">
-  <div class="col-auto"><input type="text" name="user" value="{{ user_filter }}" class="form-control" placeholder="User / actor"></div>
+  <div class="col-auto"><input type="text" name="user" value="{{ user_filter }}" class="form-control" placeholder="{% trans 'User / actor' %}"></div>
   <div class="col-auto">
     <select name="action" class="form-select">
-      <option value="">All events</option>
+      <option value="">{% trans "All events" %}</option>
       {% for value, label in actions %}<option value="{{ value }}"{% if value == action_filter %} selected{% endif %}>{{ label }}</option>{% endfor %}
     </select>
   </div>
-  <div class="col-auto"><button class="btn btn-primary" type="submit"><i class="mdi mdi-filter"></i> Filter</button></div>
+  <div class="col-auto"><button class="btn btn-primary" type="submit"><i class="mdi mdi-filter"></i> {% trans "Filter" %}</button></div>
 </form>
 <div class="card">
   <table class="table table-hover">
-    <thead><tr><th>Time</th><th>User</th><th>Event</th><th>By</th><th>Scope</th><th>IP</th><th>Detail</th></tr></thead>
+    <thead><tr><th>{% trans "Time" %}</th><th>{% trans "User" %}</th><th>{% trans "Event" %}</th><th>{% trans "By" %}</th><th>{% trans "Scope" %}</th><th>IP</th><th>{% trans "Detail" %}</th></tr></thead>
     <tbody>
       {% for event in page %}
         <tr>
@@ -26,7 +27,7 @@
           <td class="small" style="white-space: pre-line">{{ event.detail }}</td>
         </tr>
       {% empty %}
-        <tr><td colspan="7" class="text-secondary">No events.</td></tr>
+        <tr><td colspan="7" class="text-secondary">{% trans "No events." %}</td></tr>
       {% endfor %}
     </tbody>
   </table>

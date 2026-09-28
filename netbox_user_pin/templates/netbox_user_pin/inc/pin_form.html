@@ -1,15 +1,16 @@
-{% load form_helpers %}
+{% load form_helpers i18n %}
 <form method="post" class="object-edit" autocomplete="off">
   {% csrf_token %}
   <input type="hidden" name="next" value="{{ next }}">
   {% if scope %}<input type="hidden" name="scope" value="{{ scope }}">{% endif %}
   <div class="field-group mb-4">
+    {% if form.non_field_errors %}<div class="alert alert-danger"><div>{{ form.non_field_errors|join:" " }}</div></div>{% endif %}
     {% for field in form %}
       {% render_field field %}
     {% endfor %}
   </div>
   <div class="text-end">
-    {% if cancel_url %}<a href="{{ cancel_url }}" class="btn btn-outline-secondary">Cancel</a>{% endif %}
-    <button type="submit" class="btn btn-primary">{{ submit_label|default:"Save" }}</button>
+    {% if cancel_url %}<a href="{{ cancel_url }}" class="btn btn-outline-secondary">{% trans "Cancel" %}</a>{% endif %}
+    <button type="submit" class="btn btn-primary">{% if submit_label %}{{ submit_label }}{% else %}{% trans "Save" %}{% endif %}</button>
   </div>
 </form>

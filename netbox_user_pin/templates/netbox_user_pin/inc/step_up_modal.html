@@ -1,0 +1,72 @@
+{% load i18n %}
+{# PIN + 2FA confirmation in a pop-up. Forms marked with data-step-up are held until confirmed, then submitted. #}
+<div class="modal fade" id="step-up-modal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-sm modal-dialog-centered"><div class="modal-content">
+    <form id="step-up-form" autocomplete="off">{% csrf_token %}
+      <div class="modal-header"><h5 class="modal-title"><i class="mdi mdi-shield-key"></i> {% trans "Confirm your identity" %}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <div class="alert alert-danger d-none" id="step-up-error"><div></div></div>
+        <label class="form-label" for="step-up-pin">{% trans "Your PIN" %}</label>
+        <input type="password" class="form-control mb-3" id="step-up-pin" inputmode="numeric" autocomplete="off" required>
+        <label class="form-label" for="step-up-otp">{% trans "2FA code" %}</label>
+        <input type="text" class="form-control" id="step-up-otp" inputmode="numeric" autocomplete="one-time-code">
+        <div class="form-text">{% trans "6 digits from your authenticator app, or a backup code." %}</div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">{% trans "Cancel" %}</button>
+        <button type="submit" class="btn btn-primary">{% trans "Confirm" %}</button>
+      </div>
+    </form>
+  </div></div>
+</div>
+<script>
+window.addEventListener('load', function () {
+  var active = {% if step_up_active %}true{% else %}false{% endif %};
+  var modalEl = document.getElementById('step-up-modal');
+  var ModalClass = window.Modal || (window.bootstrap && window.bootstrap.Modal);
+  if (!modalEl || !ModalClass) return;   // fallback: forms go to the confirmation page
+  var modal = new ModalClass(modalEl), pending = null;
+  var errorBox = document.getElementById('step-up-error');
+  function csrf() {
+    var input = document.querySelector('#step-up-form input[name=csrfmiddlewaretoken]');
+    return input ? input.value : '';
+  }
+  function open(form) {
+    pending = form; errorBox.classList.add('d-none');
+    document.getElementById('step-up-pin').value = ''; document.getElementById('step-up-otp').value = '';
+    modal.show(); setTimeout(function () { document.getElementById('step-up-pin').focus(); }, 300);
+  }
+  document.addEventListener('submit', function (e) {
+    var form = e.target;
+    if (form.dataset.confirm && !form.dataset.confirmed) {
+      if (!window.confirm(form.dataset.confirm)) { e.preventDefault(); e.stopImmediatePropagation(); return; }
+      form.dataset.confirmed = '1';
+    }
+    if (active || !form.hasAttribute('data-step-up')) return;
+    e.preventDefault();
+    open(form);
+  }, true);
+  document.querySelectorAll('[data-step-up-open]').forEach(function (el) {
+    el.addEventListener('click', function (e) { e.preventDefault(); open(null); });
+  });
+  document.getElementById('step-up-form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var body = new URLSearchParams({pin: document.getElementById('step-up-pin').value,
+                                    otp: document.getElementById('step-up-otp').value,
+                                    csrfmiddlewaretoken: csrf()});
+    fetch('{% url "plugins:netbox_user_pin:step_up" %}', {
+      method: 'POST', body: body, credentials: 'same-origin',
+      headers: {'X-CSRFToken': csrf(), 'X-Requested-With': 'XMLHttpRequest'}
+    }).then(function (r) { return r.json(); }).then(function (data) {
+      if (data.ok) {
+        active = true; modal.hide();
+        if (pending) { pending.submit(); } else { window.location.reload(); }
+      } else {
+        errorBox.querySelector('div').textContent = data.errors.join(' ');
+        errorBox.classList.remove('d-none');
+      }
+    }).catch(function () { window.location.href = '{% url "plugins:netbox_user_pin:step_up" %}?next=' + encodeURIComponent(window.location.pathname); });
+  });
+});
+</script>

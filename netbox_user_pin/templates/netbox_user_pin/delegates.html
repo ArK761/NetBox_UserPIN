@@ -1,62 +1,58 @@
 {% extends 'generic/_base.html' %}
-{% load form_helpers %}
-{% block title %}PIN delegates{% endblock %}
+{% load form_helpers i18n %}
+{% block title %}{% trans "PIN delegates" %}{% endblock %}
 {% block content %}
 {% include 'netbox_user_pin/inc/step_up_bar.html' %}
 <div class="row">
   <div class="col-12 col-lg-7">
     <div class="card">
-      <h2 class="card-header">Delegates</h2>
+      <h2 class="card-header">{% trans "Delegates" %}</h2>
       <table class="table table-hover">
-        <thead><tr><th>Delegate</th><th>Can edit settings</th><th>Added</th>{% if step_up_active %}<th></th>{% endif %}</tr></thead>
+        <thead><tr><th>{% trans "Delegate" %}</th><th>{% trans "Can edit settings" %}</th><th>{% trans "Added" %}</th><th></th></tr></thead>
         <tbody>
           {% for d in delegates %}
             <tr>
               <td>{% if d.user %}<i class="mdi mdi-account"></i> {{ d.user.username }}{% else %}<i class="mdi mdi-account-group"></i> {{ d.group.name }}{% endif %}</td>
-              <td>{% if d.can_edit_settings %}<span class="badge text-bg-green">Yes</span>{% else %}<span class="badge text-bg-secondary">No (read only)</span>{% endif %}</td>
-              <td class="small text-secondary">{{ d.created|date:"Y-m-d" }} by {{ d.created_by|default:"—" }}</td>
-              {% if step_up_active %}
-                <td class="text-end text-nowrap">
-                  <form method="post" class="d-inline">{% csrf_token %}<input type="hidden" name="pk" value="{{ d.pk }}"><input type="hidden" name="action" value="toggle">
-                    <button class="btn btn-sm btn-outline-secondary" type="submit">{% if d.can_edit_settings %}Make read-only{% else %}Allow settings{% endif %}</button></form>
-                  <form method="post" class="d-inline" onsubmit="return confirm('Remove this delegate?');">{% csrf_token %}<input type="hidden" name="pk" value="{{ d.pk }}"><input type="hidden" name="action" value="remove">
-                    <button class="btn btn-sm btn-danger" type="submit"><i class="mdi mdi-delete"></i></button></form>
-                </td>
-              {% endif %}
+              <td>{% if d.can_edit_settings %}<span class="badge text-bg-green">{% trans "Yes" %}</span>{% else %}<span class="badge text-bg-secondary">{% trans "No (read only)" %}</span>{% endif %}</td>
+              <td class="small text-secondary">{{ d.created|date:"Y-m-d" }} · {{ d.created_by|default:"—" }}</td>
+              <td class="text-end text-nowrap">
+                <form method="post" class="d-inline" data-step-up>{% csrf_token %}<input type="hidden" name="pk" value="{{ d.pk }}"><input type="hidden" name="action" value="toggle">
+                  <button class="btn btn-sm btn-outline-secondary" type="submit">{% if d.can_edit_settings %}{% trans "Make read-only" %}{% else %}{% trans "Allow settings" %}{% endif %}</button></form>
+                <form method="post" class="d-inline" data-step-up data-confirm="{% trans 'Remove this delegate?' %}">{% csrf_token %}<input type="hidden" name="pk" value="{{ d.pk }}"><input type="hidden" name="action" value="remove">
+                  <button class="btn btn-sm btn-danger" type="submit"><i class="mdi mdi-delete"></i></button></form>
+              </td>
             </tr>
           {% empty %}
-            <tr><td colspan="4" class="text-secondary">No delegates. Only the master (superusers) manages PINs.</td></tr>
+            <tr><td colspan="4" class="text-secondary">{% trans "No delegates. Only the master (superusers) manages PINs." %}</td></tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
   </div>
   <div class="col-12 col-lg-5">
-    {% if step_up_active %}
-      <div class="card">
-        <h2 class="card-header">Add delegate</h2>
-        <div class="card-body">
-          <form method="post" class="object-edit">
-            {% csrf_token %}
-            {% if form.non_field_errors %}<div class="alert alert-danger"><div>{{ form.non_field_errors|join:" " }}</div></div>{% endif %}
-            {% render_field form.user %}
-            {% render_field form.group %}
-            {% render_field form.can_edit_settings %}
-            <div class="text-end"><button type="submit" class="btn btn-primary"><i class="mdi mdi-plus"></i> Add</button></div>
-          </form>
-        </div>
-      </div>
-    {% endif %}
     <div class="card">
-      <h2 class="card-header">What delegates can do</h2>
+      <h2 class="card-header">{% trans "Add delegate" %}</h2>
+      <div class="card-body">
+        <form method="post" class="object-edit" data-step-up>
+          {% csrf_token %}
+          {% if form.non_field_errors %}<div class="alert alert-danger"><div>{{ form.non_field_errors|join:" " }}</div></div>{% endif %}
+          {% render_field form.user %}
+          {% render_field form.group %}
+          {% render_field form.can_edit_settings %}
+          <div class="text-end"><button type="submit" class="btn btn-primary"><i class="mdi mdi-plus"></i> {% trans "Add" %}</button></div>
+        </form>
+      </div>
+    </div>
+    <div class="card">
+      <h2 class="card-header">{% trans "What delegates can do" %}</h2>
       <div class="card-body small">
         <ul class="mb-0">
-          <li>See all users' PIN status, the audit log and the settings.</li>
-          <li>Allow / deny PIN use, reset PIN or 2FA, force a PIN change, clear lockouts – after confirming with their own PIN + 2FA.</li>
-          <li>Edit settings only when "Can edit settings" is on.</li>
-          <li>They can <strong>not</strong> manage the master, other delegates or themselves, and cannot manage delegates.</li>
+          <li>{% trans "See all users' PIN status, the audit log and the settings." %}</li>
+          <li>{% trans "Allow / deny PIN use, suspend, start PIN or 2FA resets, force a PIN change, clear lockouts – after confirming with their own PIN + 2FA." %}</li>
+          <li>{% trans 'Edit settings only when "Can edit settings" is on.' %}</li>
+          <li>{% trans "They cannot manage the master, other delegates or themselves, and cannot manage delegates." %}</li>
         </ul>
-        <p class="mt-2 mb-0 text-secondary">Implemented as NetBox object permissions "User PIN: delegates …" (kept in sync automatically).</p>
+        <p class="mt-2 mb-0 text-secondary">{% trans 'Implemented as NetBox object permissions "User PIN: delegates …" (kept in sync automatically).' %}</p>
       </div>
     </div>
   </div>

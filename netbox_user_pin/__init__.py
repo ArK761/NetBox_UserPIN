@@ -1,6 +1,6 @@
 from netbox.plugins import PluginConfig
 
-__version__ = '0.6.0'
+__version__ = '0.7.0'
 
 
 class UserPinConfig(PluginConfig):
@@ -12,6 +12,7 @@ class UserPinConfig(PluginConfig):
     base_url = 'user-pin'
     min_version = '4.7.0'
     required_settings = ['encryption_keys']
+    middleware = ['netbox_user_pin.middleware.PluginLanguageMiddleware']
     default_settings = {
         # {key_id: urlsafe-base64 32 byte key}. Generate with `manage.py userpin_generate_key`.
         'encryption_keys': {},

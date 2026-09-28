@@ -1,18 +1,23 @@
 {% extends 'generic/_base.html' %}
-{% block title %}My PIN{% endblock %}
+{% load i18n %}
+{% block title %}{% trans "My PIN" %}{% endblock %}
 {% block content %}
 {% if reset_pending %}
-  <div class="alert alert-warning d-flex justify-content-between align-items-center"><div><i class="mdi mdi-shield-refresh"></i> <strong>{{ user_pin.pending_reset_by }}</strong> started a reset of your {% if reset_pending == 'pin' %}PIN{% else %}2FA{% endif %}. Confirm it until {{ user_pin.pending_reset_expires|date:"Y-m-d H:i" }}.</div>
-    <a class="btn btn-warning ms-3" href="{% url 'plugins:netbox_user_pin:reset_confirm' %}">Confirm reset</a></div>
+  <div class="alert alert-warning d-flex justify-content-between align-items-center"><div><i class="mdi mdi-shield-refresh"></i>
+    {% with by=user_pin.pending_reset_by until=user_pin.pending_reset_expires|date:"Y-m-d H:i" %}
+      {% if reset_pending == 'pin' %}{% blocktrans %}<strong>{{ by }}</strong> started a reset of your PIN. Confirm it until {{ until }}.{% endblocktrans %}
+      {% else %}{% blocktrans %}<strong>{{ by }}</strong> started a reset of your 2FA. Confirm it until {{ until }}.{% endblocktrans %}{% endif %}
+    {% endwith %}</div>
+    <a class="btn btn-warning ms-3" href="{% url 'plugins:netbox_user_pin:reset_confirm' %}">{% trans "Confirm reset" %}</a></div>
 {% endif %}
 {% if user_pin.suspended %}
-  <div class="alert alert-danger"><div><i class="mdi mdi-cancel"></i> Your PIN is suspended{% if user_pin.suspended_by %} by {{ user_pin.suspended_by }}{% endif %}. Contact your administrator.</div></div>
+  <div class="alert alert-danger"><div><i class="mdi mdi-cancel"></i> {% trans "Your PIN is suspended. Contact your administrator." %}</div></div>
 {% endif %}
 {% if allowed and has_pin and expiry_warning and not expired %}
-  <div class="alert alert-warning"><div><i class="mdi mdi-clock-alert"></i> Your PIN expires in <strong>{{ days_left }} day{{ days_left|pluralize }}</strong> ({{ expires|date:"Y-m-d" }}). <a href="{% url 'plugins:netbox_user_pin:change_pin' %}">Change it now</a>.</div></div>
+  <div class="alert alert-warning"><div><i class="mdi mdi-clock-alert"></i> {% url 'plugins:netbox_user_pin:change_pin' as change_url %}{% blocktrans with date=expires|date:"Y-m-d" %}Your PIN expires in <strong>{{ days_left }} days</strong> ({{ date }}). <a href="{{ change_url }}">Change it now</a>.{% endblocktrans %}</div></div>
 {% endif %}
 {% if allowed and not has_2fa %}
-  <div class="alert alert-info"><div><i class="mdi mdi-cellphone-key"></i> Two-factor authentication is not set up. It is needed for administrative confirmations and for recovering a forgotten PIN. <a href="{% url 'plugins:netbox_user_pin:totp_setup' %}">Set it up</a>.</div></div>
+  <div class="alert alert-info"><div><i class="mdi mdi-cellphone-key"></i> {% url 'plugins:netbox_user_pin:totp_setup' as setup_url %}{% blocktrans %}Two-factor authentication is not set up. It is needed for administrative confirmations and for recovering a forgotten PIN. <a href="{{ setup_url }}">Set it up</a>.{% endblocktrans %}</div></div>
 {% endif %}
 <div class="row">
   <div class="col-12 col-lg-6">
@@ -20,53 +25,53 @@
       <h2 class="card-header">PIN</h2>
       <table class="table table-hover attr-table">
         <tr>
-          <th scope="row">Permitted to use a PIN</th>
-          <td>{% if allowed %}<span class="badge text-bg-green">Yes</span>{% else %}<span class="badge text-bg-red">No – ask an administrator</span>{% endif %}</td>
+          <th scope="row">{% trans "Permitted to use a PIN" %}</th>
+          <td>{% if allowed %}<span class="badge text-bg-green">{% trans "Yes" %}</span>{% else %}<span class="badge text-bg-red">{% trans "No – ask an administrator" %}</span>{% endif %}</td>
         </tr>
         <tr>
           <th scope="row">PIN</th>
           <td>
-            {% if has_pin %}<span class="badge text-bg-green">Active</span>{% else %}<span class="badge text-bg-orange">Not set</span>{% endif %}
-            {% if expired %}<span class="badge text-bg-red">Change required</span>{% endif %}
+            {% if has_pin %}<span class="badge text-bg-green">{% trans "Active" %}</span>{% else %}<span class="badge text-bg-orange">{% trans "Not set" %}</span>{% endif %}
+            {% if expired %}<span class="badge text-bg-red">{% trans "Change required" %}</span>{% endif %}
           </td>
         </tr>
-        <tr><th scope="row">Last changed</th><td>{{ user_pin.changed|default:"—" }}</td></tr>
+        <tr><th scope="row">{% trans "Last changed" %}</th><td>{{ user_pin.changed|date:"Y-m-d H:i"|default:"—" }}</td></tr>
         <tr>
-          <th scope="row">Valid until</th>
-          <td>{% if expires %}{{ expires|date:"Y-m-d" }} <span class="text-secondary">({% if days_left >= 0 %}{{ days_left }} days left{% else %}expired{% endif %}, rotation every {{ settings.max_age_days }} days)</span>{% else %}—{% endif %}</td>
+          <th scope="row">{% trans "Valid until" %}</th>
+          <td>{% if expires %}{{ expires|date:"Y-m-d" }} <span class="text-secondary">({% if days_left >= 0 %}{% blocktrans %}{{ days_left }} days left{% endblocktrans %}{% else %}{% trans "expired" %}{% endif %}, {% blocktrans with days=settings.max_age_days %}rotation every {{ days }} days{% endblocktrans %})</span>{% else %}—{% endif %}</td>
         </tr>
-        <tr><th scope="row">Last successful use</th><td>{{ user_pin.last_verified|default:"—" }}</td></tr>
+        <tr><th scope="row">{% trans "Last successful use" %}</th><td>{{ user_pin.last_verified|date:"Y-m-d H:i"|default:"—" }}</td></tr>
         <tr>
-          <th scope="row">Lockout</th>
-          <td>{% if user_pin.is_locked_out %}<span class="badge text-bg-red">Locked until {{ user_pin.locked_until }}</span>{% else %}—{% endif %}</td>
+          <th scope="row">{% trans "Lockout" %}</th>
+          <td>{% if user_pin.is_locked_out %}<span class="badge text-bg-red">{% trans "Locked until" %} {{ user_pin.locked_until|date:"Y-m-d H:i" }}</span>{% else %}—{% endif %}</td>
         </tr>
         <tr>
-          <th scope="row">Unlocked now</th>
+          <th scope="row">{% trans "Unlocked now" %}</th>
           <td>
             {% for scope, seconds in unlocked_scopes.items %}
-              <span class="badge text-bg-blue">{% if scope == '*' %}everything{% else %}{{ scope }}{% endif %} · {% widthratio seconds 60 1 %} min</span>
+              <span class="badge text-bg-blue">{% if scope == '*' %}{% trans "everything" %}{% else %}{{ scope }}{% endif %} · {% widthratio seconds 60 1 %} min</span>
             {% empty %}—{% endfor %}
           </td>
         </tr>
-        <tr><th scope="row">Required length</th><td>{{ settings.pin_length }} digits</td></tr>
+        <tr><th scope="row">{% trans "Required length" %}</th><td>{% blocktrans with n=settings.pin_length %}{{ n }} digits{% endblocktrans %}</td></tr>
       </table>
       {% if allowed %}
         <div class="card-footer text-end">
           {% if unlocked_scopes %}
             <form method="post" action="{% url 'plugins:netbox_user_pin:lock' %}" class="d-inline">
               {% csrf_token %}
-              <button type="submit" class="btn btn-outline-secondary"><i class="mdi mdi-lock"></i> Lock now</button>
+              <button type="submit" class="btn btn-outline-secondary"><i class="mdi mdi-lock"></i> {% trans "Lock now" %}</button>
             </form>
           {% endif %}
           {% if has_pin %}
-            <form method="post" action="{% url 'plugins:netbox_user_pin:test_rotation' %}" class="d-inline" onsubmit="return confirm('Simulate an expired PIN? You will have to change your PIN right away.');">
+            <form method="post" action="{% url 'plugins:netbox_user_pin:test_rotation' %}" class="d-inline" onsubmit="return confirm('{% trans "Simulate an expired PIN? You will have to change your PIN right away." as q %}{{ q|escapejs }}');">
               {% csrf_token %}
-              <button type="submit" class="btn btn-outline-warning"><i class="mdi mdi-rotate-right"></i> Test rotation</button>
+              <button type="submit" class="btn btn-outline-warning"><i class="mdi mdi-rotate-right"></i> {% trans "Test rotation" %}</button>
             </form>
-            <a href="{% url 'plugins:netbox_user_pin:recover' %}" class="btn btn-outline-secondary"><i class="mdi mdi-lifebuoy"></i> Forgot PIN</a>
-            <a href="{% url 'plugins:netbox_user_pin:change_pin' %}" class="btn btn-primary"><i class="mdi mdi-pencil"></i> Change PIN</a>
+            <a href="{% url 'plugins:netbox_user_pin:recover' %}" class="btn btn-outline-secondary"><i class="mdi mdi-lifebuoy"></i> {% trans "Forgot PIN" %}</a>
+            <a href="{% url 'plugins:netbox_user_pin:change_pin' %}" class="btn btn-primary"><i class="mdi mdi-pencil"></i> {% trans "Change PIN" %}</a>
           {% else %}
-            <a href="{% url 'plugins:netbox_user_pin:set_pin' %}" class="btn btn-primary"><i class="mdi mdi-plus"></i> Set PIN</a>
+            <a href="{% url 'plugins:netbox_user_pin:set_pin' %}" class="btn btn-primary"><i class="mdi mdi-plus"></i> {% trans "Set PIN" %}</a>
           {% endif %}
         </div>
       {% endif %}
@@ -74,31 +79,31 @@
   </div>
   <div class="col-12 col-lg-6">
     <div class="card">
-      <h2 class="card-header">Two-factor authentication &amp; recovery</h2>
+      <h2 class="card-header">{% trans "Two-factor authentication & recovery" %}</h2>
       <table class="table table-hover attr-table">
         <tr>
-          <th scope="row">2FA (authenticator app)</th>
-          <td>{% if has_2fa %}<span class="badge text-bg-green">On</span> <span class="text-secondary">since {{ user_pin.totp_enabled|date:"Y-m-d" }}</span>{% else %}<span class="badge text-bg-orange">Off</span>{% endif %}</td>
+          <th scope="row">{% trans "2FA (authenticator app)" %}</th>
+          <td>{% if has_2fa %}<span class="badge text-bg-green">{% trans "On" %}</span> <span class="text-secondary">{% trans "since" %} {{ user_pin.totp_enabled|date:"Y-m-d" }}</span>{% else %}<span class="badge text-bg-orange">{% trans "Off" %}</span>{% endif %}</td>
         </tr>
-        <tr><th scope="row">Backup codes left</th><td>{% if has_2fa %}{{ backup_codes_left }} / 10{% else %}—{% endif %}</td></tr>
+        <tr><th scope="row">{% trans "Backup codes left" %}</th><td>{% if has_2fa %}{{ backup_codes_left }} / 10{% else %}—{% endif %}</td></tr>
         <tr>
-          <th scope="row">E-mail</th>
+          <th scope="row">{% trans "E-mail" %}</th>
           <td>
             {{ request.user.email|default:"—" }}
-            {% if email_status == 'missing' %}<span class="badge text-bg-orange">no e-mail</span>
-            {% elif email_status == 'domain' %}<span class="badge text-bg-orange">domain not allowed</span>{% endif %}
+            {% if email_status == 'missing' %}<span class="badge text-bg-orange">{% trans "no e-mail" %}</span>
+            {% elif email_status == 'domain' %}<span class="badge text-bg-orange">{% trans "domain not allowed" %}</span>{% endif %}
           </td>
         </tr>
         <tr>
-          <th scope="row">Self-service recovery</th>
-          <td>{% if not recovery_blockers %}<span class="badge text-bg-green">Available</span> <span class="text-secondary">(e-mail code + 2FA)</span>{% else %}<span class="badge text-bg-secondary">Not available</span> <span class="text-secondary">– an administrator can reset your PIN</span>{% endif %}</td>
+          <th scope="row">{% trans "Self-service recovery" %}</th>
+          <td>{% if not recovery_blockers %}<span class="badge text-bg-green">{% trans "Available" %}</span> <span class="text-secondary">({% trans "e-mail code + 2FA" %})</span>{% else %}<span class="badge text-bg-secondary">{% trans "Not available" %}</span> <span class="text-secondary">– {% trans "an administrator can reset your PIN" %}</span>{% endif %}</td>
         </tr>
       </table>
       {% if has_2fa %}
         <div class="card-body pt-0 small">
           <details>
-            <summary class="text-secondary">Lost your phone and all backup codes? Emergency reset on the server</summary>
-            <p class="mt-2 mb-1 text-secondary">Another administrator can start <em>Reset 2FA</em> for you. If nobody can, a server administrator runs:</p>
+            <summary class="text-secondary">{% trans "Lost your phone and all backup codes? Emergency reset on the server" %}</summary>
+            <p class="mt-2 mb-1 text-secondary">{% trans "Another administrator can start Reset 2FA for you. If nobody can, a server administrator runs:" %}</p>
             {% include 'netbox_user_pin/inc/cli_command.html' with command=cli_reset_2fa id='cli-self' %}
           </details>
         </div>
@@ -106,28 +111,28 @@
       {% if allowed %}
         <div class="card-footer text-end">
           {% if has_2fa %}
-            <a href="{% url 'plugins:netbox_user_pin:backup_codes' %}" class="btn btn-outline-secondary"><i class="mdi mdi-key-chain"></i> Show backup codes</a>
-            <a href="{% url 'plugins:netbox_user_pin:totp_manage' action='disable' %}" class="btn btn-outline-danger"><i class="mdi mdi-cellphone-remove"></i> Disable 2FA</a>
+            <a href="{% url 'plugins:netbox_user_pin:backup_codes' %}" class="btn btn-outline-secondary"><i class="mdi mdi-key-chain"></i> {% trans "Show backup codes" %}</a>
+            <a href="{% url 'plugins:netbox_user_pin:totp_manage' action='disable' %}" class="btn btn-outline-danger"><i class="mdi mdi-cellphone-remove"></i> {% trans "Disable 2FA" %}</a>
           {% else %}
-            <a href="{% url 'plugins:netbox_user_pin:totp_setup' %}" class="btn btn-primary"><i class="mdi mdi-cellphone-key"></i> Set up 2FA</a>
+            <a href="{% url 'plugins:netbox_user_pin:totp_setup' %}" class="btn btn-primary"><i class="mdi mdi-cellphone-key"></i> {% trans "Set up 2FA" %}</a>
           {% endif %}
         </div>
       {% endif %}
     </div>
     <div class="card">
-      <h2 class="card-header">Recent activity</h2>
+      <h2 class="card-header">{% trans "Recent activity" %}</h2>
       <table class="table table-hover">
-        <thead><tr><th>Time</th><th>Event</th><th>Scope</th><th>IP</th></tr></thead>
+        <thead><tr><th>{% trans "Time" %}</th><th>{% trans "Event" %}</th><th>{% trans "Scope" %}</th><th>IP</th></tr></thead>
         <tbody>
           {% for event in recent_events %}
             <tr>
               <td>{{ event.time|date:"Y-m-d H:i:s" }}</td>
-              <td>{{ event.get_action_display }}{% if event.actor_username and event.actor_username != event.username %} <span class="text-secondary">(by {{ event.actor_username }})</span>{% endif %}</td>
+              <td>{{ event.get_action_display }}{% if event.actor_username and event.actor_username != event.username %} <span class="text-secondary">({{ event.actor_username }})</span>{% endif %}</td>
               <td>{{ event.scope|default:"—" }}</td>
               <td>{{ event.ip_address|default:"—" }}</td>
             </tr>
           {% empty %}
-            <tr><td colspan="4" class="text-secondary">No activity yet.</td></tr>
+            <tr><td colspan="4" class="text-secondary">{% trans "No activity yet." %}</td></tr>
           {% endfor %}
         </tbody>
       </table>

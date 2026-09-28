@@ -310,7 +310,7 @@ class ViewTest(PinTestCase):
         self.assertEqual(UserPin.objects.get(user=self.user).reset_pending, '')
 
         data = {
-            'access_mode': 'all', 'pin_length': 8, 'block_weak_pins': 'on', 'blocked_pins': '', 'max_age_days': 180,
+            'language': 'en', 'access_mode': 'all', 'pin_length': 8, 'block_weak_pins': 'on', 'blocked_pins': '', 'max_age_days': 180,
             'warn_days': 14, 'unlock_minutes': 10, 'sliding_unlock': 'on', 'scope_mode': 'global',
             'max_attempts': 5, 'lockout_minutes': 30, 'require_2fa_admin': 'on', 'step_up_minutes': 5,
             'reset_valid_hours': 24, 'approval_valid_minutes': 1440,
@@ -903,7 +903,7 @@ class FourEyesTest(PinTestCase):
     def test_settings_change_needs_approval(self):
         admin_login(self.client, self.peter, secret=self.secrets[self.peter.pk])
         data = {f: getattr(PinSettings.load(), f) for f in (
-            'access_mode', 'pin_length', 'blocked_pins', 'max_age_days', 'warn_days', 'unlock_minutes', 'scope_mode',
+            'language', 'access_mode', 'pin_length', 'blocked_pins', 'max_age_days', 'warn_days', 'unlock_minutes', 'scope_mode',
             'max_attempts', 'lockout_minutes', 'step_up_minutes', 'reset_valid_hours', 'approval_valid_minutes')}
         data.update({'pin_length': 8, 'block_weak_pins': 'on', 'sliding_unlock': 'on', 'require_2fa_admin': 'on',
                      'four_eyes': 'on', 'four_eyes_delegates': 'on', 'four_eyes_settings': 'on'})
@@ -1034,3 +1034,48 @@ class SmtpAndDomainTest(PinTestCase):
             response = self.client.post(reverse('plugins:netbox_user_pin:mail'), {'action': 'test-connection'},
                                         follow=True)
         self.assertContains(response, 'connection refused')
+
+
+class StepUpPopupAndLanguageTest(PinTestCase):
+
+    def setUp(self):
+        super().setUp()
+        self.admin = User.objects.create_superuser('popup', password='pw')
+        service.set_pin(self.admin, GOOD_PIN)
+        self.secret = enable_2fa(self.admin)
+        self.client.force_login(self.admin)
+        self.client.post(reverse('plugins:netbox_user_pin:unlock'), {'pin': GOOD_PIN, 'scope': 'user-pin-admin'})
+
+    def test_ajax_step_up(self):
+        url = reverse('plugins:netbox_user_pin:step_up')
+        response = self.client.post(url, {'pin': '000001', 'otp': current_code(self.secret)},
+                                    HTTP_X_REQUESTED_WITH='XMLHttpRequest')
+        self.assertFalse(response.json()['ok'])
+        self.assertTrue(response.json()['errors'])
+        response = self.client.post(url, {'pin': GOOD_PIN, 'otp': current_code(self.secret, 1)},
+                                    HTTP_X_REQUESTED_WITH='XMLHttpRequest')
+        self.assertTrue(response.json()['ok'])
+        # after the pop-up the held form is submitted and goes through
+        self.client.post(reverse('plugins:netbox_user_pin:mail'), {'action': 'add-domain', 'domain': '@Firma.sk'})
+        from netbox_user_pin.models import AllowedDomain
+        self.assertTrue(AllowedDomain.objects.filter(domain='firma.sk').exists())
+
+    def test_tests_need_no_step_up(self):
+        response = self.client.post(reverse('plugins:netbox_user_pin:mail'), {'action': 'test-connection'})
+        self.assertEqual(response.url, reverse('plugins:netbox_user_pin:mail'))
+        response = self.client.post(reverse('plugins:netbox_user_pin:mail'), {'action': 'add-domain',
+                                                                               'domain': 'x.sk'})
+        self.assertIn(reverse('plugins:netbox_user_pin:step_up'), response.url)
+
+    def test_slovak_language(self):
+        settings = PinSettings.load()
+        settings.language = 'sk'
+        settings.save()
+        response = self.client.get(reverse('plugins:netbox_user_pin:my_pin'))
+        self.assertContains(response, 'Môj PIN')
+        self.assertContains(response, 'Dvojfaktorové overenie a obnova')
+        response = self.client.post(reverse('plugins:netbox_user_pin:unlock'), {'pin': '000001'})
+        self.assertContains(response, 'Nesprávny PIN')
+        # the rest of NetBox keeps its language
+        from django.utils.translation import get_language
+        self.assertNotEqual(get_language(), 'sk')

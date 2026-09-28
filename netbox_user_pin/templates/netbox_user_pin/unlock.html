@@ -1,21 +1,23 @@
 {% extends 'generic/_base.html' %}
-{% block title %}<i class="mdi mdi-lock"></i> Enter your PIN{% endblock %}
+{% load i18n %}
+{% block title %}<i class="mdi mdi-lock"></i> {% trans "Enter your PIN" %}{% endblock %}
 {% block content %}
 <div class="row"><div class="col-12 col-md-8 col-lg-4">
   {% if reset_pending %}
-    <div class="alert alert-warning"><div>An administrator started a reset of your {% if reset_pending == 'pin' %}PIN{% else %}2FA{% endif %}. <a href="{% url 'plugins:netbox_user_pin:reset_confirm' %}">Confirm it here</a>.</div></div>
+    {% url 'plugins:netbox_user_pin:reset_confirm' as reset_url %}
+    <div class="alert alert-warning"><div>{% if reset_pending == 'pin' %}{% blocktrans %}An administrator started a reset of your PIN. <a href="{{ reset_url }}">Confirm it here</a>.{% endblocktrans %}{% else %}{% blocktrans %}An administrator started a reset of your 2FA. <a href="{{ reset_url }}">Confirm it here</a>.{% endblocktrans %}{% endif %}</div></div>
   {% endif %}
   {% if suspended %}
-    <div class="alert alert-danger"><div>Your PIN is suspended. Contact your administrator.</div></div>
+    <div class="alert alert-danger"><div>{% trans "Your PIN is suspended. Contact your administrator." %}</div></div>
   {% elif locked_until %}
-    <div class="alert alert-danger"><div>Too many failed attempts. Try again after {{ locked_until }} or ask an administrator.</div></div>
+    <div class="alert alert-danger"><div>{% blocktrans with until=locked_until|date:"Y-m-d H:i" %}Too many failed attempts. Try again after {{ until }} or ask an administrator.{% endblocktrans %}</div></div>
   {% else %}
-    <p class="text-secondary">This area is protected. Enter your personal PIN to continue.</p>
+    <p class="text-secondary">{% trans "This area is protected. Enter your personal PIN to continue." %}</p>
   {% endif %}
-  {% include 'netbox_user_pin/inc/pin_form.html' with submit_label="Unlock" %}
+  {% trans "Unlock" as submit %}{% include 'netbox_user_pin/inc/pin_form.html' with submit_label=submit %}
   <p class="mt-3 small text-secondary">
-    Forgot your PIN?
-    {% if can_recover %}<a href="{% url 'plugins:netbox_user_pin:recover' %}">Recover it with e-mail + 2FA</a>{% else %}Ask an administrator to reset it.{% endif %}
+    {% trans "Forgot your PIN?" %}
+    {% if can_recover %}<a href="{% url 'plugins:netbox_user_pin:recover' %}">{% trans "Recover it with e-mail + 2FA" %}</a>{% else %}{% trans "Ask an administrator to reset it." %}{% endif %}
   </p>
 </div></div>
 {% endblock %}

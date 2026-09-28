@@ -1,102 +1,101 @@
 {% extends 'generic/_base.html' %}
-{% block title %}User PINs{% endblock %}
+{% load i18n %}
+{% block title %}{% trans "User PINs" %}{% endblock %}
 {% block content %}
 <div class="row row-cards mb-3">
-  <div class="col-6 col-md-3 col-xl"><a class="card card-link text-reset" href="?"><div class="card-body"><div class="text-secondary">Users</div><div class="h2 mb-0">{{ summary.total }}</div></div></a></div>
-  <div class="col-6 col-md-3 col-xl"><a class="card card-link text-reset" href="?status=with_pin"><div class="card-body"><div class="text-secondary">PIN active</div><div class="h2 mb-0 text-green">{{ summary.with_pin }}</div></div></a></div>
-  <div class="col-6 col-md-3 col-xl"><a class="card card-link text-reset" href="?status=without_pin"><div class="card-body"><div class="text-secondary">No PIN yet</div><div class="h2 mb-0 text-orange">{{ summary.without_pin }}</div></div></a></div>
-  <div class="col-6 col-md-3 col-xl"><a class="card card-link text-reset" href="?status=no_2fa"><div class="card-body"><div class="text-secondary">No 2FA</div><div class="h2 mb-0 text-orange">{{ summary.no_2fa }}</div></div></a></div>
-  <div class="col-6 col-md-3 col-xl"><a class="card card-link text-reset" href="?status=no_email"><div class="card-body"><div class="text-secondary">E-mail issue</div><div class="h2 mb-0 text-orange">{{ summary.no_email }}</div></div></a></div>
-  <div class="col-6 col-md-3 col-xl"><a class="card card-link text-reset" href="?status=locked"><div class="card-body"><div class="text-secondary">Locked out</div><div class="h2 mb-0 text-red">{{ summary.locked }}</div></div></a></div>
-  <div class="col-6 col-md-3 col-xl"><a class="card card-link text-reset" href="?status=suspended"><div class="card-body"><div class="text-secondary">Suspended</div><div class="h2 mb-0 text-red">{{ summary.suspended }}</div></div></a></div>
-  <div class="col-6 col-md-3 col-xl"><a class="card card-link text-reset" href="?status=not_allowed"><div class="card-body"><div class="text-secondary">Not permitted</div><div class="h2 mb-0 text-secondary">{{ summary.not_allowed }}</div></div></a></div>
+  <div class="col-6 col-md-3 col-xl"><a class="card card-link text-reset" href="?"><div class="card-body"><div class="text-secondary">{% trans "Users" %}</div><div class="h2 mb-0">{{ summary.total }}</div></div></a></div>
+  <div class="col-6 col-md-3 col-xl"><a class="card card-link text-reset" href="?status=with_pin"><div class="card-body"><div class="text-secondary">{% trans "PIN active" %}</div><div class="h2 mb-0 text-green">{{ summary.with_pin }}</div></div></a></div>
+  <div class="col-6 col-md-3 col-xl"><a class="card card-link text-reset" href="?status=without_pin"><div class="card-body"><div class="text-secondary">{% trans "No PIN yet" %}</div><div class="h2 mb-0 text-orange">{{ summary.without_pin }}</div></div></a></div>
+  <div class="col-6 col-md-3 col-xl"><a class="card card-link text-reset" href="?status=no_2fa"><div class="card-body"><div class="text-secondary">{% trans "No 2FA" %}</div><div class="h2 mb-0 text-orange">{{ summary.no_2fa }}</div></div></a></div>
+  <div class="col-6 col-md-3 col-xl"><a class="card card-link text-reset" href="?status=no_email"><div class="card-body"><div class="text-secondary">{% trans "E-mail issue" %}</div><div class="h2 mb-0 text-orange">{{ summary.no_email }}</div></div></a></div>
+  <div class="col-6 col-md-3 col-xl"><a class="card card-link text-reset" href="?status=locked"><div class="card-body"><div class="text-secondary">{% trans "Locked out" %}</div><div class="h2 mb-0 text-red">{{ summary.locked }}</div></div></a></div>
+  <div class="col-6 col-md-3 col-xl"><a class="card card-link text-reset" href="?status=suspended"><div class="card-body"><div class="text-secondary">{% trans "Suspended" %}</div><div class="h2 mb-0 text-red">{{ summary.suspended }}</div></div></a></div>
+  <div class="col-6 col-md-3 col-xl"><a class="card card-link text-reset" href="?status=not_allowed"><div class="card-body"><div class="text-secondary">{% trans "Not permitted" %}</div><div class="h2 mb-0 text-secondary">{{ summary.not_allowed }}</div></div></a></div>
 </div>
 {% if can_change %}{% include 'netbox_user_pin/inc/step_up_bar.html' %}{% endif %}
 <form method="get" class="row g-2 mb-3">
-  <div class="col-auto"><input type="text" name="q" value="{{ q }}" class="form-control" placeholder="Username or e-mail"></div>
+  <div class="col-auto"><input type="text" name="q" value="{{ q }}" class="form-control" placeholder="{% trans 'Username or e-mail' %}"></div>
   <div class="col-auto">
     <select name="status" class="form-select">
-      <option value="">All users</option>
-      <option value="with_pin"{% if status == 'with_pin' %} selected{% endif %}>PIN active</option>
-      <option value="without_pin"{% if status == 'without_pin' %} selected{% endif %}>No PIN yet</option>
-      <option value="no_2fa"{% if status == 'no_2fa' %} selected{% endif %}>No 2FA</option>
-      <option value="no_email"{% if status == 'no_email' %} selected{% endif %}>E-mail issue (missing / domain)</option>
-      <option value="locked"{% if status == 'locked' %} selected{% endif %}>Locked out</option>
-      <option value="suspended"{% if status == 'suspended' %} selected{% endif %}>Suspended</option>
-      <option value="not_allowed"{% if status == 'not_allowed' %} selected{% endif %}>Not permitted</option>
+      <option value="">{% trans "All users" %}</option>
+      <option value="with_pin"{% if status == 'with_pin' %} selected{% endif %}>{% trans "PIN active" %}</option>
+      <option value="without_pin"{% if status == 'without_pin' %} selected{% endif %}>{% trans "No PIN yet" %}</option>
+      <option value="no_2fa"{% if status == 'no_2fa' %} selected{% endif %}>{% trans "No 2FA" %}</option>
+      <option value="no_email"{% if status == 'no_email' %} selected{% endif %}>{% trans "E-mail issue (missing / domain)" %}</option>
+      <option value="locked"{% if status == 'locked' %} selected{% endif %}>{% trans "Locked out" %}</option>
+      <option value="suspended"{% if status == 'suspended' %} selected{% endif %}>{% trans "Suspended" %}</option>
+      <option value="not_allowed"{% if status == 'not_allowed' %} selected{% endif %}>{% trans "Not permitted" %}</option>
     </select>
   </div>
-  <div class="col-auto"><button class="btn btn-primary" type="submit"><i class="mdi mdi-magnify"></i> Search</button></div>
-  <div class="col text-end text-secondary small align-self-center">Mode: <strong>{{ settings.get_access_mode_display }}</strong> · rotation every {{ settings.max_age_days }} days</div>
+  <div class="col-auto"><button class="btn btn-primary" type="submit"><i class="mdi mdi-magnify"></i> {% trans "Search" %}</button></div>
+  <div class="col text-end text-secondary small align-self-center">{% trans "Mode" %}: <strong>{{ settings.get_access_mode_display }}</strong> · {% blocktrans with days=settings.max_age_days %}rotation every {{ days }} days{% endblocktrans %}</div>
 </form>
 <div class="card">
   <div class="table-responsive">
   <table class="table table-hover">
-    <thead><tr><th>User</th><th>Permitted</th><th>PIN</th><th>2FA</th><th>E-mail</th><th>Valid until</th><th>Last used</th><th>Lockout</th>{% if can_change and step_up_active %}<th></th>{% endif %}</tr></thead>
+    <thead><tr><th>{% trans "User" %}</th><th>{% trans "Permitted" %}</th><th>PIN</th><th>2FA</th><th>{% trans "E-mail" %}</th><th>{% trans "Valid until" %}</th><th>{% trans "Last used" %}</th><th>{% trans "Lockout" %}</th>{% if can_change %}<th></th>{% endif %}</tr></thead>
     <tbody>
       {% for row in rows %}
         <tr>
           <td class="text-nowrap">
             {{ row.user.username }}
-            {% if row.user == request.user %}<span class="badge text-bg-blue">you</span>{% endif %}
-            {% if row.role == 'master' %}<span class="badge text-bg-purple">master</span>{% elif row.role == 'delegate' %}<span class="badge text-bg-cyan">delegate</span>{% endif %}
-            {% if not row.user.is_active %}<span class="badge text-bg-secondary">inactive</span>{% endif %}
+            {% if row.user == request.user %}<span class="badge text-bg-blue">{% trans "you" %}</span>{% endif %}
+            {% if row.role == 'master' %}<span class="badge text-bg-purple">{% trans "master" %}</span>{% elif row.role == 'delegate' %}<span class="badge text-bg-cyan">{% trans "delegate" %}</span>{% endif %}
+            {% if not row.user.is_active %}<span class="badge text-bg-secondary">{% trans "inactive" %}</span>{% endif %}
           </td>
           <td>
-            {% if row.allowed %}<span class="badge text-bg-green">Yes</span>{% else %}<span class="badge text-bg-red">No</span>{% endif %}
-            {% if row.access != 'default' %}<span class="text-secondary small">({{ row.access }})</span>{% endif %}
+            {% if row.allowed %}<span class="badge text-bg-green">{% trans "Yes" %}</span>{% else %}<span class="badge text-bg-red">{% trans "No" %}</span>{% endif %}
+            {% if row.access == 'allowed' %}<span class="text-secondary small">({% trans "allowed" %})</span>{% elif row.access == 'denied' %}<span class="text-secondary small">({% trans "denied" %})</span>{% endif %}
           </td>
           <td>
-            {% if row.is_set %}<span class="badge text-bg-green">Active</span>{% else %}<span class="badge text-bg-orange">Not set</span>{% endif %}
-            {% if row.must_change %}<span class="badge text-bg-yellow">must change</span>{% endif %}
-            {% if row.suspended %}<span class="badge text-bg-red">suspended</span>{% endif %}
-            {% if row.reset_pending %}<span class="badge text-bg-blue" title="waiting for the user to confirm">{{ row.reset_pending }} reset pending</span>{% endif %}
+            {% if row.is_set %}<span class="badge text-bg-green">{% trans "Active" %}</span>{% else %}<span class="badge text-bg-orange">{% trans "Not set" %}</span>{% endif %}
+            {% if row.must_change %}<span class="badge text-bg-yellow">{% trans "must change" %}</span>{% endif %}
+            {% if row.suspended %}<span class="badge text-bg-red">{% trans "suspended" %}</span>{% endif %}
+            {% if row.reset_pending == 'pin' %}<span class="badge text-bg-blue">{% trans "PIN reset pending" %}</span>{% elif row.reset_pending %}<span class="badge text-bg-blue">{% trans "2FA reset pending" %}</span>{% endif %}
           </td>
-          <td>{% if row.has_2fa %}<span class="badge text-bg-green">On</span>{% else %}<span class="badge text-bg-secondary">Off</span>{% endif %}</td>
+          <td>{% if row.has_2fa %}<span class="badge text-bg-green">{% trans "On" %}</span>{% else %}<span class="badge text-bg-secondary">{% trans "Off" %}</span>{% endif %}</td>
           <td class="text-nowrap">
-            {% if row.email_status == 'missing' %}<span class="badge text-bg-orange"><i class="mdi mdi-alert"></i> no e-mail</span>
-            {% else %}{{ row.user.email }}{% if row.email_status == 'domain' %} <span class="badge text-bg-orange"><i class="mdi mdi-alert"></i> domain</span>{% endif %}{% endif %}
+            {% if row.email_status == 'missing' %}<span class="badge text-bg-orange"><i class="mdi mdi-alert"></i> {% trans "no e-mail" %}</span>
+            {% else %}{{ row.user.email }}{% if row.email_status == 'domain' %} <span class="badge text-bg-orange"><i class="mdi mdi-alert"></i> {% trans "domain" %}</span>{% endif %}{% endif %}
           </td>
           <td class="text-nowrap">
             {% if row.expires %}{{ row.expires|date:"Y-m-d" }}
-              {% if row.days_left < 0 %}<span class="badge text-bg-red">expired</span>{% elif row.days_left <= settings.warn_days %}<span class="badge text-bg-yellow">{{ row.days_left }} d</span>{% endif %}
+              {% if row.days_left < 0 %}<span class="badge text-bg-red">{% trans "expired" %}</span>{% elif row.days_left <= settings.warn_days %}<span class="badge text-bg-yellow">{{ row.days_left }} d</span>{% endif %}
             {% else %}—{% endif %}
           </td>
           <td class="text-nowrap">{{ row.pin.last_verified|date:"Y-m-d H:i"|default:"—" }}</td>
-          <td class="text-nowrap">{% if row.locked %}<span class="badge text-bg-red">until {{ row.pin.locked_until|date:"H:i" }}</span>{% else %}—{% endif %}</td>
-          {% if can_change and step_up_active %}
+          <td class="text-nowrap">{% if row.locked %}<span class="badge text-bg-red">{% trans "until" %} {{ row.pin.locked_until|date:"H:i" }}</span>{% else %}—{% endif %}</td>
+          {% if can_change %}
             <td class="text-end text-nowrap">
               {% if row.manageable %}
                 <div class="dropdown">
-                  <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">Actions</button>
+                  <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">{% trans "Actions" %}</button>
                   <div class="dropdown-menu dropdown-menu-end">
-                    {% with base=row.user.pk %}
-                    {% if row.access != 'allowed' %}{% include 'netbox_user_pin/inc/user_action.html' with action='allow' label='Allow PIN' icon='check' %}{% endif %}
-                    {% if row.access != 'denied' and not row.user.is_superuser %}{% include 'netbox_user_pin/inc/user_action.html' with action='deny' label='Deny PIN' icon='cancel' %}{% endif %}
-                    {% if row.access != 'default' %}{% include 'netbox_user_pin/inc/user_action.html' with action='default' label='Back to default' icon='undo' %}{% endif %}
-                    {% if row.is_set %}{% include 'netbox_user_pin/inc/user_action.html' with action='force-change' label='Force PIN change' icon='rotate-right' %}{% endif %}
-                    {% if row.locked %}{% include 'netbox_user_pin/inc/user_action.html' with action='clear-lockout' label='Clear lockout' icon='lock-open' %}{% endif %}
+                    {% if row.access != 'allowed' %}{% trans "Allow PIN" as l %}{% include 'netbox_user_pin/inc/user_action.html' with action='allow' label=l icon='check' %}{% endif %}
+                    {% if row.access != 'denied' and not row.user.is_superuser %}{% trans "Deny PIN" as l %}{% include 'netbox_user_pin/inc/user_action.html' with action='deny' label=l icon='cancel' %}{% endif %}
+                    {% if row.access != 'default' %}{% trans "Back to default" as l %}{% include 'netbox_user_pin/inc/user_action.html' with action='default' label=l icon='undo' %}{% endif %}
+                    {% if row.is_set %}{% trans "Force PIN change" as l %}{% include 'netbox_user_pin/inc/user_action.html' with action='force-change' label=l icon='rotate-right' %}{% endif %}
+                    {% if row.locked %}{% trans "Clear lockout" as l %}{% include 'netbox_user_pin/inc/user_action.html' with action='clear-lockout' label=l icon='lock-open' %}{% endif %}
                     <div class="dropdown-divider"></div>
-                    {% if row.suspended %}{% include 'netbox_user_pin/inc/user_action.html' with action='unsuspend' label='Lift suspension' icon='lock-open-check' %}
-                    {% elif row.is_set %}{% include 'netbox_user_pin/inc/user_action.html' with action='suspend' label='Suspend PIN (block now)' icon='cancel' confirm=True %}{% endif %}
-                    {% if row.reset_pending %}{% include 'netbox_user_pin/inc/user_action.html' with action='cancel-reset' label='Cancel pending reset' icon='close' %}
+                    {% if row.suspended %}{% trans "Lift suspension" as l %}{% include 'netbox_user_pin/inc/user_action.html' with action='unsuspend' label=l icon='lock-open-check' %}
+                    {% elif row.is_set %}{% trans "Suspend PIN (block now)" as l %}{% include 'netbox_user_pin/inc/user_action.html' with action='suspend' label=l icon='cancel' confirm=True %}{% endif %}
+                    {% if row.reset_pending %}{% trans "Cancel pending reset" as l %}{% include 'netbox_user_pin/inc/user_action.html' with action='cancel-reset' label=l icon='close' %}
                     {% elif row.has_2fa %}
-                      {% include 'netbox_user_pin/inc/user_action.html' with action='reset' label='Reset PIN (user confirms with 2FA)' icon='restore' confirm=True %}
-                      {% include 'netbox_user_pin/inc/user_action.html' with action='reset-2fa' label='Reset 2FA (user confirms with PIN)' icon='cellphone-remove' confirm=True %}
-                    {% else %}<span class="dropdown-item text-secondary small">Reset needs the user's 2FA</span>{% endif %}
+                      {% trans "Reset PIN (user confirms with 2FA)" as l %}{% include 'netbox_user_pin/inc/user_action.html' with action='reset' label=l icon='restore' confirm=True %}
+                      {% trans "Reset 2FA (user confirms with PIN)" as l %}{% include 'netbox_user_pin/inc/user_action.html' with action='reset-2fa' label=l icon='cellphone-remove' confirm=True %}
+                    {% else %}<span class="dropdown-item text-secondary small">{% trans "Reset needs the user's 2FA" %}</span>{% endif %}
                     {% if row.has_2fa %}
                       <div class="dropdown-divider"></div>
-                      <button type="button" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#cli-{{ row.user.pk }}"><i class="mdi mdi-console me-2"></i>Emergency: server command (2FA)</button>
+                      <button type="button" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#cli-{{ row.user.pk }}"><i class="mdi mdi-console me-2"></i>{% trans "Emergency: server command (2FA)" %}</button>
                     {% endif %}
-                    {% endwith %}
                   </div>
                 </div>
-              {% else %}<span class="text-secondary small" title="Delegates cannot manage the master, other delegates or themselves">—</span>{% endif %}
+              {% else %}<span class="text-secondary small" title="{% trans 'Nobody manages themselves here; delegates cannot manage the master or other delegates' %}">—</span>{% endif %}
             </td>
           {% endif %}
         </tr>
       {% empty %}
-        <tr><td colspan="9" class="text-secondary">No users.</td></tr>
+        <tr><td colspan="9" class="text-secondary">{% trans "No users." %}</td></tr>
       {% endfor %}
     </tbody>
   </table>
@@ -106,9 +105,9 @@
 {% for row in rows %}{% if row.has_2fa and row.manageable %}
   <div class="modal fade" id="cli-{{ row.user.pk }}" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg"><div class="modal-content">
-      <div class="modal-header"><h5 class="modal-title">Emergency 2FA reset – {{ row.user.username }}</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-header"><h5 class="modal-title">{% trans "Emergency 2FA reset" %} – {{ row.user.username }}</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
       <div class="modal-body">
-        <p class="text-secondary">Only if the normal way is not possible (<em>Reset 2FA</em> confirmed by the user with the PIN). Run as root on the NetBox server – the 2FA is removed immediately and the action is recorded in the audit log.</p>
+        <p class="text-secondary">{% trans "Only if the normal way (Reset 2FA confirmed by the user with the PIN) is not possible. Run as root on the NetBox server – the 2FA is removed immediately and the action is recorded in the audit log." %}</p>
         {% include 'netbox_user_pin/inc/cli_command.html' with command=row.cli_reset_2fa id=row.user.pk %}
       </div>
     </div></div>

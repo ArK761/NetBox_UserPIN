@@ -1,23 +1,24 @@
 {% extends 'generic/_base.html' %}
-{% block title %}Set up two-factor authentication{% endblock %}
+{% load i18n %}
+{% block title %}{% trans "Set up two-factor authentication" %}{% endblock %}
 {% block content %}
 <div class="row">
   <div class="col-12 col-lg-5">
     <div class="card">
-      <h2 class="card-header">1. Scan with your authenticator app</h2>
+      <h2 class="card-header">{% trans "1. Scan with your authenticator app" %}</h2>
       <div class="card-body text-center">
         <div class="d-inline-block p-2 bg-white rounded">{{ qr|safe }}</div>
         <p class="mt-3 mb-1 text-secondary small">Microsoft Authenticator, Google Authenticator, Authy, 1Password …</p>
-        <p class="small mb-0">Can't scan? Enter this key manually:<br><code class="fs-4">{{ secret }}</code></p>
+        <p class="small mb-0">{% trans "Can't scan? Enter this key manually:" %}<br><code class="fs-4">{{ secret }}</code></p>
       </div>
     </div>
   </div>
   <div class="col-12 col-lg-5">
     <div class="card">
-      <h2 class="card-header">2. Enter the 6-digit code</h2>
+      <h2 class="card-header">{% trans "2. Enter the 6-digit code" %}</h2>
       <div class="card-body">
         {% url 'plugins:netbox_user_pin:my_pin' as cancel_url %}
-        {% include 'netbox_user_pin/inc/pin_form.html' with submit_label="Activate 2FA" %}
+        {% trans "Activate 2FA" as submit %}{% include 'netbox_user_pin/inc/pin_form.html' with submit_label=submit %}
       </div>
     </div>
   </div>

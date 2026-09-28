@@ -275,7 +275,7 @@ class PinSettingsForm(_StyledModelForm):
     class Meta:
         model = PinSettings
         fields = (
-            'access_mode', 'pin_length', 'block_weak_pins', 'blocked_pins', 'max_age_days', 'warn_days',
+            'language', 'access_mode', 'pin_length', 'block_weak_pins', 'blocked_pins', 'max_age_days', 'warn_days',
             'unlock_minutes', 'sliding_unlock', 'scope_mode', 'require_2fa_unlock',
             'max_attempts', 'lockout_minutes', 'require_2fa_admin', 'step_up_minutes', 'reset_valid_hours',
             'four_eyes', 'four_eyes_delegates', 'four_eyes_settings', 'four_eyes_access', 'approval_valid_minutes',

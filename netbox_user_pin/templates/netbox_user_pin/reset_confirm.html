@@ -1,15 +1,19 @@
 {% extends 'generic/_base.html' %}
-{% block title %}<i class="mdi mdi-shield-refresh"></i> Confirm {% if kind == 'pin' %}PIN{% else %}2FA{% endif %} reset{% endblock %}
+{% load i18n %}
+{% block title %}<i class="mdi mdi-shield-refresh"></i> {% if kind == 'pin' %}{% trans "Confirm PIN reset" %}{% else %}{% trans "Confirm 2FA reset" %}{% endif %}{% endblock %}
 {% block content %}
 <div class="row"><div class="col-12 col-md-8 col-lg-5">
   <div class="alert alert-info"><div>
-    <strong>{{ user_pin.pending_reset_by }}</strong> started a reset of your {% if kind == 'pin' %}PIN{% else %}two-factor authentication{% endif %}
-    (valid until {{ user_pin.pending_reset_expires|date:"Y-m-d H:i" }}).
-    {% if kind == 'pin' %}Confirm with a code from your authenticator app (or a backup code) and choose a new PIN ({{ settings.pin_length }} digits).
-    {% else %}Confirm with your PIN; afterwards you set up 2FA on your new phone.{% endif %}
-    If you did not ask for this, do not continue and contact your administrator.
+    {% with by=user_pin.pending_reset_by until=user_pin.pending_reset_expires|date:"Y-m-d H:i" n=settings.pin_length %}
+    {% if kind == 'pin' %}
+      {% blocktrans %}<strong>{{ by }}</strong> started a reset of your PIN (valid until {{ until }}). Confirm with a code from your authenticator app (or a backup code) and choose a new PIN ({{ n }} digits).{% endblocktrans %}
+    {% else %}
+      {% blocktrans %}<strong>{{ by }}</strong> started a reset of your two-factor authentication (valid until {{ until }}). Confirm with your PIN; afterwards you set up 2FA on your new phone.{% endblocktrans %}
+    {% endif %}
+    {% endwith %}
+    {% trans "If you did not ask for this, do not continue and contact your administrator." %}
   </div></div>
   {% url 'plugins:netbox_user_pin:my_pin' as cancel_url %}
-  {% include 'netbox_user_pin/inc/pin_form.html' with submit_label="Confirm" %}
+  {% trans "Confirm" as submit %}{% include 'netbox_user_pin/inc/pin_form.html' with submit_label=submit %}
 </div></div>
 {% endblock %}

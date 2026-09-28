@@ -1,4 +1,5 @@
+{% load i18n %}
 <div class="input-group">
   <input type="text" class="form-control font-monospace small" id="cmd-{{ id }}" value="{{ command }}" readonly>
-  <button class="btn btn-outline-secondary" type="button" onclick="navigator.clipboard.writeText(document.getElementById('cmd-{{ id }}').value)" title="Copy"><i class="mdi mdi-content-copy"></i> Copy</button>
+  <button class="btn btn-outline-secondary" type="button" onclick="navigator.clipboard.writeText(document.getElementById('cmd-{{ id }}').value)" title="{% trans 'Copy' %}"><i class="mdi mdi-content-copy"></i> {% trans "Copy" %}</button>
 </div>

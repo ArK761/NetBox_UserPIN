@@ -1,11 +1,12 @@
 {% extends 'generic/_base.html' %}
-{% block title %}Four-eyes approvals{% endblock %}
+{% load i18n %}
+{% block title %}{% trans "Four-eyes approvals" %}{% endblock %}
 {% block content %}
-{% if not settings.four_eyes %}<div class="alert alert-secondary"><div>Four-eyes approval is currently off (Settings → Protection).</div></div>{% endif %}
+{% if not settings.four_eyes %}<div class="alert alert-secondary"><div>{% trans "Four-eyes approval is currently off (Settings → Four-eyes approval)." %}</div></div>{% endif %}
 <div class="card">
-  <h2 class="card-header">Waiting</h2>
+  <h2 class="card-header">{% trans "Waiting" %}</h2>
   <table class="table table-hover">
-    <thead><tr><th>#</th><th>Change</th><th>Requested by</th><th>Confirmed</th><th>Valid until</th><th></th></tr></thead>
+    <thead><tr><th>#</th><th>{% trans "Change" %}</th><th>{% trans "Requested by" %}</th><th>{% trans "Confirmed" %}</th><th>{% trans "Valid until" %}</th><th></th></tr></thead>
     <tbody>
       {% for req, can_vote in pending %}
         <tr>
@@ -14,18 +15,18 @@
           <td>{{ req.requested_by_name }}</td>
           <td>{% for v in req.votes.all %}<span class="badge text-bg-{% if v.approve %}green{% else %}red{% endif %}">{{ v.username }}</span> {% empty %}—{% endfor %}</td>
           <td>{{ req.expires|date:"Y-m-d H:i" }}</td>
-          <td class="text-end"><a class="btn btn-sm {% if can_vote %}btn-primary{% else %}btn-outline-secondary{% endif %}" href="{% url 'plugins:netbox_user_pin:approval' pk=req.pk %}">{% if can_vote %}Confirm{% else %}Open{% endif %}</a></td>
+          <td class="text-end"><a class="btn btn-sm {% if can_vote %}btn-primary{% else %}btn-outline-secondary{% endif %}" href="{% url 'plugins:netbox_user_pin:approval' pk=req.pk %}">{% if can_vote %}{% trans "Confirm" %}{% else %}{% trans "Open" %}{% endif %}</a></td>
         </tr>
       {% empty %}
-        <tr><td colspan="6" class="text-secondary">Nothing is waiting.</td></tr>
+        <tr><td colspan="6" class="text-secondary">{% trans "Nothing is waiting." %}</td></tr>
       {% endfor %}
     </tbody>
   </table>
 </div>
 <div class="card">
-  <h2 class="card-header">History</h2>
+  <h2 class="card-header">{% trans "History" %}</h2>
   <table class="table table-hover">
-    <thead><tr><th>#</th><th>Change</th><th>Requested by</th><th>Confirmed by</th><th>Status</th><th>Finished</th></tr></thead>
+    <thead><tr><th>#</th><th>{% trans "Change" %}</th><th>{% trans "Requested by" %}</th><th>{% trans "Confirmed by" %}</th><th>{% trans "Status" %}</th><th>{% trans "Finished" %}</th></tr></thead>
     <tbody>
       {% for req in page %}
         <tr>
@@ -37,7 +38,7 @@
           <td>{{ req.finished|date:"Y-m-d H:i"|default:"—" }}</td>
         </tr>
       {% empty %}
-        <tr><td colspan="6" class="text-secondary">No history.</td></tr>
+        <tr><td colspan="6" class="text-secondary">{% trans "No history." %}</td></tr>
       {% endfor %}
     </tbody>
   </table>

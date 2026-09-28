@@ -41,6 +41,13 @@ class PinSettings(models.Model):
     """
     Singleton holding the PIN policy. Edited in the UI by users with the change_pinsettings permission.
     """
+    language = models.CharField(
+        verbose_name=_('Language'),
+        max_length=5,
+        choices=(('en', 'English'), ('sk', 'Slovenčina')),
+        default='en',
+        help_text=_('Language of the User PIN pages and e-mails.'),
+    )
     access_mode = models.CharField(
         verbose_name=_('Who may use a PIN'),
         max_length=20,

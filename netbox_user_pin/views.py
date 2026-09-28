@@ -5,6 +5,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -467,11 +468,18 @@ class StepUpView(AllowedUserMixin, View):
 
     def post(self, request):
         form = PinOtpForm(request.POST, require_otp=service.get_settings().require_2fa_admin)
+        ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
         if form.is_valid():
             result = service.step_up(request, form.cleaned_data['pin'], form.cleaned_data.get('otp'))
             if result:
-                return redirect(_next_url(request))
+                return JsonResponse({'ok': True}) if ajax else redirect(_next_url(request))
             _verify_error(form, result)
+        if ajax:
+            errors = [str(e) for errs in form.errors.values() for e in errs]
+            blockers = service.step_up_blockers(request.user)
+            if 'no_2fa' in blockers:
+                errors.append(str(_('Two-factor authentication must be set up first (My PIN > Two-factor).')))
+            return JsonResponse({'ok': False, 'errors': errors or [str(_('Confirmation failed.'))]})
         return self._render(request, form)
 
 
@@ -718,9 +726,10 @@ class MailSettingsView(AdminViewMixin, View):
     def post(self, request):
         if not request.user.has_perm('netbox_user_pin.change_pinsettings'):
             raise PermissionDenied
-        if (response := step_up_gate(request)) is not None:
-            return response
         action = request.POST.get('action', 'save')
+        # tests change nothing, so they need no PIN + 2FA confirmation
+        if action not in ('test-connection', 'test-mail') and (response := step_up_gate(request)) is not None:
+            return response
         handler = getattr(self, f'_post_{action.replace("-", "_")}', None)
         if handler is None:
             raise PermissionDenied

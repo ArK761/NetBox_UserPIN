@@ -1,20 +1,21 @@
 {% extends 'generic/_base.html' %}
-{% block title %}{% if action == 'disable' %}Disable two-factor authentication{% else %}New backup codes{% endif %}{% endblock %}
+{% load i18n %}
+{% block title %}{% if action == 'disable' %}{% trans "Disable two-factor authentication" %}{% else %}{% trans "New backup codes" %}{% endif %}{% endblock %}
 {% block content %}
 <div class="row"><div class="col-12 col-md-8 col-lg-5">
   <div class="alert alert-{% if action == 'disable' %}warning{% else %}info{% endif %}"><div>
     {% if action == 'disable' %}
-      Without 2FA you cannot confirm administrative actions or recover a forgotten PIN yourself.
+      {% trans "Without 2FA you cannot confirm administrative actions or recover a forgotten PIN yourself." %}
     {% else %}
-      New codes replace all old ones ({{ codes_left }} unused left).
+      {% blocktrans %}New codes replace all old ones ({{ codes_left }} unused left).{% endblocktrans %}
     {% endif %}
-    Confirm with your PIN and a 2FA code.
+    {% trans "Confirm with your PIN and a 2FA code." %}
   </div></div>
   {% url 'plugins:netbox_user_pin:my_pin' as cancel_url %}
   {% if action == 'disable' %}
-    {% include 'netbox_user_pin/inc/pin_form.html' with submit_label="Disable 2FA" %}
+    {% trans "Disable 2FA" as submit %}{% include 'netbox_user_pin/inc/pin_form.html' with submit_label=submit %}
   {% else %}
-    {% include 'netbox_user_pin/inc/pin_form.html' with submit_label="Generate new codes" %}
+    {% trans "Generate new codes" as submit %}{% include 'netbox_user_pin/inc/pin_form.html' with submit_label=submit %}
   {% endif %}
 </div></div>
 {% endblock %}
