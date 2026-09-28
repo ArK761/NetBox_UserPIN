@@ -10,9 +10,9 @@
       <table class="table table-hover">
         <thead><tr><th>{% trans "Delegate" %}</th><th>{% trans "Can edit settings" %}</th><th>{% trans "Added" %}</th><th></th></tr></thead>
         <tbody>
-          {% for d in delegates %}
+          {% for d, name in delegates %}
             <tr>
-              <td>{% if d.user %}<i class="mdi mdi-account"></i> {{ d.user.username }}{% else %}<i class="mdi mdi-account-group"></i> {{ d.group.name }}{% endif %}</td>
+              <td>{% if d.user %}<i class="mdi mdi-account"></i> {{ d.user.username }}{% if name %}<div class="small text-secondary">{{ name }}</div>{% endif %}{% else %}<i class="mdi mdi-account-group"></i> {{ d.group.name }}{% endif %}</td>
               <td>{% if d.can_edit_settings %}<span class="badge text-bg-green">{% trans "Yes" %}</span>{% else %}<span class="badge text-bg-secondary">{% trans "No (read only)" %}</span>{% endif %}</td>
               <td class="small text-secondary">{{ d.created|date:"Y-m-d" }} · {{ d.created_by|default:"—" }}</td>
               <td class="text-end text-nowrap">

@@ -48,6 +48,11 @@ class PinSettings(models.Model):
         default='en',
         help_text=_('Language of the User PIN pages and e-mails.'),
     )
+    show_full_names = models.BooleanField(
+        verbose_name=_('Show first and last name'),
+        default=True,
+        help_text=_('Show the users\' first and last name next to the username (Users, Delegates, e-mail recipients).'),
+    )
     access_mode = models.CharField(
         verbose_name=_('Who may use a PIN'),
         max_length=20,

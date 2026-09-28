@@ -50,6 +50,7 @@ __all__ = (
     'email_configured',
     'email_status',
     'force_change',
+    'full_name',
     'get_settings',
     'has_2fa',
     'has_pin',
@@ -82,6 +83,7 @@ __all__ = (
     'unsuspend',
     'unlock',
     'unlocked_scopes',
+    'user_label',
     'verify_pin',
     'verify_second_factor',
 )
@@ -832,6 +834,20 @@ def end_step_up(request):
 #
 # E-mail
 #
+
+def full_name(user, settings=None):
+    """First and last name when 'Show first and last name' is on, else ''."""
+    settings = settings or get_settings()
+    if not settings.show_full_names or user is None:
+        return ''
+    return (user.get_full_name() or '').strip()
+
+
+def user_label(user, settings=None):
+    """'username (First Last)' or just 'username'."""
+    name = full_name(user, settings)
+    return f'{user.username} ({name})' if name else user.username
+
 
 def email_configured(settings=None):
     return mail.configured(settings or get_settings())

@@ -521,6 +521,7 @@ class UserPinListView(AdminViewMixin, View):
             expires = service.pin_expires_at(user_pin, settings)
             rows.append({
                 'user': user,
+                'name': service.full_name(user, settings),
                 'pin': user_pin,
                 'access': access,
                 'allowed': allowed,
@@ -559,7 +560,8 @@ class UserPinListView(AdminViewMixin, View):
         q = request.GET.get('q', '').strip().lower()
         status = request.GET.get('status', '')
         if q:
-            rows = [r for r in rows if q in r['user'].username.lower() or q in (r['user'].email or '').lower()]
+            rows = [r for r in rows if q in r['user'].username.lower() or q in (r['user'].email or '').lower()
+                    or q in r['name'].lower()]
         if status in filters:
             rows = [r for r in rows if filters[status](r)]
         page = Paginator(rows, 50).get_page(request.GET.get('page'))
@@ -849,7 +851,10 @@ class DelegateListView(AdminViewMixin, View):
     def _render(self, request, form):
         return render(request, self.template_name, {
             'form': form,
-            'delegates': PinDelegate.objects.select_related('user', 'group').order_by('created'),
+            'delegates': [
+                (d, service.full_name(d.user) if d.user else '')
+                for d in PinDelegate.objects.select_related('user', 'group').order_by('created')
+            ],
             'step_up_active': service.has_step_up(request),
             'step_up_left': service.step_up_seconds_left(request),
             'step_up_level': 'full',

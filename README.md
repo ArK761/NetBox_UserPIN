@@ -28,11 +28,13 @@ sensitive pages ("enter your PIN to continue"), so the PIN logic exists only onc
   Settings and Mail need only the PIN (optionally also 2FA); actions on other users and delegates need
   PIN + 2FA; connection and test e-mail need no confirmation
 - Allowed domains entered as `@firma.sk`, exact match only (no sub-domains or look-alikes); verification in a
-  pop-up: address → code by e-mail → enter code
+  pop-up: address → code by e-mail → enter code; **Verify again** at any time (e.g. new address)
 - **Mail** page: own SMTP server (server, port, encryption off / STARTTLS / SSL, automatic TLS, SMTP
   authentication with a service account; password encrypted, never shown), connection test; **allowed e-mail
   domains must be verified** with a code sent to an address in the domain before any e-mail goes there
 - Separate **Mail** page: allowed domains, notifications, self-service recovery, test e-mail to a chosen user
+  (the picker shows account, name and the e-mail address it will go to)
+- First and last name shown next to the account in Users and Delegates (Settings → General, can be turned off)
 - Append-only **audit log** of every PIN event (never contains a PIN, hash or code)
 - Settings page in the UI, stable API + signals for other plugins
 
@@ -124,6 +126,7 @@ Delegates are stored by the plugin and synchronised into NetBox object permissio
 | PIN max age / warn before | 180 days / 14 days (NIST SP 800-63B-4 does not recommend periodic changes – set according to your company policy) |
 | Unlock duration / extend on activity / scope | 15 min / on / one unlock for everything |
 | Require 2FA on every unlock | off |
+| Show first and last name | on |
 | Max failed attempts / lockout | 5 / 30 min (PIN and 2FA failures count together) |
 | PIN + 2FA for administrative actions / window | on / 5 min |
 | Self-service recovery (e-mail code + 2FA) / code validity | on / 15 min |

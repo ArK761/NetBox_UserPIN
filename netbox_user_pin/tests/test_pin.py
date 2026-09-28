@@ -1149,3 +1149,37 @@ class SettingsPinOnlyAndDomainPopupTest(PinTestCase):
                                 ('a@xfirma.sk', 'domain'), ('a@firma.sk.evil.com', 'domain')):
             self.admin.email = email
             self.assertEqual(service.email_status(self.admin), expected, email)
+
+
+class FullNamesAndReverifyTest(PinTestCase):
+
+    def setUp(self):
+        super().setUp()
+        self.admin = User.objects.create_superuser('boss9', password='pw', email='boss9@firma.sk',
+                                                   first_name='Peter', last_name='Knotek')
+        self.jana = User.objects.create_user('jana', password='pw', email='jana@firma.sk',
+                                             first_name='Jana', last_name='Malá')
+        allow_domains('firma.sk')
+        admin_login(self.client, self.admin)
+
+    def test_names_on_users_delegates_and_test_mail(self):
+        response = self.client.get(reverse('plugins:netbox_user_pin:user_list') + '?q=mal')
+        self.assertContains(response, 'Jana Malá')
+        from netbox_user_pin import delegation
+        PinDelegate.objects.create(user=self.jana)
+        delegation.sync_permissions()
+        self.assertContains(self.client.get(reverse('plugins:netbox_user_pin:delegates')), 'Jana Malá')
+        service.set_access(self.jana, PinAccess.ALLOWED, actor=self.admin)
+        response = self.client.get(reverse('plugins:netbox_user_pin:mail'))
+        self.assertContains(response, 'boss9 (Peter Knotek) – boss9@firma.sk')
+        self.assertContains(response, 'jana (Jana Malá) – jana@firma.sk')
+        settings = PinSettings.load()
+        settings.show_full_names = False
+        settings.save()
+        self.assertNotContains(self.client.get(reverse('plugins:netbox_user_pin:user_list')), 'Jana Malá')
+
+    def test_verified_domain_can_be_verified_again(self):
+        from netbox_user_pin.models import AllowedDomain
+        response = self.client.get(reverse('plugins:netbox_user_pin:mail'))
+        self.assertContains(response, 'Verify again')
+        self.assertTrue(AllowedDomain.objects.get(domain='firma.sk').is_verified)

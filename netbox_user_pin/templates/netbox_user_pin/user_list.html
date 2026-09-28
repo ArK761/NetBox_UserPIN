@@ -14,7 +14,7 @@
 </div>
 {% if can_change %}{% include 'netbox_user_pin/inc/step_up_bar.html' %}{% endif %}
 <form method="get" class="row g-2 mb-3">
-  <div class="col-auto"><input type="text" name="q" value="{{ q }}" class="form-control" placeholder="{% trans 'Username or e-mail' %}"></div>
+  <div class="col-auto"><input type="text" name="q" value="{{ q }}" class="form-control" placeholder="{% trans 'Name, username or e-mail' %}"></div>
   <div class="col-auto">
     <select name="status" class="form-select">
       <option value="">{% trans "All users" %}</option>
@@ -42,6 +42,7 @@
             {% if row.user == request.user %}<span class="badge text-bg-blue">{% trans "you" %}</span>{% endif %}
             {% if row.role == 'master' %}<span class="badge text-bg-purple">{% trans "master" %}</span>{% elif row.role == 'delegate' %}<span class="badge text-bg-cyan">{% trans "delegate" %}</span>{% endif %}
             {% if not row.user.is_active %}<span class="badge text-bg-secondary">{% trans "inactive" %}</span>{% endif %}
+            {% if row.name %}<div class="small text-secondary">{{ row.name }}</div>{% endif %}
           </td>
           <td>
             {% if row.allowed %}<span class="badge text-bg-green">{% trans "Yes" %}</span>{% else %}<span class="badge text-bg-red">{% trans "No" %}</span>{% endif %}

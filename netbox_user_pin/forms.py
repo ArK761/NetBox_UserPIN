@@ -104,8 +104,21 @@ class RecoveryForm(forms.Form):
         return cleaned
 
 
+class UserChoiceField(forms.ModelChoiceField):
+    """Shows 'username (First Last)' and optionally the e-mail address."""
+
+    def __init__(self, *args, with_email=False, **kwargs):
+        self.with_email = with_email
+        super().__init__(*args, **kwargs)
+
+    def label_from_instance(self, obj):
+        from .service import user_label
+        label = user_label(obj)
+        return f'{label} – {obj.email}' if self.with_email and obj.email else label
+
+
 class DelegateForm(forms.Form):
-    user = forms.ModelChoiceField(
+    user = UserChoiceField(
         queryset=get_user_model().objects.filter(is_active=True, is_superuser=False).order_by('username'),
         required=False, label=_('User'), widget=forms.Select(attrs={'class': 'form-select'}),
     )
@@ -212,7 +225,8 @@ class BackupCodesForm(forms.Form):
 
 
 class TestMailForm(forms.Form):
-    recipient = forms.ModelChoiceField(
+    recipient = UserChoiceField(
+        with_email=True,
         queryset=get_user_model().objects.none(), label=_('Send test e-mail to'),
         widget=forms.Select(attrs={'class': 'form-select'}),
         help_text=_('Users permitted to use a PIN with an e-mail address in an allowed domain.'),
@@ -275,7 +289,7 @@ class PinSettingsForm(_StyledModelForm):
     class Meta:
         model = PinSettings
         fields = (
-            'language', 'access_mode', 'pin_length', 'block_weak_pins', 'blocked_pins', 'max_age_days', 'warn_days',
+            'language', 'show_full_names', 'access_mode', 'pin_length', 'block_weak_pins', 'blocked_pins', 'max_age_days', 'warn_days',
             'unlock_minutes', 'sliding_unlock', 'scope_mode', 'require_2fa_unlock',
             'max_attempts', 'lockout_minutes', 'require_2fa_admin', 'require_2fa_settings', 'step_up_minutes', 'reset_valid_hours',
             'four_eyes', 'four_eyes_delegates', 'four_eyes_settings', 'four_eyes_access', 'approval_valid_minutes',

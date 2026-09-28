@@ -67,8 +67,8 @@
               {% else %}<span class="badge text-bg-yellow">{% trans "not verified – no e-mails yet" %}</span>{% endif %}
             </td>
             <td class="text-end text-nowrap">
-              {% if can_edit and not d.is_verified %}
-                <button type="button" class="btn btn-sm btn-primary" data-verify-domain="{{ d.pk }}" data-domain="{{ d.domain }}" data-code-email="{{ d.code_email }}" data-code-pending="{% if d.code_pending %}1{% endif %}"><i class="mdi mdi-check-decagram"></i> {% trans "Verify" %}</button>
+              {% if can_edit %}
+                <button type="button" class="btn btn-sm {% if d.is_verified %}btn-outline-secondary{% else %}btn-primary{% endif %}" data-verify-domain="{{ d.pk }}" data-domain="{{ d.domain }}" data-code-email="{{ d.code_email|default:d.verified_email }}" data-code-pending="{% if d.code_pending %}1{% endif %}"><i class="mdi mdi-check-decagram"></i> {% if d.is_verified %}{% trans "Verify again" %}{% else %}{% trans "Verify" %}{% endif %}</button>
               {% endif %}
               {% if can_edit %}
                 <form method="post" class="d-inline" data-step-up data-confirm="{% blocktrans with domain=d.domain %}Remove @{{ domain }}?{% endblocktrans %}">{% csrf_token %}<input type="hidden" name="action" value="remove-domain"><input type="hidden" name="pk" value="{{ d.pk }}">

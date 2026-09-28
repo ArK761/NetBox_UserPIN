@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-28 05:54+0000\n"
+"POT-Creation-Date: 2026-09-28 06:13+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -98,7 +98,7 @@ msgstr "2FA kód"
 msgid "6 digits from your authenticator app, or a backup code."
 msgstr "6 číslic z aplikácie Authenticator alebo záložný kód."
 
-#: forms.py:64 service.py:1144
+#: forms.py:64 service.py:1160
 msgid "PIN"
 msgstr "PIN"
 
@@ -173,43 +173,43 @@ msgstr ""
 msgid "Enter a 2FA code or the code from the e-mail."
 msgstr "Zadajte 2FA kód alebo kód z e-mailu."
 
-#: forms.py:216
+#: forms.py:230
 msgid "Send test e-mail to"
 msgstr "Poslať testovací e-mail na"
 
-#: forms.py:218
+#: forms.py:232
 msgid ""
 "Users permitted to use a PIN with an e-mail address in an allowed domain."
 msgstr "Používatelia s povoleným PINom a e-mailom v povolenej doméne."
 
-#: forms.py:246
+#: forms.py:260
 msgid "SMTP password"
 msgstr "SMTP heslo"
 
-#: forms.py:248
+#: forms.py:262
 msgid ""
 "Stored encrypted and never shown. Leave empty to keep the current password."
 msgstr ""
 "Uloží sa šifrovane a nikdy sa nezobrazí. Nechajte prázdne, ak chcete "
 "ponechať súčasné heslo."
 
-#: forms.py:261
+#: forms.py:275
 msgid "A sender address is needed together with the SMTP server."
 msgstr "K SMTP serveru je potrebná adresa odosielateľa."
 
-#: forms.py:263
+#: forms.py:277
 msgid "Enter the SMTP user."
 msgstr "Zadajte SMTP používateľa."
 
-#: forms.py:265
+#: forms.py:279
 msgid "Enter the SMTP password."
 msgstr "Zadajte SMTP heslo."
 
-#: forms.py:270
+#: forms.py:284
 msgid "Domain"
 msgstr "Doména"
 
-#: forms.py:293
+#: forms.py:307
 msgid "At least two administrators / delegates with PIN and 2FA are needed."
 msgstr "Sú potrební aspoň dvaja administrátori / delegáti s PINom a 2FA."
 
@@ -250,10 +250,22 @@ msgid "Language of the User PIN pages and e-mails."
 msgstr "Jazyk stránok a e-mailov User PIN."
 
 #: models.py:52
+msgid "Show first and last name"
+msgstr "Zobrazovať meno a priezvisko"
+
+#: models.py:54
+msgid ""
+"Show the users' first and last name next to the username (Users, Delegates, "
+"e-mail recipients)."
+msgstr ""
+"Zobrazovať meno a priezvisko používateľov vedľa používateľského mena "
+"(Používatelia, Delegáti, príjemcovia e-mailu)."
+
+#: models.py:57
 msgid "Who may use a PIN"
 msgstr "Kto môže mať PIN"
 
-#: models.py:56
+#: models.py:61
 msgid ""
 "Per-user Allow / Deny is set on the Users page. Superusers are always "
 "allowed."
@@ -261,25 +273,25 @@ msgstr ""
 "Povolenie / zákaz pre jednotlivcov sa nastavuje na stránke Používatelia. "
 "Superpoužívatelia majú PIN povolený vždy."
 
-#: models.py:59
+#: models.py:64
 msgid "PIN length"
 msgstr "Dĺžka PINu"
 
-#: models.py:62
+#: models.py:67
 msgid ""
 "Number of digits (4-12). Existing PINs of another length stay valid until "
 "changed."
 msgstr "Počet číslic (4–12). Existujúce PINy inej dĺžky platia až do zmeny."
 
-#: models.py:65
+#: models.py:70
 msgid "Unlock duration (minutes)"
 msgstr "Doba odomknutia (minúty)"
 
-#: models.py:70
+#: models.py:75
 msgid "Extend unlock on activity"
 msgstr "Predlžovať odomknutie pri aktivite"
 
-#: models.py:72
+#: models.py:77
 msgid ""
 "Every protected page view restarts the unlock timer (i.e. it expires after "
 "inactivity)."
@@ -287,41 +299,41 @@ msgstr ""
 "Každé zobrazenie chránenej stránky reštartuje časovač (odomknutie vyprší po "
 "nečinnosti)."
 
-#: models.py:75
+#: models.py:80
 msgid "Unlock scope"
 msgstr "Rozsah odomknutia"
 
-#: models.py:81
+#: models.py:86
 msgid "Max failed attempts"
 msgstr "Max. počet chybných pokusov"
 
-#: models.py:86
+#: models.py:91
 msgid "Lockout duration (minutes)"
 msgstr "Doba zablokovania (minúty)"
 
-#: models.py:91
+#: models.py:96
 msgid "Block weak PINs"
 msgstr "Blokovať slabé PINy"
 
-#: models.py:93
+#: models.py:98
 msgid ""
 "Reject repeated digits (111111), sequences (123456) and patterns (121212)."
 msgstr ""
 "Odmietnuť opakované číslice (111111), postupnosti (123456) a vzory (121212)."
 
-#: models.py:96
+#: models.py:101
 msgid "Additional blocked PINs"
 msgstr "Ďalšie zakázané PINy"
 
-#: models.py:98
+#: models.py:103
 msgid "One per line or comma separated."
 msgstr "Jeden na riadok alebo oddelené čiarkou."
 
-#: models.py:101
+#: models.py:106
 msgid "PIN max age (days)"
 msgstr "Platnosť PINu (dni)"
 
-#: models.py:104
+#: models.py:109
 msgid ""
 "Users must change their PIN after this many days (company policy). Note: "
 "NIST SP 800-63B-4 does not recommend periodic changes, only forced changes "
@@ -331,15 +343,15 @@ msgstr ""
 "Poznámka: NIST SP 800-63B-4 neodporúča pravidelné zmeny, iba vynútenú zmenu "
 "pri podozrení na kompromitáciu."
 
-#: models.py:108
+#: models.py:113
 msgid "Warn before expiry (days)"
 msgstr "Upozorniť pred vypršaním (dni)"
 
-#: models.py:113
+#: models.py:118
 msgid "Require PIN + 2FA for administrative actions"
 msgstr "Vyžadovať PIN + 2FA pri správcovských akciách"
 
-#: models.py:115
+#: models.py:120
 msgid ""
 "Allow / deny, reset, force change, settings and delegates need a fresh PIN +"
 " 2FA confirmation (step-up). When off, the PIN alone is enough."
@@ -347,11 +359,11 @@ msgstr ""
 "Povolenie / zákaz, reset, vynútená zmena, nastavenia a delegáti vyžadujú "
 "čerstvé potvrdenie PIN + 2FA. Ak je vypnuté, stačí PIN."
 
-#: models.py:119
+#: models.py:124
 msgid "Require 2FA also for settings"
 msgstr "Vyžadovať 2FA aj pre nastavenia"
 
-#: models.py:121
+#: models.py:126
 msgid ""
 "Off: changes on the Settings and Mail pages need only your PIN (you are "
 "logged in anyway). Actions on other users and delegates always need PIN + "
@@ -361,35 +373,35 @@ msgstr ""
 "(prihlásený ste aj tak). Zásahy do iných používateľov a delegátov vždy "
 "vyžadujú PIN + 2FA."
 
-#: models.py:125
+#: models.py:130
 msgid "Administrative window (minutes)"
 msgstr "Admin okno (minúty)"
 
-#: models.py:128
+#: models.py:133
 msgid "How long a step-up confirmation stays valid."
 msgstr "Ako dlho platí potvrdenie totožnosti."
 
-#: models.py:131
+#: models.py:136
 msgid "Require 2FA on every unlock"
 msgstr "Vyžadovať 2FA pri každom odomknutí"
 
-#: models.py:135
+#: models.py:140
 msgid "Self-service recovery of a forgotten PIN"
 msgstr "Samoobslužná obnova zabudnutého PINu"
 
-#: models.py:137
+#: models.py:142
 msgid "A code sent by e-mail AND a 2FA code are required together."
 msgstr "Vyžaduje sa kód z e-mailu A zároveň 2FA kód."
 
-#: models.py:140
+#: models.py:145
 msgid "Recovery code validity (minutes)"
 msgstr "Platnosť kódu na obnovu (minúty)"
 
-#: models.py:145 templates/netbox_user_pin/mail.html:61
+#: models.py:150 templates/netbox_user_pin/mail.html:61
 msgid "Allowed e-mail domains"
 msgstr "Povolené e-mailové domény"
 
-#: models.py:147
+#: models.py:152
 msgid ""
 "E-mails are only sent to these domains, one per line (e.g. firma.sk). Empty "
 "= no e-mails."
@@ -397,20 +409,20 @@ msgstr ""
 "E-maily sa posielajú iba na tieto domény, jedna na riadok (napr. firma.sk). "
 "Prázdne = žiadne e-maily."
 
-#: models.py:150
+#: models.py:155
 msgid "Administrator reset valid (hours)"
 msgstr "Platnosť resetu od administrátora (hodiny)"
 
-#: models.py:153
+#: models.py:158
 msgid "How long the user has to confirm a reset started by an administrator."
 msgstr ""
 "Koľko času má používateľ na potvrdenie resetu, ktorý spustil administrátor."
 
-#: models.py:156 templates/netbox_user_pin/settings.html:45
+#: models.py:161 templates/netbox_user_pin/settings.html:46
 msgid "Four-eyes approval"
 msgstr "Schvaľovanie štyrmi očami"
 
-#: models.py:158
+#: models.py:163
 msgid ""
 "Selected administrative changes need a second administrator or delegate who "
 "confirms with their own PIN + 2FA. Needs at least two administrators / "
@@ -420,34 +432,34 @@ msgstr ""
 "svojím PINom + 2FA. Vyžaduje aspoň dvoch administrátorov / delegátov s PINom"
 " a 2FA."
 
-#: models.py:161
+#: models.py:166
 msgid "… for delegates (add / remove / change)"
 msgstr "… pre delegátov (pridať / odobrať / zmeniť)"
 
-#: models.py:163
+#: models.py:168
 msgid "… for settings and mail settings"
 msgstr "… pre nastavenia a nastavenia mailu"
 
-#: models.py:164
+#: models.py:169
 msgid "… for allowing / denying PIN use"
 msgstr "… pre povolenie / zákaz PINu"
 
-#: models.py:166
+#: models.py:171
 msgid "Approval request valid (minutes)"
 msgstr "Platnosť žiadosti o schválenie (minúty)"
 
-#: models.py:169
+#: models.py:174
 msgid ""
 "Both can confirm live at the same time or the second one later, until the "
 "request expires."
 msgstr ""
 "Obaja môžu potvrdiť naživo naraz alebo druhý neskôr, kým žiadosť nevyprší."
 
-#: models.py:172
+#: models.py:177
 msgid "Allow break-glass for the master"
 msgstr "Povoliť núdzové vykonanie (break-glass) pre mastera"
 
-#: models.py:174
+#: models.py:179
 msgid ""
 "In an emergency a superuser may execute a request alone with a reason; all "
 "administrators and delegates are informed by e-mail."
@@ -455,19 +467,19 @@ msgstr ""
 "V núdzi môže superpoužívateľ vykonať žiadosť sám s uvedením dôvodu; všetci "
 "administrátori a delegáti dostanú e-mail."
 
-#: models.py:177
+#: models.py:182
 msgid "Sender name"
 msgstr "Meno odosielateľa"
 
-#: models.py:178
+#: models.py:183
 msgid "e.g. NetBox PIN"
 msgstr "napr. NetBox PIN"
 
-#: models.py:180
+#: models.py:185
 msgid "Sender e-mail address"
 msgstr "E-mailová adresa odosielateľa"
 
-#: models.py:181
+#: models.py:186
 msgid ""
 "e.g. netbox@firma.sk. Together with the SMTP server; if the server is empty,"
 " the NetBox e-mail configuration (EMAIL in configuration.py) is used."
@@ -475,355 +487,355 @@ msgstr ""
 "napr. netbox@firma.sk. Spolu so SMTP serverom; ak je server prázdny, použije"
 " sa e-mailové nastavenie NetBoxu (EMAIL v configuration.py)."
 
-#: models.py:185
+#: models.py:190
 msgid "SMTP server"
 msgstr "SMTP server"
 
-#: models.py:186
+#: models.py:191
 msgid "e.g. mail.firma.sk. Empty = use the NetBox e-mail configuration."
 msgstr ""
 "napr. mail.firma.sk. Prázdne = použije sa e-mailové nastavenie NetBoxu."
 
-#: models.py:188
+#: models.py:193
 msgid "SMTP port"
 msgstr "SMTP port"
 
-#: models.py:190
+#: models.py:195
 msgid "SMTP timeout (s)"
 msgstr "SMTP časový limit (s)"
 
-#: models.py:193
+#: models.py:198
 msgid "Encryption"
 msgstr "Šifrovanie"
 
-#: models.py:194
+#: models.py:199
 msgid "Off (usually port 25)"
 msgstr "Vypnuté (zvyčajne port 25)"
 
-#: models.py:194
+#: models.py:199
 msgid "STARTTLS (usually port 587)"
 msgstr "STARTTLS (zvyčajne port 587)"
 
-#: models.py:195
+#: models.py:200
 msgid "SSL/TLS (usually port 465)"
 msgstr "SSL/TLS (zvyčajne port 465)"
 
-#: models.py:198
+#: models.py:203
 msgid "Automatic TLS"
 msgstr "Automatické TLS"
 
-#: models.py:199
+#: models.py:204
 msgid "With encryption off, STARTTLS is used when the server offers it."
 msgstr "Pri vypnutom šifrovaní sa použije STARTTLS, ak ho server ponúka."
 
-#: models.py:201
+#: models.py:206
 msgid "SMTP authentication"
 msgstr "SMTP autentifikácia"
 
-#: models.py:202
+#: models.py:207
 msgid "SMTP user"
 msgstr "SMTP používateľ"
 
-#: models.py:203
+#: models.py:208
 msgid "Service account the e-mails are sent from."
 msgstr "Servisný účet, z ktorého sa posielajú e-maily."
 
-#: models.py:206
+#: models.py:211
 msgid "Security notifications by e-mail"
 msgstr "Bezpečnostné upozornenia e-mailom"
 
-#: models.py:208
+#: models.py:213
 msgid "PIN set / changed / reset, lockout, upcoming expiry, 2FA changes."
 msgstr ""
 "Nastavenie / zmena / reset PINu, zablokovanie, blížiace sa vypršanie, zmeny "
 "2FA."
 
-#: models.py:212 models.py:213 models.py:216
+#: models.py:217 models.py:218 models.py:221
 #: templates/netbox_user_pin/settings.html:3
 msgid "PIN settings"
 msgstr "Nastavenia PINu"
 
-#: models.py:286
+#: models.py:291
 msgid "user PIN"
 msgstr "PIN používateľa"
 
-#: models.py:287
+#: models.py:292
 msgid "user PINs"
 msgstr "PINy používateľov"
 
-#: models.py:319
+#: models.py:324
 msgid "PIN set"
 msgstr "PIN nastavený"
 
-#: models.py:320
+#: models.py:325
 msgid "PIN changed"
 msgstr "PIN zmenený"
 
-#: models.py:321
+#: models.py:326
 msgid "PIN reset by administrator"
 msgstr "PIN resetovaný administrátorom"
 
-#: models.py:322
+#: models.py:327
 msgid "PIN verified"
 msgstr "PIN overený"
 
-#: models.py:323
+#: models.py:328
 msgid "Wrong PIN"
 msgstr "Nesprávny PIN"
 
-#: models.py:324
+#: models.py:329
 msgid "Locked out after failed attempts"
 msgstr "Zablokovaný po chybných pokusoch"
 
-#: models.py:325
+#: models.py:330
 msgid "Attempt while locked out"
 msgstr "Pokus počas zablokovania"
 
-#: models.py:326
+#: models.py:331
 msgid "Lockout cleared by administrator"
 msgstr "Zablokovanie zrušil administrátor"
 
-#: models.py:327
+#: models.py:332
 msgid "PIN change forced"
 msgstr "Vynútená zmena PINu"
 
-#: models.py:328
+#: models.py:333
 msgid "2FA enabled"
 msgstr "2FA zapnuté"
 
-#: models.py:329
+#: models.py:334
 msgid "2FA disabled"
 msgstr "2FA vypnuté"
 
-#: models.py:330
+#: models.py:335
 msgid "2FA reset by administrator"
 msgstr "2FA resetované administrátorom"
 
-#: models.py:331
+#: models.py:336
 msgid "Wrong 2FA code"
 msgstr "Nesprávny 2FA kód"
 
-#: models.py:332
+#: models.py:337
 msgid "Backup code used"
 msgstr "Použitý záložný kód"
 
-#: models.py:333
+#: models.py:338
 msgid "New backup codes generated"
 msgstr "Vygenerované nové záložné kódy"
 
-#: models.py:334
+#: models.py:339
 msgid "Administrative confirmation (step-up)"
 msgstr "Potvrdenie totožnosti (admin)"
 
-#: models.py:335
+#: models.py:340
 msgid "Administrative confirmation failed"
 msgstr "Potvrdenie totožnosti zlyhalo"
 
-#: models.py:336
+#: models.py:341
 msgid "Recovery code e-mailed"
 msgstr "Kód na obnovu odoslaný e-mailom"
 
-#: models.py:337
+#: models.py:342
 msgid "PIN recovered (e-mail + 2FA)"
 msgstr "PIN obnovený (e-mail + 2FA)"
 
-#: models.py:338
+#: models.py:343
 msgid "PIN recovery failed"
 msgstr "Obnova PINu zlyhala"
 
-#: models.py:339
+#: models.py:344
 msgid "E-mail sent"
 msgstr "E-mail odoslaný"
 
-#: models.py:340
+#: models.py:345
 msgid "E-mail failed"
 msgstr "E-mail zlyhal"
 
-#: models.py:341
+#: models.py:346
 msgid "Delegate added"
 msgstr "Delegát pridaný"
 
-#: models.py:342
+#: models.py:347
 msgid "Delegate removed"
 msgstr "Delegát odobratý"
 
-#: models.py:343
+#: models.py:348
 msgid "Delegate changed"
 msgstr "Delegát zmenený"
 
-#: models.py:344
+#: models.py:349
 msgid "Backup codes viewed"
 msgstr "Záložné kódy zobrazené"
 
-#: models.py:345
+#: models.py:350
 msgid "Verification code e-mailed"
 msgstr "Overovací kód odoslaný e-mailom"
 
-#: models.py:346
+#: models.py:351
 msgid "Four-eyes request created"
 msgstr "Žiadosť na štyri oči vytvorená"
 
-#: models.py:347
+#: models.py:352
 msgid "Four-eyes request confirmed"
 msgstr "Žiadosť na štyri oči potvrdená"
 
-#: models.py:348
+#: models.py:353
 msgid "Four-eyes request rejected"
 msgstr "Žiadosť na štyri oči zamietnutá"
 
-#: models.py:349
+#: models.py:354
 msgid "Four-eyes request cancelled"
 msgstr "Žiadosť na štyri oči zrušená"
 
-#: models.py:350
+#: models.py:355
 msgid "Four-eyes request executed"
 msgstr "Žiadosť na štyri oči vykonaná"
 
-#: models.py:351
+#: models.py:356
 msgid "Break-glass: executed alone by the master"
 msgstr "Break-glass: master vykonal sám"
 
-#: models.py:352
+#: models.py:357
 msgid "Allowed e-mail domain added"
 msgstr "Povolená e-mailová doména pridaná"
 
-#: models.py:353
+#: models.py:358
 msgid "Allowed e-mail domain verified"
 msgstr "Povolená e-mailová doména overená"
 
-#: models.py:354
+#: models.py:359
 msgid "Domain verification failed"
 msgstr "Overenie domény zlyhalo"
 
-#: models.py:355
+#: models.py:360
 msgid "Allowed e-mail domain removed"
 msgstr "Povolená e-mailová doména odobratá"
 
-#: models.py:356
+#: models.py:361
 msgid "PIN access changed by administrator"
 msgstr "Povolenie PINu zmenil administrátor"
 
-#: models.py:357
+#: models.py:362
 msgid "PIN suspended by administrator"
 msgstr "PIN pozastavený administrátorom"
 
-#: models.py:358
+#: models.py:363
 msgid "PIN suspension lifted by administrator"
 msgstr "Pozastavenie PINu zrušil administrátor"
 
-#: models.py:359
+#: models.py:364
 msgid "Reset started by administrator"
 msgstr "Reset spustil administrátor"
 
-#: models.py:360
+#: models.py:365
 msgid "Reset confirmed by the user"
 msgstr "Reset potvrdil používateľ"
 
-#: models.py:361
+#: models.py:366
 msgid "Reset cancelled"
 msgstr "Reset zrušený"
 
-#: models.py:362
+#: models.py:367
 msgid "Attempt by a user not allowed to use a PIN"
 msgstr "Pokus používateľa bez povolenia PINu"
 
-#: models.py:363
+#: models.py:368
 msgid "Locked manually"
 msgstr "Uzamknuté ručne"
 
-#: models.py:364
+#: models.py:369
 msgid "Settings changed"
 msgstr "Nastavenia zmenené"
 
-#: models.py:365
+#: models.py:370
 msgid "Encryption key rotated"
 msgstr "Šifrovací kľúč vymenený"
 
-#: models.py:366
+#: models.py:371
 msgid "Error"
 msgstr "Chyba"
 
-#: models.py:401
+#: models.py:406
 msgid "PIN event"
 msgstr "Udalosť PINu"
 
-#: models.py:402
+#: models.py:407
 msgid "PIN events"
 msgstr "Udalosti PINu"
 
-#: models.py:433
+#: models.py:438
 msgid "PIN delegate"
 msgstr "Delegát PINu"
 
-#: models.py:434 templates/netbox_user_pin/delegates.html:3
+#: models.py:439 templates/netbox_user_pin/delegates.html:3
 msgid "PIN delegates"
 msgstr "Delegáti PINu"
 
-#: models.py:449 templates/netbox_user_pin/delegates.html:34
+#: models.py:454 templates/netbox_user_pin/delegates.html:34
 msgid "Add delegate"
 msgstr "Pridať delegáta"
 
-#: models.py:450
+#: models.py:455
 msgid "Remove delegate"
 msgstr "Odobrať delegáta"
 
-#: models.py:451
+#: models.py:456
 msgid "Change delegate settings permission"
 msgstr "Zmeniť oprávnenie delegáta na nastavenia"
 
-#: models.py:452
+#: models.py:457
 msgid "Change PIN settings"
 msgstr "Zmeniť nastavenia PINu"
 
-#: models.py:453
+#: models.py:458
 msgid "Change mail settings"
 msgstr "Zmeniť nastavenia mailu"
 
-#: models.py:454
+#: models.py:459
 msgid "Allow / deny PIN use"
 msgstr "Povoliť / zakázať PIN"
 
-#: models.py:455
+#: models.py:460
 msgid "Add allowed e-mail domain"
 msgstr "Pridať povolenú e-mailovú doménu"
 
-#: models.py:459 templates/netbox_user_pin/approval_list.html:7
+#: models.py:464 templates/netbox_user_pin/approval_list.html:7
 msgid "Waiting"
 msgstr "Čaká"
 
-#: models.py:460
+#: models.py:465
 msgid "Approved and executed"
 msgstr "Schválené a vykonané"
 
-#: models.py:461
+#: models.py:466
 msgid "Rejected"
 msgstr "Zamietnuté"
 
-#: models.py:462
+#: models.py:467
 msgid "Cancelled"
 msgstr "Zrušené"
 
-#: models.py:463
+#: models.py:468
 msgid "Expired"
 msgstr "Vypršané"
 
-#: models.py:464
+#: models.py:469
 msgid "Failed"
 msgstr "Zlyhalo"
 
-#: models.py:492
+#: models.py:497
 msgid "four-eyes request"
 msgstr "žiadosť na štyri oči"
 
-#: models.py:493
+#: models.py:498
 msgid "four-eyes requests"
 msgstr "žiadosti na štyri oči"
 
-#: models.py:540
+#: models.py:545
 msgid "allowed e-mail domain"
 msgstr "povolená e-mailová doména"
 
-#: models.py:541
+#: models.py:546
 msgid "allowed e-mail domains"
 msgstr "povolené e-mailové domény"
 
@@ -880,47 +892,47 @@ msgstr ""
 "Tento PIN je príliš ľahko uhádnuteľný (opakované číslice, postupnosť alebo "
 "zakázaný PIN). Zvoľte iný."
 
-#: service.py:220
+#: service.py:222
 msgid "You are not permitted to use a PIN. Ask an administrator."
 msgstr "Nemáte povolený PIN. Obráťte sa na administrátora."
 
-#: service.py:254
+#: service.py:256
 msgid "A PIN is already set. Use the change form."
 msgstr "PIN už je nastavený. Použite formulár na zmenu."
 
-#: service.py:264
+#: service.py:266
 msgid "Your PIN was set"
 msgstr "Váš PIN bol nastavený"
 
-#: service.py:264
+#: service.py:266
 msgid "A PIN was set for your NetBox account."
 msgstr "Pre váš účet v NetBoxe bol nastavený PIN."
 
-#: service.py:282
+#: service.py:284
 msgid "Too many failed attempts. Try again later."
 msgstr "Príliš veľa chybných pokusov. Skúste to neskôr."
 
-#: service.py:283
+#: service.py:285
 msgid "The current PIN is not correct."
 msgstr "Súčasný PIN nie je správny."
 
-#: service.py:286
+#: service.py:288
 msgid "The new PIN must differ from the current one."
 msgstr "Nový PIN sa musí líšiť od súčasného."
 
-#: service.py:296
+#: service.py:298
 msgid "Your PIN was changed"
 msgstr "Váš PIN bol zmenený"
 
-#: service.py:296
+#: service.py:298
 msgid "The PIN of your NetBox account was changed."
 msgstr "PIN vášho účtu v NetBoxe bol zmenený."
 
-#: service.py:374
+#: service.py:376
 msgid "Your PIN is locked"
 msgstr "Váš PIN je zablokovaný"
 
-#: service.py:375
+#: service.py:377
 #, python-brace-format
 msgid ""
 "Too many wrong PIN / 2FA attempts. Your PIN is locked until {time}. If this "
@@ -929,42 +941,42 @@ msgstr ""
 "Príliš veľa nesprávnych pokusov PIN / 2FA. Váš PIN je zablokovaný do {time}."
 " Ak ste to neboli vy, kontaktujte administrátora."
 
-#: service.py:502 service.py:1188
+#: service.py:504 service.py:1204
 msgid "Your PIN was reset"
 msgstr "Váš PIN bol resetovaný"
 
-#: service.py:503
+#: service.py:505
 #, python-brace-format
 msgid ""
 "Your PIN was reset by {actor}. Set a new PIN the next time you are asked for"
 " it."
 msgstr "Váš PIN resetoval {actor}. Pri najbližšej výzve si nastavte nový PIN."
 
-#: service.py:592
+#: service.py:594
 msgid "The setup expired. Start again."
 msgstr "Nastavenie vypršalo. Začnite znova."
 
-#: service.py:596
+#: service.py:598
 msgid "The code is not correct. Check the time on your phone and try again."
 msgstr "Kód nie je správny. Skontrolujte čas v mobile a skúste znova."
 
-#: service.py:609
+#: service.py:611
 msgid "Two-factor authentication enabled"
 msgstr "Dvojfaktorové overenie zapnuté"
 
-#: service.py:610
+#: service.py:612
 msgid "Two-factor authentication was enabled for your NetBox PIN."
 msgstr "Pre váš PIN v NetBoxe bolo zapnuté dvojfaktorové overenie."
 
-#: service.py:689
+#: service.py:691
 msgid "No verification e-mail can be sent to your account."
 msgstr "Na váš účet nie je možné poslať overovací e-mail."
 
-#: service.py:691
+#: service.py:693
 msgid "Verification code"
 msgstr "Overovací kód"
 
-#: service.py:692
+#: service.py:694
 #, python-brace-format
 msgid ""
 "Your verification code for showing your 2FA backup codes is: {code}\n"
@@ -975,27 +987,27 @@ msgstr ""
 "\n"
 "Platí {minutes} minút. Ak ste oň nežiadali, kontaktujte administrátora."
 
-#: service.py:707 templates/netbox_user_pin/recover.html:16
+#: service.py:709 templates/netbox_user_pin/recover.html:16
 msgid "Two-factor authentication is not set up."
 msgstr "Dvojfaktorové overenie nie je nastavené."
 
-#: service.py:710 service.py:1202
+#: service.py:712 service.py:1218
 msgid "The PIN is not correct."
 msgstr "PIN nie je správny."
 
-#: service.py:713 service.py:1063 service.py:1173
+#: service.py:715 service.py:1079 service.py:1189
 msgid "The 2FA code is not correct."
 msgstr "2FA kód nie je správny."
 
-#: service.py:715 service.py:1059
+#: service.py:717 service.py:1075
 msgid "The e-mail code is wrong or expired."
 msgstr "Kód z e-mailu je nesprávny alebo vypršal."
 
-#: service.py:726
+#: service.py:728
 msgid "Your backup codes were viewed"
 msgstr "Vaše záložné kódy boli zobrazené"
 
-#: service.py:727
+#: service.py:729
 msgid ""
 "Your 2FA backup codes were displayed in NetBox. If this was not you, contact"
 " your administrator and generate new codes."
@@ -1003,19 +1015,19 @@ msgstr ""
 "Vaše záložné 2FA kódy boli zobrazené v NetBoxe. Ak ste to neboli vy, "
 "kontaktujte administrátora a vygenerujte nové kódy."
 
-#: service.py:747
+#: service.py:749
 msgid "Two-factor authentication disabled"
 msgstr "Dvojfaktorové overenie vypnuté"
 
-#: service.py:748
+#: service.py:750
 msgid "Two-factor authentication was disabled for your NetBox PIN."
 msgstr "Pre váš PIN v NetBoxe bolo vypnuté dvojfaktorové overenie."
 
-#: service.py:755
+#: service.py:757
 msgid "Two-factor authentication reset"
 msgstr "Dvojfaktorové overenie resetované"
 
-#: service.py:756
+#: service.py:758
 #, python-brace-format
 msgid ""
 "Your two-factor authentication was reset by {actor}. Set it up again under "
@@ -1024,24 +1036,24 @@ msgstr ""
 "Vaše dvojfaktorové overenie resetoval {actor}. Nastavte ho znova v časti Môj"
 " PIN."
 
-#: service.py:886
+#: service.py:902
 msgid "Enter a domain such as firma.sk."
 msgstr "Zadajte doménu, napr. firma.sk."
 
-#: service.py:905
+#: service.py:921
 #, python-brace-format
 msgid "The address must end with @{domain}."
 msgstr "Adresa musí končiť na @{domain}."
 
-#: service.py:908
+#: service.py:924
 msgid "No mail server is configured."
 msgstr "Nie je nastavený žiadny mail server."
 
-#: service.py:911
+#: service.py:927
 msgid "Domain verification"
 msgstr "Overenie domény"
 
-#: service.py:912
+#: service.py:928
 #, python-brace-format
 msgid ""
 "Verification code for the domain {domain}: {code}\n"
@@ -1052,41 +1064,41 @@ msgstr ""
 "\n"
 "Zadajte ho v NetBox > User PIN > Mail. Platí {minutes} minút."
 
-#: service.py:917
+#: service.py:933
 #, python-brace-format
 msgid "The e-mail could not be sent: {error}"
 msgstr "E-mail sa nepodarilo odoslať: {error}"
 
-#: service.py:933
+#: service.py:949
 msgid "The code is wrong or expired."
 msgstr "Kód je nesprávny alebo vypršal."
 
-#: service.py:960
+#: service.py:976
 msgid "Your PIN expires soon"
 msgstr "Váš PIN čoskoro vyprší"
 
-#: service.py:961
+#: service.py:977
 #, python-brace-format
 msgid "Your NetBox PIN expires on {date}. Change it under User PIN > My PIN."
 msgstr "Váš PIN v NetBoxe vyprší {date}. Zmeňte ho v User PIN > Môj PIN."
 
-#: service.py:995
+#: service.py:1011
 msgid "A code was sent a moment ago. Please wait a minute."
 msgstr "Kód bol odoslaný pred chvíľou. Počkajte prosím minútu."
 
-#: service.py:1008
+#: service.py:1024
 msgid "The e-mail could not be sent. Contact your administrator."
 msgstr "E-mail sa nepodarilo odoslať. Kontaktujte administrátora."
 
-#: service.py:1042
+#: service.py:1058
 msgid "Self-service recovery is not available for your account."
 msgstr "Samoobslužná obnova nie je pre váš účet dostupná."
 
-#: service.py:1044
+#: service.py:1060
 msgid "PIN recovery code"
 msgstr "Kód na obnovu PINu"
 
-#: service.py:1045
+#: service.py:1061
 #, python-brace-format
 msgid ""
 "Your PIN recovery code is: {code}\n"
@@ -1097,11 +1109,11 @@ msgstr ""
 "\n"
 "Platí {minutes} minút a zadáva sa spolu s kódom z aplikácie Authenticator. Ak ste oň nežiadali, kontaktujte administrátora."
 
-#: service.py:1077
+#: service.py:1093
 msgid "Your PIN was recovered"
 msgstr "Váš PIN bol obnovený"
 
-#: service.py:1078
+#: service.py:1094
 msgid ""
 "A new PIN was set using the e-mail code and 2FA. If this was not you, "
 "contact your administrator immediately."
@@ -1109,52 +1121,52 @@ msgstr ""
 "Nový PIN bol nastavený pomocou kódu z e-mailu a 2FA. Ak ste to neboli vy, "
 "okamžite kontaktujte administrátora."
 
-#: service.py:1106
+#: service.py:1122
 msgid "Your PIN was suspended"
 msgstr "Váš PIN bol pozastavený"
 
-#: service.py:1107
+#: service.py:1123
 #, python-brace-format
 msgid "Your NetBox PIN was suspended by {actor}. Contact your administrator."
 msgstr "Váš PIN v NetBoxe pozastavil {actor}. Kontaktujte administrátora."
 
-#: service.py:1114
+#: service.py:1130
 msgid "Your PIN is active again"
 msgstr "Váš PIN je opäť aktívny"
 
-#: service.py:1115
+#: service.py:1131
 #, python-brace-format
 msgid "The suspension of your NetBox PIN was lifted by {actor}."
 msgstr "Pozastavenie vášho PINu v NetBoxe zrušil {actor}."
 
-#: service.py:1129
+#: service.py:1145
 #, python-brace-format
 msgid "{user} has no 2FA, so the reset cannot be confirmed by the user."
 msgstr "{user} nemá 2FA, takže reset nemôže potvrdiť."
 
-#: service.py:1133
+#: service.py:1149
 #, python-brace-format
 msgid "{user} has no 2FA or no PIN."
 msgstr "{user} nemá 2FA alebo PIN."
 
-#: service.py:1144
+#: service.py:1160
 msgid "two-factor authentication"
 msgstr "dvojfaktorové overenie"
 
-#: service.py:1145
+#: service.py:1161
 msgid "your 2FA code"
 msgstr "vaším 2FA kódom"
 
-#: service.py:1145
+#: service.py:1161
 msgid "your PIN"
 msgstr "vaším PINom"
 
-#: service.py:1146
+#: service.py:1162
 #, python-brace-format
 msgid "Reset of your {what} started"
 msgstr "Spustený reset: {what}"
 
-#: service.py:1147
+#: service.py:1163
 #, python-brace-format
 msgid ""
 "{actor} started a reset of your {what}. Log in to NetBox, open User PIN > My"
@@ -1165,24 +1177,24 @@ msgstr ""
 "Môj PIN a potvrďte ho {how} do {time}. Ak ste o to nežiadali, kontaktujte "
 "administrátora."
 
-#: service.py:1169
+#: service.py:1185
 msgid "There is no PIN reset waiting for you."
 msgstr "Nečaká na vás žiadny reset PINu."
 
-#: service.py:1188
+#: service.py:1204
 #, python-brace-format
 msgid "You set a new PIN (reset started by {by})."
 msgstr "Nastavili ste nový PIN (reset spustil {by})."
 
-#: service.py:1199
+#: service.py:1215
 msgid "There is no 2FA reset waiting for you."
 msgstr "Nečaká na vás žiadny reset 2FA."
 
-#: service.py:1210
+#: service.py:1226
 msgid "Your two-factor authentication was reset"
 msgstr "Vaše dvojfaktorové overenie bolo resetované"
 
-#: service.py:1211
+#: service.py:1227
 #, python-brace-format
 msgid "Set it up again under User PIN > My PIN (reset started by {by})."
 msgstr "Nastavte ho znova v User PIN > Môj PIN (reset spustil {by})."
@@ -1359,7 +1371,7 @@ msgstr "Pridaný"
 
 #: templates/netbox_user_pin/delegates.html:16
 #: templates/netbox_user_pin/my_pin.html:29
-#: templates/netbox_user_pin/user_list.html:47
+#: templates/netbox_user_pin/user_list.html:48
 msgid "Yes"
 msgstr "Áno"
 
@@ -1512,7 +1524,7 @@ msgstr "Zrušiť"
 
 #: templates/netbox_user_pin/inc/pin_form.html:15
 #: templates/netbox_user_pin/mail.html:34
-#: templates/netbox_user_pin/settings.html:54
+#: templates/netbox_user_pin/settings.html:55
 msgid "Save"
 msgstr "Uložiť"
 
@@ -1617,6 +1629,10 @@ msgstr "overená"
 #: templates/netbox_user_pin/mail.html:67
 msgid "not verified – no e-mails yet"
 msgstr "neoverená – zatiaľ žiadne e-maily"
+
+#: templates/netbox_user_pin/mail.html:71
+msgid "Verify again"
+msgstr "Znovu overiť"
 
 #: templates/netbox_user_pin/mail.html:71
 #: templates/netbox_user_pin/mail.html:110
@@ -1734,12 +1750,12 @@ msgid "No – ask an administrator"
 msgstr "Nie – obráťte sa na administrátora"
 
 #: templates/netbox_user_pin/my_pin.html:34
-#: templates/netbox_user_pin/user_list.html:51
+#: templates/netbox_user_pin/user_list.html:52
 msgid "Active"
 msgstr "Aktívny"
 
 #: templates/netbox_user_pin/my_pin.html:34
-#: templates/netbox_user_pin/user_list.html:51
+#: templates/netbox_user_pin/user_list.html:52
 msgid "Not set"
 msgstr "Nenastavený"
 
@@ -1757,7 +1773,7 @@ msgid "%(days_left)s days left"
 msgstr "zostáva %(days_left)s dní"
 
 #: templates/netbox_user_pin/my_pin.html:41
-#: templates/netbox_user_pin/user_list.html:63
+#: templates/netbox_user_pin/user_list.html:64
 msgid "expired"
 msgstr "vypršal"
 
@@ -1828,7 +1844,7 @@ msgid "2FA (authenticator app)"
 msgstr "2FA (aplikácia Authenticator)"
 
 #: templates/netbox_user_pin/my_pin.html:86
-#: templates/netbox_user_pin/user_list.html:56
+#: templates/netbox_user_pin/user_list.html:57
 msgid "On"
 msgstr "Zapnuté"
 
@@ -1837,7 +1853,7 @@ msgid "since"
 msgstr "od"
 
 #: templates/netbox_user_pin/my_pin.html:86
-#: templates/netbox_user_pin/user_list.html:56
+#: templates/netbox_user_pin/user_list.html:57
 msgid "Off"
 msgstr "Vypnuté"
 
@@ -1851,7 +1867,7 @@ msgid "E-mail"
 msgstr "E-mail"
 
 #: templates/netbox_user_pin/my_pin.html:93
-#: templates/netbox_user_pin/user_list.html:58
+#: templates/netbox_user_pin/user_list.html:59
 msgid "no e-mail"
 msgstr "bez e-mailu"
 
@@ -2075,24 +2091,24 @@ msgstr ""
 msgid "General"
 msgstr "Všeobecné"
 
-#: templates/netbox_user_pin/settings.html:17
+#: templates/netbox_user_pin/settings.html:18
 msgid "Access & PIN policy"
 msgstr "Prístup a pravidlá PINu"
 
-#: templates/netbox_user_pin/settings.html:24
+#: templates/netbox_user_pin/settings.html:25
 msgid "Rotation"
 msgstr "Rotácia"
 
-#: templates/netbox_user_pin/settings.html:29
+#: templates/netbox_user_pin/settings.html:30
 #: templates/netbox_user_pin/unlock.html:17
 msgid "Unlock"
 msgstr "Odomknúť"
 
-#: templates/netbox_user_pin/settings.html:36
+#: templates/netbox_user_pin/settings.html:37
 msgid "Protection"
 msgstr "Ochrana"
 
-#: templates/netbox_user_pin/settings.html:53
+#: templates/netbox_user_pin/settings.html:54
 #, python-format
 msgid ""
 "E-mail, notifications and self-service recovery are configured under <a "
@@ -2101,23 +2117,23 @@ msgstr ""
 "E-mail, upozornenia a samoobslužná obnova sa nastavujú v časti <a "
 "href=\"%(mail_url)s\">Mail</a>."
 
-#: templates/netbox_user_pin/settings.html:59
+#: templates/netbox_user_pin/settings.html:60
 msgid "Encryption key"
 msgstr "Šifrovací kľúč"
 
-#: templates/netbox_user_pin/settings.html:64
+#: templates/netbox_user_pin/settings.html:65
 msgid "Active key"
 msgstr "Aktívny kľúč"
 
-#: templates/netbox_user_pin/settings.html:65
+#: templates/netbox_user_pin/settings.html:66
 msgid "Fingerprint"
 msgstr "Odtlačok"
 
-#: templates/netbox_user_pin/settings.html:66
+#: templates/netbox_user_pin/settings.html:67
 msgid "Configured keys"
 msgstr "Nastavené kľúče"
 
-#: templates/netbox_user_pin/settings.html:69
+#: templates/netbox_user_pin/settings.html:70
 msgid ""
 "The key is stored only in the NetBox configuration "
 "(<code>PLUGINS_CONFIG</code>), never in the database. Compare the "
@@ -2346,8 +2362,8 @@ msgid "Not permitted"
 msgstr "Bez povolenia"
 
 #: templates/netbox_user_pin/user_list.html:17
-msgid "Username or e-mail"
-msgstr "Meno alebo e-mail"
+msgid "Name, username or e-mail"
+msgstr "Meno, používateľ alebo e-mail"
 
 #: templates/netbox_user_pin/user_list.html:20
 msgid "All users"
@@ -2389,95 +2405,95 @@ msgstr "delegát"
 msgid "inactive"
 msgstr "neaktívny"
 
-#: templates/netbox_user_pin/user_list.html:47
+#: templates/netbox_user_pin/user_list.html:48
 msgid "No"
 msgstr "Nie"
 
-#: templates/netbox_user_pin/user_list.html:48
+#: templates/netbox_user_pin/user_list.html:49
 msgid "allowed"
 msgstr "povolený"
 
-#: templates/netbox_user_pin/user_list.html:48
+#: templates/netbox_user_pin/user_list.html:49
 msgid "denied"
 msgstr "zakázaný"
 
-#: templates/netbox_user_pin/user_list.html:52
+#: templates/netbox_user_pin/user_list.html:53
 msgid "must change"
 msgstr "musí zmeniť"
 
-#: templates/netbox_user_pin/user_list.html:53
+#: templates/netbox_user_pin/user_list.html:54
 msgid "suspended"
 msgstr "pozastavený"
 
-#: templates/netbox_user_pin/user_list.html:54
+#: templates/netbox_user_pin/user_list.html:55
 msgid "PIN reset pending"
 msgstr "čaká reset PINu"
 
-#: templates/netbox_user_pin/user_list.html:54
+#: templates/netbox_user_pin/user_list.html:55
 msgid "2FA reset pending"
 msgstr "čaká reset 2FA"
 
-#: templates/netbox_user_pin/user_list.html:59
+#: templates/netbox_user_pin/user_list.html:60
 msgid "domain"
 msgstr "doména"
 
-#: templates/netbox_user_pin/user_list.html:67
+#: templates/netbox_user_pin/user_list.html:68
 msgid "until"
 msgstr "do"
 
-#: templates/netbox_user_pin/user_list.html:72
+#: templates/netbox_user_pin/user_list.html:73
 msgid "Actions"
 msgstr "Akcie"
 
-#: templates/netbox_user_pin/user_list.html:74
+#: templates/netbox_user_pin/user_list.html:75
 msgid "Allow PIN"
 msgstr "Povoliť PIN"
 
-#: templates/netbox_user_pin/user_list.html:75
+#: templates/netbox_user_pin/user_list.html:76
 msgid "Deny PIN"
 msgstr "Zakázať PIN"
 
-#: templates/netbox_user_pin/user_list.html:76
+#: templates/netbox_user_pin/user_list.html:77
 msgid "Back to default"
 msgstr "Späť na predvolené"
 
-#: templates/netbox_user_pin/user_list.html:77
+#: templates/netbox_user_pin/user_list.html:78
 msgid "Force PIN change"
 msgstr "Vynútiť zmenu PINu"
 
-#: templates/netbox_user_pin/user_list.html:78
+#: templates/netbox_user_pin/user_list.html:79
 msgid "Clear lockout"
 msgstr "Zrušiť zablokovanie"
 
-#: templates/netbox_user_pin/user_list.html:80
+#: templates/netbox_user_pin/user_list.html:81
 msgid "Lift suspension"
 msgstr "Zrušiť pozastavenie"
 
-#: templates/netbox_user_pin/user_list.html:81
+#: templates/netbox_user_pin/user_list.html:82
 msgid "Suspend PIN (block now)"
 msgstr "Pozastaviť PIN (zablokovať hneď)"
 
-#: templates/netbox_user_pin/user_list.html:82
+#: templates/netbox_user_pin/user_list.html:83
 msgid "Cancel pending reset"
 msgstr "Zrušiť čakajúci reset"
 
-#: templates/netbox_user_pin/user_list.html:84
+#: templates/netbox_user_pin/user_list.html:85
 msgid "Reset PIN (user confirms with 2FA)"
 msgstr "Reset PINu (používateľ potvrdí cez 2FA)"
 
-#: templates/netbox_user_pin/user_list.html:85
+#: templates/netbox_user_pin/user_list.html:86
 msgid "Reset 2FA (user confirms with PIN)"
 msgstr "Reset 2FA (používateľ potvrdí PINom)"
 
-#: templates/netbox_user_pin/user_list.html:86
+#: templates/netbox_user_pin/user_list.html:87
 msgid "Reset needs the user's 2FA"
 msgstr "Reset vyžaduje 2FA používateľa"
 
-#: templates/netbox_user_pin/user_list.html:89
+#: templates/netbox_user_pin/user_list.html:90
 msgid "Emergency: server command (2FA)"
 msgstr "Núdza: príkaz na serveri (2FA)"
 
-#: templates/netbox_user_pin/user_list.html:93
+#: templates/netbox_user_pin/user_list.html:94
 msgid ""
 "Nobody manages themselves here; delegates cannot manage the master or other "
 "delegates"
@@ -2485,15 +2501,15 @@ msgstr ""
 "Tu nikto nespravuje sám seba; delegáti nemôžu zasahovať do mastera ani iných"
 " delegátov"
 
-#: templates/netbox_user_pin/user_list.html:98
+#: templates/netbox_user_pin/user_list.html:99
 msgid "No users."
 msgstr "Žiadni používatelia."
 
-#: templates/netbox_user_pin/user_list.html:108
+#: templates/netbox_user_pin/user_list.html:109
 msgid "Emergency 2FA reset"
 msgstr "Núdzový reset 2FA"
 
-#: templates/netbox_user_pin/user_list.html:110
+#: templates/netbox_user_pin/user_list.html:111
 msgid ""
 "Only if the normal way (Reset 2FA confirmed by the user with the PIN) is not"
 " possible. Run as root on the NetBox server – the 2FA is removed immediately"
@@ -2587,16 +2603,16 @@ msgstr "Vaše staré 2FA bolo odstránené. Nastavte ho teraz znova."
 msgid "Confirmation failed."
 msgstr "Potvrdenie zlyhalo."
 
-#: views.py:595
+#: views.py:597
 msgid "Delegates cannot manage the master, other delegates or themselves."
 msgstr "Delegáti nemôžu zasahovať do mastera, iných delegátov ani do seba."
 
-#: views.py:612
+#: views.py:614
 #, python-brace-format
 msgid "PIN access of {user} set to {access}."
 msgstr "Povolenie PINu pre {user}: {access}."
 
-#: views.py:616
+#: views.py:618
 #, python-brace-format
 msgid ""
 "PIN reset of {user} started. The user confirms it with 2FA in their own "
@@ -2605,7 +2621,7 @@ msgstr ""
 "Reset PINu pre {user} spustený. Používateľ ho potvrdí cez 2FA vo svojej "
 "relácii a zvolí si nový PIN."
 
-#: views.py:620
+#: views.py:622
 #, python-brace-format
 msgid ""
 "2FA reset of {user} started. The user confirms it with the PIN and sets up "
@@ -2614,83 +2630,83 @@ msgstr ""
 "Reset 2FA pre {user} spustený. Používateľ ho potvrdí PINom a nastaví si 2FA "
 "znova."
 
-#: views.py:624
+#: views.py:626
 #, python-brace-format
 msgid "Reset of {user} cancelled."
 msgstr "Reset pre {user} zrušený."
 
-#: views.py:627
+#: views.py:629
 #, python-brace-format
 msgid "PIN of {user} suspended."
 msgstr "PIN používateľa {user} pozastavený."
 
-#: views.py:630
+#: views.py:632
 #, python-brace-format
 msgid "Suspension of {user} lifted."
 msgstr "Pozastavenie používateľa {user} zrušené."
 
-#: views.py:633
+#: views.py:635
 #, python-brace-format
 msgid "Lockout of {user} has been cleared."
 msgstr "Zablokovanie používateľa {user} zrušené."
 
-#: views.py:636
+#: views.py:638
 #, python-brace-format
 msgid "{user} must change the PIN at next use."
 msgstr "{user} musí pri najbližšom použití zmeniť PIN."
 
-#: views.py:772
+#: views.py:774
 msgid "Test e-mail"
 msgstr "Testovací e-mail"
 
-#: views.py:773
+#: views.py:775
 #, python-brace-format
 msgid "This is a test e-mail from NetBox User PIN, sent by {actor}."
 msgstr "Toto je testovací e-mail z NetBox User PIN, odoslal {actor}."
 
-#: views.py:775
+#: views.py:777
 #, python-brace-format
 msgid "Test e-mail sent to {email}."
 msgstr "Testovací e-mail odoslaný na {email}."
 
-#: views.py:777
+#: views.py:779
 msgid "The test e-mail could not be sent – see the audit log for the error."
 msgstr "Testovací e-mail sa nepodarilo odoslať – chybu nájdete v audit logu."
 
-#: views.py:797
+#: views.py:799
 #, python-brace-format
 msgid "Domain @{domain} added. Verify it now."
 msgstr "Doména @{domain} pridaná. Teraz ju overte."
 
-#: views.py:804
+#: views.py:806
 #, python-brace-format
 msgid "Domain @{domain} removed."
 msgstr "Doména @{domain} odobratá."
 
-#: views.py:817
+#: views.py:819
 #, python-brace-format
 msgid "A verification code was sent to {address}."
 msgstr "Overovací kód bol odoslaný na {address}."
 
-#: views.py:832
+#: views.py:834
 #, python-brace-format
 msgid "Domain @{domain} is verified."
 msgstr "Doména @{domain} je overená."
 
-#: views.py:886
+#: views.py:891
 msgid "Delegates updated."
 msgstr "Delegáti upravení."
 
-#: views.py:907
+#: views.py:912
 msgid "Delegate added."
 msgstr "Delegát pridaný."
 
-#: views.py:1046
+#: views.py:1051
 #, python-brace-format
 msgid "A verification code was sent to {email}."
 msgstr "Overovací kód bol odoslaný na {email}."
 
-#: views.py:1051
+#: views.py:1056
 msgid "Please verify again."
 msgstr "Overte sa prosím znova."
 
