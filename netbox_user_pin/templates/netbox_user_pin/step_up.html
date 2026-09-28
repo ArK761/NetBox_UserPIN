@@ -13,7 +13,7 @@
     </div></div>
   {% else %}
     <p class="text-secondary">
-      {% if settings.require_2fa_admin %}{% trans "This is an administrative action. Confirm with your PIN and a code from your authenticator app." %}{% else %}{% trans "This is an administrative action. Confirm with your PIN." %}{% endif %}
+      {% if needs_2fa %}{% trans "This is an administrative action. Confirm with your PIN and a code from your authenticator app." %}{% else %}{% trans "This is an administrative action. Confirm with your PIN." %}{% endif %}
       {% blocktrans with minutes=settings.step_up_minutes %}The confirmation is valid for {{ minutes }} minutes.{% endblocktrans %}
     </p>
     {% trans "Confirm" as submit %}{% include 'netbox_user_pin/inc/pin_form.html' with submit_label=submit %}

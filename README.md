@@ -24,8 +24,11 @@ sensitive pages ("enter your PIN to continue"), so the PIN logic exists only onc
   (the codes themselves are never e-mailed)
 - Emergency server command for a 2FA reset shown at each account
 - **Languages: English / Slovenčina** (Settings → General) for the plugin pages and e-mails
-- Administrative confirmation (PIN + 2FA) in a **pop-up** directly on the page – the action continues
-  without leaving it; connection and test e-mail need no confirmation
+- Administrative confirmation in a **pop-up** directly on the page – the action continues without leaving it.
+  Settings and Mail need only the PIN (optionally also 2FA); actions on other users and delegates need
+  PIN + 2FA; connection and test e-mail need no confirmation
+- Allowed domains entered as `@firma.sk`, exact match only (no sub-domains or look-alikes); verification in a
+  pop-up: address → code by e-mail → enter code
 - **Mail** page: own SMTP server (server, port, encryption off / STARTTLS / SSL, automatic TLS, SMTP
   authentication with a service account; password encrypted, never shown), connection test; **allowed e-mail
   domains must be verified** with a code sent to an address in the domain before any e-mail goes there

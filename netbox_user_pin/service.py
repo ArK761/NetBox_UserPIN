@@ -77,6 +77,7 @@ __all__ = (
     'start_totp_enrollment',
     'step_up',
     'step_up_blockers',
+    'step_up_needs_2fa',
     'suspend',
     'unsuspend',
     'unlock',
@@ -760,49 +761,68 @@ def reset_totp(user, actor, request=None):
 # Step-up: fresh PIN (+ 2FA) confirmation for sensitive actions
 #
 
-def step_up_blockers(user, settings=None):
+def step_up_needs_2fa(level='full', settings=None):
+    """
+    ``level='full'``: actions on other people's accounts, delegates, approvals – PIN + 2FA (when
+    'Require PIN + 2FA for administrative actions' is on). ``level='settings'``: Settings and Mail pages – the PIN
+    is enough unless 'Require 2FA also for settings' is on.
+    """
+    settings = settings or get_settings()
+    if not settings.require_2fa_admin:
+        return False
+    return level != 'settings' or settings.require_2fa_settings
+
+
+def step_up_blockers(user, settings=None, level='full'):
     """Reasons why ``user`` cannot perform a step-up yet (empty list = possible)."""
     settings = settings or get_settings()
     reasons = []
     if not has_pin(user):
         reasons.append('no_pin')
-    if settings.require_2fa_admin and not has_2fa(user):
+    if step_up_needs_2fa(level, settings) and not has_2fa(user):
         reasons.append('no_2fa')
     return reasons
 
 
-def step_up(request, pin, otp=None):
-    """Confirm identity with PIN (+ 2FA) and open the administrative window."""
+def step_up(request, pin, otp=None, level='full'):
+    """Confirm identity with PIN (+ 2FA for level 'full') and open the administrative window."""
     settings = get_settings()
-    if step_up_blockers(request.user, settings):
+    needs_2fa = step_up_needs_2fa(level, settings)
+    if step_up_blockers(request.user, settings, level):
         return VerifyResult(VerifyStatus.NEED_2FA if has_pin(request.user) else VerifyStatus.NO_PIN)
     result = verify_pin(request.user, pin, request=request, scope='step-up')
-    if result and settings.require_2fa_admin:
+    if result and needs_2fa:
         result = verify_second_factor(request.user, otp, request=request, scope='step-up')
     if result:
         user_pin = _get_pin(request.user)
+        previous = request.session.get(STEP_UP_SESSION_KEY) or {}
+        keep_2fa = previous.get('u') == request.user.pk and previous.get('fa2') and previous.get('until', 0) > time.time()
         request.session[STEP_UP_SESSION_KEY] = {
             'u': request.user.pk, 'v': user_pin.version, 'until': time.time() + settings.step_up_minutes * 60,
+            'fa2': bool(needs_2fa or keep_2fa or not settings.require_2fa_admin),
         }
-        log_event(PinEventAction.STEP_UP_OK, user=request.user, request=request)
+        log_event(PinEventAction.STEP_UP_OK, user=request.user, request=request,
+                  detail='PIN + 2FA' if needs_2fa else 'PIN')
     elif result.status in (VerifyStatus.WRONG, VerifyStatus.WRONG_2FA):
         log_event(PinEventAction.STEP_UP_FAILED, user=request.user, request=request)
     return result
 
 
-def has_step_up(request):
-    """True while the administrative window opened by step_up() is valid."""
+def has_step_up(request, level='full'):
+    """True while the administrative window opened by step_up() is valid for ``level``."""
     user = _user_or_none(getattr(request, 'user', None))
     data = request.session.get(STEP_UP_SESSION_KEY) if user else None
     if not data or data.get('u') != user.pk or data.get('until', 0) <= time.time():
+        return False
+    if step_up_needs_2fa(level) and not data.get('fa2'):
         return False
     user_pin = _get_pin(user)
     return bool(user_pin and user_pin.version == data.get('v') and not user_pin.suspended and is_allowed(user))
 
 
-def step_up_seconds_left(request):
+def step_up_seconds_left(request, level='full'):
     data = request.session.get(STEP_UP_SESSION_KEY) or {}
-    return max(int(data.get('until', 0) - time.time()), 0) if has_step_up(request) else 0
+    return max(int(data.get('until', 0) - time.time()), 0) if has_step_up(request, level) else 0
 
 
 def end_step_up(request):

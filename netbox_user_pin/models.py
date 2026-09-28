@@ -115,6 +115,12 @@ class PinSettings(models.Model):
         help_text=_('Allow / deny, reset, force change, settings and delegates need a fresh PIN + 2FA '
                     'confirmation (step-up). When off, the PIN alone is enough.'),
     )
+    require_2fa_settings = models.BooleanField(
+        verbose_name=_('Require 2FA also for settings'),
+        default=False,
+        help_text=_('Off: changes on the Settings and Mail pages need only your PIN (you are logged in anyway). '
+                    'Actions on other users and delegates always need PIN + 2FA.'),
+    )
     step_up_minutes = models.PositiveIntegerField(
         verbose_name=_('Administrative window (minutes)'),
         default=5,

@@ -454,30 +454,40 @@ class ResetConfirmView(AllowedUserMixin, View):
 class StepUpView(AllowedUserMixin, View):
     template_name = 'netbox_user_pin/step_up.html'
 
+    @staticmethod
+    def _level(request):
+        return 'settings' if (request.POST.get('level') or request.GET.get('level')) == 'settings' else 'full'
+
+    def _form(self, request, data=None):
+        return PinOtpForm(data, require_otp=service.step_up_needs_2fa(self._level(request)))
+
     def _render(self, request, form):
         settings = service.get_settings()
+        level = self._level(request)
         return render(request, self.template_name, {
             'form': form,
-            'blockers': service.step_up_blockers(request.user, settings),
+            'blockers': service.step_up_blockers(request.user, settings, level),
             'settings': settings,
+            'needs_2fa': service.step_up_needs_2fa(level, settings),
+            'level': level,
             'next': request.POST.get('next') or request.GET.get('next', ''),
         })
 
     def get(self, request):
-        return self._render(request, PinOtpForm(require_otp=service.get_settings().require_2fa_admin))
+        return self._render(request, self._form(request))
 
     def post(self, request):
-        form = PinOtpForm(request.POST, require_otp=service.get_settings().require_2fa_admin)
+        level = self._level(request)
+        form = self._form(request, request.POST)
         ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
         if form.is_valid():
-            result = service.step_up(request, form.cleaned_data['pin'], form.cleaned_data.get('otp'))
+            result = service.step_up(request, form.cleaned_data['pin'], form.cleaned_data.get('otp'), level=level)
             if result:
                 return JsonResponse({'ok': True}) if ajax else redirect(_next_url(request))
             _verify_error(form, result)
         if ajax:
             errors = [str(e) for errs in form.errors.values() for e in errs]
-            blockers = service.step_up_blockers(request.user)
-            if 'no_2fa' in blockers:
+            if 'no_2fa' in service.step_up_blockers(request.user, level=level):
                 errors.append(str(_('Two-factor authentication must be set up first (My PIN > Two-factor).')))
             return JsonResponse({'ok': False, 'errors': errors or [str(_('Confirmation failed.'))]})
         return self._render(request, form)
@@ -562,6 +572,8 @@ class UserPinListView(AdminViewMixin, View):
             'can_change': can_change,
             'step_up_active': service.has_step_up(request),
             'step_up_left': service.step_up_seconds_left(request),
+            'step_up_level': 'full',
+            'step_up_otp': service.step_up_needs_2fa('full'),
             'settings': settings,
         })
 
@@ -661,8 +673,10 @@ class PinSettingsView(AdminViewMixin, View):
             'form': form,
             'key_info': key_info,
             'can_edit': request.user.has_perm('netbox_user_pin.change_pinsettings'),
-            'step_up_active': service.has_step_up(request),
-            'step_up_left': service.step_up_seconds_left(request),
+            'step_up_active': service.has_step_up(request, 'settings'),
+            'step_up_left': service.step_up_seconds_left(request, 'settings'),
+            'step_up_level': 'settings',
+            'step_up_otp': service.step_up_needs_2fa('settings'),
         }
 
     def get(self, request):
@@ -673,7 +687,7 @@ class PinSettingsView(AdminViewMixin, View):
     def post(self, request):
         if not request.user.has_perm('netbox_user_pin.change_pinsettings'):
             raise PermissionDenied
-        if (response := step_up_gate(request)) is not None:
+        if (response := step_up_gate(request, 'settings')) is not None:
             return response
         form = PinSettingsForm(request.POST, instance=PinSettings.load())
         if form.is_valid():
@@ -700,6 +714,7 @@ class MailSettingsView(AdminViewMixin, View):
             'test_form': test_form or self._test_form(),
             'domain_form': domain_form or DomainForm(),
             'domains': AllowedDomain.objects.all(),
+            'verify_pk': request.GET.get('verify', ''),
             'verify': verify,
             'can_edit': can_edit,
             'settings': settings,
@@ -708,8 +723,10 @@ class MailSettingsView(AdminViewMixin, View):
             'netbox_server': netbox_email.get('SERVER', ''),
             'netbox_from': netbox_email.get('FROM_EMAIL', ''),
             'sender': mail.sender(settings),
-            'step_up_active': service.has_step_up(request),
-            'step_up_left': service.step_up_seconds_left(request),
+            'step_up_active': service.has_step_up(request, 'settings'),
+            'step_up_left': service.step_up_seconds_left(request, 'settings'),
+            'step_up_level': 'settings',
+            'step_up_otp': service.step_up_needs_2fa('settings'),
         })
 
     def _test_form(self, data=None):
@@ -728,8 +745,9 @@ class MailSettingsView(AdminViewMixin, View):
             raise PermissionDenied
         action = request.POST.get('action', 'save')
         # tests change nothing, so they need no PIN + 2FA confirmation
-        if action not in ('test-connection', 'test-mail') and (response := step_up_gate(request)) is not None:
-            return response
+        if action not in ('test-connection', 'test-mail'):
+            if (response := step_up_gate(request, 'settings')) is not None:
+                return response
         handler = getattr(self, f'_post_{action.replace("-", "_")}', None)
         if handler is None:
             raise PermissionDenied
@@ -759,6 +777,10 @@ class MailSettingsView(AdminViewMixin, View):
             messages.error(request, _('The test e-mail could not be sent – see the audit log for the error.'))
         return redirect('plugins:netbox_user_pin:mail')
 
+    @staticmethod
+    def _ajax(request):
+        return request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+
     def _post_add_domain(self, request):
         domain_form = DomainForm(request.POST)
         if not domain_form.is_valid():
@@ -766,31 +788,36 @@ class MailSettingsView(AdminViewMixin, View):
         domain = service.normalize_domain(domain_form.cleaned_data['domain'])
         if approvals.required_for(ApprovalAction.DOMAIN_ADD):
             return _four_eyes(request, ApprovalAction.DOMAIN_ADD, {'domain': domain},
-                              f'Add allowed e-mail domain {domain}')
+                              f'Add allowed e-mail domain @{domain}')
         try:
-            service.add_domain(domain, request.user, request=request)
+            obj = service.add_domain(domain, request.user, request=request)
         except ValidationError as exc:
             domain_form.add_error('domain', exc)
             return self._render(request, domain_form=domain_form)
-        messages.success(request, _('Domain {domain} added. Verify it before e-mails are sent to it.').format(
-            domain=domain))
-        return redirect('plugins:netbox_user_pin:mail')
+        messages.success(request, _('Domain @{domain} added. Verify it now.').format(domain=obj.domain))
+        # reopen the page with the verification pop-up for this domain
+        return redirect(f"{reverse('plugins:netbox_user_pin:mail')}?verify={obj.pk}#domains")
 
     def _post_remove_domain(self, request):
         domain = get_object_or_404(AllowedDomain, pk=request.POST.get('pk'))
         service.remove_domain(domain, request.user, request=request)
-        messages.success(request, _('Domain {domain} removed.').format(domain=domain))
+        messages.success(request, _('Domain @{domain} removed.').format(domain=domain))
         return redirect('plugins:netbox_user_pin:mail')
 
     def _post_send_domain_code(self, request):
         domain = get_object_or_404(AllowedDomain, pk=request.POST.get('pk'))
+        address = request.POST.get('address', '')
         try:
-            service.send_domain_code(domain, request.POST.get('address'), request.user, request=request)
+            service.send_domain_code(domain, address, request.user, request=request)
         except ValidationError as exc:
+            if self._ajax(request):
+                return JsonResponse({'ok': False, 'errors': exc.messages})
             messages.error(request, ' '.join(exc.messages))
         else:
-            messages.success(request, _('A verification code was sent to {address}.').format(
-                address=request.POST.get('address')))
+            text = _('A verification code was sent to {address}.').format(address=address)
+            if self._ajax(request):
+                return JsonResponse({'ok': True, 'message': str(text)})
+            messages.success(request, text)
         return redirect('plugins:netbox_user_pin:mail')
 
     def _post_verify_domain(self, request):
@@ -798,9 +825,14 @@ class MailSettingsView(AdminViewMixin, View):
         try:
             service.verify_domain(domain, request.POST.get('code'), request.user, request=request)
         except ValidationError as exc:
+            if self._ajax(request):
+                return JsonResponse({'ok': False, 'errors': exc.messages})
             messages.error(request, ' '.join(exc.messages))
         else:
-            messages.success(request, _('Domain {domain} is verified.').format(domain=domain))
+            text = _('Domain @{domain} is verified.').format(domain=domain)
+            messages.success(request, text)
+            if self._ajax(request):
+                return JsonResponse({'ok': True, 'message': str(text)})
         return redirect('plugins:netbox_user_pin:mail')
 
 
@@ -820,6 +852,8 @@ class DelegateListView(AdminViewMixin, View):
             'delegates': PinDelegate.objects.select_related('user', 'group').order_by('created'),
             'step_up_active': service.has_step_up(request),
             'step_up_left': service.step_up_seconds_left(request),
+            'step_up_level': 'full',
+            'step_up_otp': service.step_up_needs_2fa('full'),
         })
 
     def get(self, request):

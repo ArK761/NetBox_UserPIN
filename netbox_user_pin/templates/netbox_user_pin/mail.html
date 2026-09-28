@@ -62,31 +62,20 @@
       <table class="table">
         {% for d in domains %}
           <tr>
-            <td><strong>{{ d.domain }}</strong><br>
+            <td><strong>@{{ d.domain }}</strong><br>
               {% if d.is_verified %}<span class="badge text-bg-green">{% trans "verified" %}</span> <span class="small text-secondary">{{ d.verified|date:"Y-m-d" }} · {{ d.verified_by }} · {{ d.verified_email }}</span>
               {% else %}<span class="badge text-bg-yellow">{% trans "not verified – no e-mails yet" %}</span>{% endif %}
             </td>
-            <td class="text-end">
+            <td class="text-end text-nowrap">
+              {% if can_edit and not d.is_verified %}
+                <button type="button" class="btn btn-sm btn-primary" data-verify-domain="{{ d.pk }}" data-domain="{{ d.domain }}" data-code-email="{{ d.code_email }}" data-code-pending="{% if d.code_pending %}1{% endif %}"><i class="mdi mdi-check-decagram"></i> {% trans "Verify" %}</button>
+              {% endif %}
               {% if can_edit %}
-                <form method="post" class="d-inline" data-step-up data-confirm="{% blocktrans with domain=d.domain %}Remove {{ domain }}?{% endblocktrans %}">{% csrf_token %}<input type="hidden" name="action" value="remove-domain"><input type="hidden" name="pk" value="{{ d.pk }}">
+                <form method="post" class="d-inline" data-step-up data-confirm="{% blocktrans with domain=d.domain %}Remove @{{ domain }}?{% endblocktrans %}">{% csrf_token %}<input type="hidden" name="action" value="remove-domain"><input type="hidden" name="pk" value="{{ d.pk }}">
                   <button type="submit" class="btn btn-sm btn-outline-danger"><i class="mdi mdi-delete"></i></button></form>
               {% endif %}
             </td>
           </tr>
-          {% if can_edit and not d.is_verified %}
-            <tr><td colspan="2" class="pt-0">
-              <div class="small text-secondary mb-1">{% trans "1. Send a code to an address in this domain" %}</div>
-              <form method="post" class="input-group input-group-sm mb-2" data-step-up>{% csrf_token %}<input type="hidden" name="action" value="send-domain-code"><input type="hidden" name="pk" value="{{ d.pk }}">
-                <input type="email" name="address" class="form-control" placeholder="someone@{{ d.domain }}" value="{{ d.code_email }}" required>
-                <button type="submit" class="btn btn-outline-primary">{% if d.code_pending %}{% trans "Send again" %}{% else %}{% trans "Send code" %}{% endif %}</button></form>
-              {% if d.code_pending %}
-                <div class="small text-secondary mb-1">{% blocktrans with email=d.code_email %}2. Enter the code sent to {{ email }}{% endblocktrans %}</div>
-                <form method="post" class="input-group input-group-sm" data-step-up>{% csrf_token %}<input type="hidden" name="action" value="verify-domain"><input type="hidden" name="pk" value="{{ d.pk }}">
-                  <input type="text" name="code" class="form-control" placeholder="{% trans 'Code' %}" inputmode="numeric" autocomplete="off" required autofocus>
-                  <button type="submit" class="btn btn-primary">{% trans "Verify" %}</button></form>
-              {% endif %}
-            </td></tr>
-          {% endif %}
         {% empty %}
           <tr><td class="text-secondary">{% trans "No domain – no e-mails are sent." %}</td></tr>
         {% endfor %}
@@ -97,10 +86,34 @@
             {{ domain_form.domain }}
             <button type="submit" class="btn btn-outline-primary"><i class="mdi mdi-plus"></i> {% trans "Add" %}</button></form>
           {% if domain_form.errors %}<div class="text-danger small mt-1">{{ domain_form.errors.domain|join:" " }}</div>{% endif %}
-          <div class="small text-secondary mt-1">{% trans "e.g. firma.sk or @firma.sk. A domain is used only after a code sent to an address in it was entered." %}</div>
+          <div class="small text-secondary mt-1">{% trans "e.g. @firma.sk. Only addresses ending exactly with this domain receive e-mails (not sub-domains or similar names). The domain is used only after it was verified with a code." %}</div>
         </div>
       {% endif %}
     </div>
+    {% if can_edit %}
+      <div class="modal fade" id="domain-modal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+          <div class="modal-header"><h5 class="modal-title"><i class="mdi mdi-check-decagram"></i> {% trans "Verify domain" %} <span id="dm-domain"></span></h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+          <div class="modal-body">
+            {% csrf_token %}
+            <div class="alert alert-danger d-none" id="dm-error"><div></div></div>
+            <div class="alert alert-success d-none" id="dm-info"><div></div></div>
+            <label class="form-label" for="dm-address">{% trans "1. Address in this domain" %}</label>
+            <div class="input-group mb-3">
+              <input type="email" class="form-control" id="dm-address" autocomplete="off">
+              <button type="button" class="btn btn-outline-primary" id="dm-send"><i class="mdi mdi-email-fast"></i> {% trans "Send code" %}</button>
+            </div>
+            <label class="form-label" for="dm-code">{% trans "2. Code from the e-mail" %}</label>
+            <div class="input-group">
+              <input type="text" class="form-control" id="dm-code" inputmode="numeric" autocomplete="off" maxlength="8">
+              <button type="button" class="btn btn-primary" id="dm-verify"><i class="mdi mdi-check"></i> {% trans "Verify" %}</button>
+            </div>
+            <div class="form-text">{% trans "Already have a code? Enter it directly." %}</div>
+          </div>
+        </div></div>
+      </div>
+    {% endif %}
     <div class="card">
       <h2 class="card-header">{% trans "Send test e-mail" %}</h2>
       <div class="card-body">
@@ -118,6 +131,52 @@
   </div>
 </div>
 <script>
+window.addEventListener('load', function () {
+  var modalEl = document.getElementById('domain-modal');
+  var ModalClass = window.Modal || (window.bootstrap && window.bootstrap.Modal);
+  if (!modalEl || !ModalClass) return;
+  var modal = new ModalClass(modalEl), current = null;
+  var err = document.getElementById('dm-error'), info = document.getElementById('dm-info');
+  var userEmail = '{{ request.user.email|escapejs }}';
+  function show(box, text) { err.classList.add('d-none'); info.classList.add('d-none'); if (text) { box.querySelector('div').textContent = text; box.classList.remove('d-none'); } }
+  function openFor(btn) {
+    current = btn.dataset.verifyDomain;
+    document.getElementById('dm-domain').textContent = '@' + btn.dataset.domain;
+    var address = btn.dataset.codeEmail || (userEmail.toLowerCase().endsWith('@' + btn.dataset.domain) ? userEmail : '');
+    document.getElementById('dm-address').value = address;
+    document.getElementById('dm-address').placeholder = 'meno@' + btn.dataset.domain;
+    document.getElementById('dm-code').value = '';
+    show(info, btn.dataset.codePending ? '{% trans "A code was already sent – enter it below or send a new one." as t %}{{ t|escapejs }}' : '');
+    modal.show();
+  }
+  function post(action, extra, onOk) {
+    var body = new URLSearchParams(Object.assign({action: action, pk: current,
+      csrfmiddlewaretoken: modalEl.querySelector('input[name=csrfmiddlewaretoken]').value}, extra));
+    fetch('{% url "plugins:netbox_user_pin:mail" %}', {method: 'POST', body: body, credentials: 'same-origin',
+      headers: {'X-Requested-With': 'XMLHttpRequest'}})
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.step_up && window.userPinStepUp) {        // PIN confirmation expired: ask, then retry
+          modal.hide(); window.userPinStepUp(function () { modal.show(); post(action, extra, onOk); });
+        } else if (data.ok) { onOk(data); }
+        else { show(err, (data.errors || []).join(' ')); }
+      });
+  }
+  document.getElementById('dm-send').addEventListener('click', function () {
+    post('send-domain-code', {address: document.getElementById('dm-address').value}, function (data) {
+      show(info, data.message); document.getElementById('dm-code').focus();
+    });
+  });
+  document.getElementById('dm-verify').addEventListener('click', function () {
+    post('verify-domain', {code: document.getElementById('dm-code').value}, function () {
+      modal.hide(); window.location.href = '{% url "plugins:netbox_user_pin:mail" %}#domains';
+    });
+  });
+  document.querySelectorAll('[data-verify-domain]').forEach(function (btn) {
+    btn.addEventListener('click', function () { openFor(btn); });
+    if (btn.dataset.verifyDomain === '{{ verify_pk|escapejs }}') { openFor(btn); }
+  });
+});
 (function () {
   var auth = document.getElementById('id_smtp_auth'), box = document.getElementById('smtp-auth-fields');
   if (!auth || !box) return;

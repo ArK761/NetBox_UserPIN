@@ -5,8 +5,8 @@
       <button type="submit" class="btn btn-sm btn-outline-secondary"><i class="mdi mdi-lock"></i> {% trans "Lock" %}</button></form>
   </div>
 {% else %}
-  <div class="alert alert-info d-flex justify-content-between align-items-center"><div><i class="mdi mdi-shield-key"></i> {% trans "Changes require a confirmation of your identity (PIN + 2FA)." %}</div>
-    <a class="btn btn-sm btn-primary ms-3" href="{% url 'plugins:netbox_user_pin:step_up' %}?next={{ request.get_full_path|urlencode }}" data-step-up-open><i class="mdi mdi-shield-key"></i> {% trans "Confirm identity" %}</a>
+  <div class="alert alert-info d-flex justify-content-between align-items-center"><div><i class="mdi mdi-shield-key"></i> {% if step_up_otp %}{% trans "Changes require a confirmation of your identity (PIN + 2FA)." %}{% else %}{% trans "Changes require a confirmation with your PIN." %}{% endif %}</div>
+    <a class="btn btn-sm btn-primary ms-3" href="{% url 'plugins:netbox_user_pin:step_up' %}?level={{ step_up_level|default:'full' }}&next={{ request.get_full_path|urlencode }}" data-step-up-open><i class="mdi mdi-shield-key"></i> {% trans "Confirm identity" %}</a>
   </div>
 {% endif %}
 {% include 'netbox_user_pin/inc/step_up_modal.html' %}

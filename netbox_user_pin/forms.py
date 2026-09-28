@@ -268,7 +268,7 @@ class MailSettingsForm(_StyledModelForm):
 
 class DomainForm(forms.Form):
     domain = forms.CharField(label=_('Domain'), max_length=253,
-                             widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'firma.sk'}))
+                             widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': '@firma.sk'}))
 
 
 class PinSettingsForm(_StyledModelForm):
@@ -277,7 +277,7 @@ class PinSettingsForm(_StyledModelForm):
         fields = (
             'language', 'access_mode', 'pin_length', 'block_weak_pins', 'blocked_pins', 'max_age_days', 'warn_days',
             'unlock_minutes', 'sliding_unlock', 'scope_mode', 'require_2fa_unlock',
-            'max_attempts', 'lockout_minutes', 'require_2fa_admin', 'step_up_minutes', 'reset_valid_hours',
+            'max_attempts', 'lockout_minutes', 'require_2fa_admin', 'require_2fa_settings', 'step_up_minutes', 'reset_valid_hours',
             'four_eyes', 'four_eyes_delegates', 'four_eyes_settings', 'four_eyes_access', 'approval_valid_minutes',
             'break_glass',
         )

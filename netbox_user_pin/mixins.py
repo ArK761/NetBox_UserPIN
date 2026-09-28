@@ -25,7 +25,7 @@ Sensitive actions (fresh PIN + 2FA confirmation, "step-up")::
 from functools import wraps
 from urllib.parse import urlencode
 
-from django.http import HttpResponse, HttpResponseRedirect
+from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
 from django.shortcuts import render
 from django.urls import reverse
 
@@ -114,17 +114,22 @@ def pin_required(view_func=None, *, scope=None):
     return decorator
 
 
-def step_up_gate(request):
-    """Return a redirect to the confirmation page unless a step-up (PIN + 2FA) is currently valid."""
+def step_up_gate(request, level='full'):
+    """
+    Return a redirect to the confirmation page unless a step-up is currently valid (``level='full'``: PIN + 2FA,
+    ``level='settings'``: PIN, see service.step_up_needs_2fa).
+    """
     user = getattr(request, 'user', None)
     if user is None or not user.is_authenticated:
         return None
     if not service.is_allowed(user):
         return not_allowed_response(request)
-    if service.has_step_up(request):
+    if service.has_step_up(request, level):
         return None
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return JsonResponse({'ok': False, 'step_up': True}, status=403)
     next_url = request.get_full_path() if request.method == 'GET' else request.META.get('HTTP_REFERER', '')
-    query = urlencode({'next': next_url})
+    query = urlencode({'next': next_url, 'level': level})
     return _redirect(request, f"{reverse('plugins:netbox_user_pin:step_up')}?{query}")
 
 

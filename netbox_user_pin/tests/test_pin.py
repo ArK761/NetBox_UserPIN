@@ -1079,3 +1079,73 @@ class StepUpPopupAndLanguageTest(PinTestCase):
         # the rest of NetBox keeps its language
         from django.utils.translation import get_language
         self.assertNotEqual(get_language(), 'sk')
+
+
+class SettingsPinOnlyAndDomainPopupTest(PinTestCase):
+
+    def setUp(self):
+        super().setUp()
+        self.admin = User.objects.create_superuser('dom', password='pw', email='dom@firma.sk')
+        service.set_pin(self.admin, GOOD_PIN)
+        self.secret = enable_2fa(self.admin)
+        self.client.force_login(self.admin)
+        self.client.post(reverse('plugins:netbox_user_pin:unlock'), {'pin': GOOD_PIN, 'scope': 'user-pin-admin'})
+        self.ajax = {'HTTP_X_REQUESTED_WITH': 'XMLHttpRequest'}
+
+    def test_pin_only_for_settings_but_2fa_for_users(self):
+        # without confirmation an AJAX call asks for the pop-up
+        response = self.client.post(reverse('plugins:netbox_user_pin:mail'), {'action': 'add-domain',
+                                                                               'domain': 'a.sk'}, **self.ajax)
+        self.assertEqual(response.status_code, 403)
+        self.assertTrue(response.json()['step_up'])
+        response = self.client.post(reverse('plugins:netbox_user_pin:step_up'),
+                                    {'pin': GOOD_PIN, 'level': 'settings'}, **self.ajax)
+        self.assertTrue(response.json()['ok'])
+        response = self.client.post(reverse('plugins:netbox_user_pin:mail'), {'action': 'add-domain',
+                                                                               'domain': '@firma.sk'})
+        from netbox_user_pin.models import AllowedDomain
+        domain = AllowedDomain.objects.get(domain='firma.sk')
+        self.assertIn(f'verify={domain.pk}', response.url)
+        # actions on other users still need PIN + 2FA
+        other = User.objects.create_user('other', password='pw')
+        url = reverse('plugins:netbox_user_pin:user_action', kwargs={'pk': other.pk, 'action': 'allow'})
+        self.assertIn(reverse('plugins:netbox_user_pin:step_up'), self.client.post(url).url)
+        # and when 'Require 2FA also for settings' is on, the PIN-only window is not enough
+        settings = PinSettings.load()
+        settings.require_2fa_settings = True
+        settings.save()
+        self.assertFalse(service.has_step_up(self.client.request().wsgi_request, 'settings'))
+
+    def test_domain_popup_flow(self):
+        from unittest import mock
+        from netbox_user_pin.models import AllowedDomain
+        from netbox_user_pin import mail as pin_mail
+        settings = PinSettings.load()
+        settings.smtp_server, settings.mail_from_address = 'mail.firma.sk', 'nb@firma.sk'
+        settings.save()
+        domain = AllowedDomain.objects.create(domain='firma.sk')
+        self.client.post(reverse('plugins:netbox_user_pin:step_up'), {'pin': GOOD_PIN, 'level': 'settings'},
+                         **self.ajax)
+        url = reverse('plugins:netbox_user_pin:mail')
+        response = self.client.post(url, {'action': 'send-domain-code', 'pk': domain.pk, 'address': 'x@other.sk'},
+                                    **self.ajax)
+        self.assertFalse(response.json()['ok'])
+        with mock.patch('smtplib.SMTP') as smtp:
+            response = self.client.post(url, {'action': 'send-domain-code', 'pk': domain.pk,
+                                              'address': 'dom@firma.sk'}, **self.ajax)
+        self.assertTrue(response.json()['ok'])
+        body = smtp.return_value.send_message.call_args[0][0].get_content()
+        code = next(w.strip('.') for w in body.split() if w.strip('.').isdigit() and len(w.strip('.')) == 8)
+        response = self.client.post(url, {'action': 'verify-domain', 'pk': domain.pk, 'code': '1'}, **self.ajax)
+        self.assertFalse(response.json()['ok'])
+        response = self.client.post(url, {'action': 'verify-domain', 'pk': domain.pk, 'code': code}, **self.ajax)
+        self.assertTrue(response.json()['ok'])
+        self.assertTrue(AllowedDomain.objects.get(pk=domain.pk).is_verified)
+        self.assertIsNotNone(pin_mail)
+
+    def test_exact_domain_match(self):
+        allow_domains('firma.sk')
+        for email, expected in (('a@firma.sk', 'ok'), ('a@FIRMA.SK', 'ok'), ('a@mail.firma.sk', 'domain'),
+                                ('a@xfirma.sk', 'domain'), ('a@firma.sk.evil.com', 'domain')):
+            self.admin.email = email
+            self.assertEqual(service.email_status(self.admin), expected, email)
