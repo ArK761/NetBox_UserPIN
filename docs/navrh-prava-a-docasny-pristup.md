@@ -38,7 +38,7 @@ Nadväzuje na [navrh-delegovanie-pracoviska.md](navrh-delegovanie-pracoviska.md)
 Každý plugin pri štarte povie PINu, aké práva pozná:
 
 ```
-projects.documents   : read, write, move, delete
+projects.documents   : read, write, move, delete, transfer   # transfer = poslať do iného oddelenia
 projects.mail        : read, send
 projects.photos      : read, write, delete
 projects.members     : manage
@@ -118,7 +118,26 @@ neschváli, a iba na určitý čas.
   NetBoxu (zariadenia, IP …), ešte overím – závisí od toho, čo NetBox 4.7 pluginom dovolí vložiť do každej
   stránky.
 
-## 8. Presun do iného oddelenia
+## 7b. Presun obsahu (súbory, maily …)
+
+**V rámci oddelenia** – kto má právo `move` (správca, delegát, alebo člen, ktorému ho dali), presúva medzi
+priečinkami svojho oddelenia sám. Zapíše sa do auditu.
+
+**Do iného oddelenia** – obsah nemôže len tak „pristáť“ u cudzích:
+
+1. Správca alebo delegát oddelenia A vyberie objekt (napr. DOC-000482) → **Presunúť do oddelenia B**.
+2. Správcovi a delegátom oddelenia B sa **v ich relácii zobrazí okno** (+ zvonček a e-mail):
+
+   > **Oddelenie IT posiela objekt DOC-000482** – *zmluva_2026.pdf*
+   > Poslal: Eva Kráľová · Cieľový priečinok: (vyberie príjemca)
+   > [ Prijať ] [ Odmietnuť ]
+
+3. Kto z oddelenia B prijme, **potvrdí PINom** a vyberie priečinok. Až potom sa objekt presunie; kým nie je
+   prijatý, ostáva v oddelení A (stav „odosiela sa do B“).
+4. Po prijatí patrí objekt oddeleniu B – práva ľudí z A k nemu zanikajú, platia práva oddelenia B.
+5. Odmietnutie alebo neprijatie do dátumu (napr. 7 dní) → objekt ostáva v A, odosielateľ dostane e-mail.
+
+## 8. Presun ľudí do iného oddelenia
 
 - Práva viazané na oddelenie pri presune **automaticky zaniknú** (PIN).
 - Odovzdanie agendy (vlastník projektu, rozrobené úlohy …) rieši plugin, ktorý agendu má. PIN mu dá signály

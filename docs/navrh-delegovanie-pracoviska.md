@@ -215,3 +215,24 @@ správcom) sa zapíše do auditu – kto, komu, oddelenie, kedy, odkiaľ (IP), d
 | 3 | Trvalý presun správcu dvomi delegátmi bez CORE – povoliť? | nie; dvaja delegáti môžu iba **dočasne** (max. 30 dní), trvalý presun potvrdí CORE |
 | 4 | Zmeny správcu oddelenia (povoliť PIN, reset) – cez štyri oči, alebo stačí správca sám? | správca sám; štyri oči iba pre zmeny rolí (delegáti, presun práv, presun ľudí) |
 | 5 | Dostane mail o dočasnom delegovaní naozaj **každý** v oddelení, alebo iba tí, čo majú PIN? | každý s e-mailom v overenej doméne |
+
+
+## 14. Doplnenie (rozhodnuté, zatiaľ neimplementované)
+
+- **Master v PINe ≠ superuser NetBoxu** – v `configuration.py`:
+  ```python
+  PLUGINS_CONFIG = {
+      'netbox_user_pin': {
+          'masters': ['admin'],              # vždy master v PINe (nedá sa odobrať cez web)
+          'superusers_are_masters': False,   # True = každý superuser NetBoxu je automaticky master
+      },
+  }
+  ```
+  Iný superuser má v PINe iba svoj PIN, kým ho master nedeleguje.
+- **Zaradenie do oddelenia** – ľudí bez oddelenia zaraďuje CORE (master, zástupcovia CORE), bez ohľadu na to,
+  či majú PIN, aj priamo zo stránky Používatelia (Akcie → Presunúť do oddelenia, potvrdenie PINom). Potom ho
+  vidí správca oddelenia a povolí mu PIN / práva.
+- **Núdzový príkaz (bash)** vidia iba ľudia s oprávnením „Prístup na server (SSH)“; na stránke Môj PIN nebude.
+- **Štruktúra oddelení** – plná šírka, e-mail, oddelenia zbalené do jedného riadku s rozbalením, vyhľadávanie,
+  problémové (červené, žlté) navrchu, veľké oddelenia po častiach.
+- **Karta prehliadača** – čistý názov bez HTML („NetBox PIN – …“).
