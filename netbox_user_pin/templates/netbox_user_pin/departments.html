@@ -14,9 +14,9 @@
           <td>{{ t.user.username }}</td><td>{{ t.from_department|default:"—" }}</td><td>{{ t.to_department }}</td>
           <td>{{ t.requested_by_name }}</td><td>{{ t.expires|date:"Y-m-d H:i" }}</td>
           <td class="text-end text-nowrap">
-            <form method="post" class="d-inline" data-step-up>{% csrf_token %}<input type="hidden" name="pk" value="{{ t.pk }}"><input type="hidden" name="action" value="transfer-approve">
+            <form method="post" class="d-inline" data-step-up="settings">{% csrf_token %}<input type="hidden" name="pk" value="{{ t.pk }}"><input type="hidden" name="action" value="transfer-approve">
               <button class="btn btn-sm btn-success" type="submit"><i class="mdi mdi-check"></i> {% trans "Approve" %}</button></form>
-            <form method="post" class="d-inline" data-step-up>{% csrf_token %}<input type="hidden" name="pk" value="{{ t.pk }}"><input type="hidden" name="action" value="transfer-reject">
+            <form method="post" class="d-inline" data-step-up="settings">{% csrf_token %}<input type="hidden" name="pk" value="{{ t.pk }}"><input type="hidden" name="action" value="transfer-reject">
               <button class="btn btn-sm btn-outline-danger" type="submit">{% trans "Reject" %}</button></form>
           </td>
         </tr>
@@ -34,7 +34,7 @@
         <tbody>
           {% for row in rows %}
             <tr>
-              <td><a href="{% url 'plugins:netbox_user_pin:department' pk=row.department.pk %}"><strong>{{ row.department.name }}</strong></a>{% if row.department.description %}<div class="small text-secondary">{{ row.department.description }}</div>{% endif %}</td>
+              <td><span class="pin-dot {{ row.status }}" title="{% if row.status == 'ok' %}{% trans 'Head and delegates in place' %}{% elif row.status == 'warn' %}{% trans 'Too few delegates' %}{% else %}{% trans 'No head!' %}{% endif %}"></span><a href="{% url 'plugins:netbox_user_pin:department' pk=row.department.pk %}"><strong>{{ row.department.name }}</strong></a>{% if row.department.description %}<div class="small text-secondary">{{ row.department.description }}</div>{% endif %}</td>
               <td>{% if row.head %}{{ row.head.user.username }}{% if row.head.temporary_until %} <span class="badge text-bg-purple">{% trans "until" %} {{ row.head.temporary_until|date:"Y-m-d" }}</span>{% endif %}{% else %}<span class="badge text-bg-orange">{% trans "no head – managed by CORE" %}</span>{% endif %}</td>
               <td>{{ row.delegates }}{% if row.delegates < 2 %} <span class="badge text-bg-orange" title="{% trans 'Minimum 2 delegates' %}"><i class="mdi mdi-alert"></i></span>{% endif %}</td>
               <td>{{ row.members }}</td>
@@ -47,6 +47,8 @@
         </tbody>
       </table>
     </div>
+    <h3 class="mt-4 mb-2"><i class="mdi mdi-file-tree"></i> {% trans "Structure" %}</h3>
+    {% include 'netbox_user_pin/inc/department_tree.html' %}
     {% if is_core and unassigned %}<p class="text-secondary small">{% blocktrans with n=unassigned %}{{ n }} active users are not in any department (only CORE manages their PINs).{% endblocktrans %}</p>{% endif %}
   </div>
   {% if is_core %}
@@ -54,7 +56,7 @@
     <div class="card">
       <h2 class="card-header">{% trans "New department" %}</h2>
       <div class="card-body">
-        <form method="post" class="object-edit" data-step-up>{% csrf_token %}<input type="hidden" name="action" value="create">
+        <form method="post" class="object-edit" data-step-up="settings">{% csrf_token %}<input type="hidden" name="action" value="create">
           {% render_field form.name %}
           {% render_field form.description %}
           <div class="text-end"><button type="submit" class="btn btn-primary"><i class="mdi mdi-plus"></i> {% trans "Create" %}</button></div>

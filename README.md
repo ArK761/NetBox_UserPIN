@@ -115,8 +115,14 @@ Everything else is configured in the UI: **User PIN → Settings**.
 | Settings, Mail | ✅ edit | view (edit if allowed) | – | – | – |
 | CORE | ✅ | – | – | – | – |
 
-Everybody except the master sees other people's data only after confirming with **PIN + 2FA**; all changes
-require a **step-up**. Administration pages also require the administrator's own unlocked PIN.
+Everybody except the master sees other people's data only after confirming with **PIN + 2FA**. Everyday
+actions (allow / deny PIN, clear a lockout, force a PIN change, moves between departments) need only the **PIN**;
+resets, suspension, roles and dissolving a department need **PIN + 2FA** (Settings → *Require 2FA also for
+settings* makes the PIN-only actions ask for 2FA too).
+
+Users can be filtered by department (or "without a department") and role, and shown **by departments** as a
+tree: head → delegates → members. Status of each department: green = head + at least 2 delegates, yellow =
+delegates missing, red (blinking) = no head. A delegate can be invited only when the department has a head. Administration pages also require the administrator's own unlocked PIN.
 
 Roles are stored by the plugin and effective roles are synchronised into NetBox object permissions named
 `User PIN: delegates …`, `User PIN: settings editors` and `User PIN: departments …` – do not edit those by hand.

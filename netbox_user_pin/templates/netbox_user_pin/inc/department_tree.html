@@ -1,0 +1,42 @@
+{% load i18n %}
+<style>
+  .pin-tree ul { list-style: none; margin: 0; padding-left: 1.4rem; border-left: 1px dashed var(--tblr-border-color, #555); }
+  .pin-tree > ul { border-left: none; padding-left: .5rem; }
+  .pin-tree li { position: relative; padding: .2rem 0 .2rem .6rem; }
+  .pin-tree li::before { content: ''; position: absolute; left: -1.4rem; top: .95rem; width: 1.6rem; border-top: 1px dashed var(--tblr-border-color, #555); }
+  .pin-tree > ul > li::before { display: none; }
+  .pin-dot { display: inline-block; width: .8rem; height: .8rem; border-radius: 50%; margin-right: .4rem; vertical-align: middle; }
+  .pin-dot.ok { background: #2fb344; } .pin-dot.warn { background: #f59f00; }
+  .pin-dot.error { background: #d63939; animation: pin-blink 1s steps(2, start) infinite; }
+  @keyframes pin-blink { to { visibility: hidden; } }
+  .pin-missing { font-style: italic; }
+</style>
+{% for b in tree.departments %}
+<div class="card pin-tree border-{% if b.status == 'ok' %}green{% elif b.status == 'warn' %}yellow{% else %}red{% endif %}">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <h2 class="card-title mb-0"><span class="pin-dot {{ b.status }}"></span><a href="{% url 'plugins:netbox_user_pin:department' pk=b.department.pk %}">{{ b.department.name }}</a></h2>
+    <span class="small">{% if b.status == 'ok' %}<span class="text-green">{% trans "Head and delegates in place" %}</span>{% elif b.status == 'warn' %}<span class="text-yellow">{% blocktrans count n=b.delegates|length %}Only {{ n }} delegate – at least 2 are needed{% plural %}Only {{ n }} delegates – at least 2 are needed{% endblocktrans %}</span>{% else %}<span class="text-red"><strong>{% trans "No head!" %}</strong></span>{% endif %}{% if b.pending %} · <span class="text-secondary">{% blocktrans with n=b.pending %}{{ n }} invitation(s) waiting{% endblocktrans %}</span>{% endif %}</span>
+  </div>
+  <ul class="card-body">
+    <li>
+      {% for r in b.head %}<span class="badge text-bg-purple"><i class="mdi mdi-crown"></i> {% trans "head" %}</span> {% include 'netbox_user_pin/inc/tree_person.html' %}{% if not forloop.last %}<br>{% endif %}{% empty %}<span class="badge text-bg-red"><i class="mdi mdi-crown"></i> {% trans "head" %}</span> <span class="text-red pin-missing">{% trans "missing" %}</span>{% endfor %}
+      {% for r in b.on_leave %}<div class="small text-secondary"><i class="mdi mdi-timer-sand"></i> {% trans "handed over temporarily by" %} {{ r.user.username }}</div>{% endfor %}
+      <ul>
+        {% for r in b.delegates %}<li><span class="badge text-bg-cyan">{% trans "delegate" %}</span> {% include 'netbox_user_pin/inc/tree_person.html' %}</li>{% endfor %}
+        {% if b.status == 'warn' or b.status == 'error' and b.delegates|length < 2 %}<li><span class="badge text-bg-yellow">{% trans "delegate" %}</span> <span class="text-yellow pin-missing">{% trans "missing" %}</span></li>{% endif %}
+        <li><span class="text-secondary"><i class="mdi mdi-account-group"></i> {% trans "Members" %} ({{ b.members|length }})</span>
+          {% if b.members %}<ul>{% for r in b.members %}<li>{% include 'netbox_user_pin/inc/tree_person.html' %}</li>{% endfor %}</ul>{% endif %}
+        </li>
+      </ul>
+    </li>
+  </ul>
+</div>
+{% empty %}
+<div class="alert alert-secondary"><div>{% trans "No departments." %}</div></div>
+{% endfor %}
+{% if tree.unassigned %}
+<div class="card pin-tree">
+  <div class="card-header"><h2 class="card-title mb-0"><span class="pin-dot" style="background:#868e96"></span>{% trans "Without a department" %} ({{ tree.unassigned|length }})</h2></div>
+  <ul class="card-body">{% for r in tree.unassigned %}<li>{% if r.user.is_superuser %}<span class="badge text-bg-purple">{% trans "master" %}</span> {% endif %}{% for x in r.roles %}{% if x.role == 'core' %}<span class="badge text-bg-blue">CORE</span> {% endif %}{% endfor %}{% include 'netbox_user_pin/inc/tree_person.html' %}</li>{% endfor %}</ul>
+</div>
+{% endif %}

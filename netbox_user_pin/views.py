@@ -526,11 +526,16 @@ def view_gate(request):
 
 
 def _step_up_context(request, level='full'):
+    """Step-up state for the confirmation pop-up; forms may ask for the other level with data-step-up="…"."""
     return {
         'step_up_active': service.has_step_up(request, level),
         'step_up_left': service.step_up_seconds_left(request, level),
         'step_up_level': level,
         'step_up_otp': service.step_up_needs_2fa(level),
+        'step_up_full_active': service.has_step_up(request, 'full'),
+        'step_up_settings_active': service.has_step_up(request, 'settings'),
+        'step_up_full_otp': service.step_up_needs_2fa('full'),
+        'step_up_settings_otp': service.step_up_needs_2fa('settings'),
     }
 
 
@@ -619,10 +624,38 @@ class UserPinListView(AdminViewMixin, View):
                     or q in r['name'].lower() or (r['department'] and q in r['department'].name.lower())]
         if status in filters:
             rows = [r for r in rows if filters[status](r)]
+        department_filter = request.GET.get('department', '')
+        if department_filter == 'none':
+            rows = [r for r in rows if r['department'] is None]
+        elif department_filter.isdigit():
+            rows = [r for r in rows if r['department'] and r['department'].pk == int(department_filter)]
+        role_filter = request.GET.get('role', '')
+        role_filters = {
+            'master': lambda r: r['user'].is_superuser,
+            'core': lambda r: any(x.role == RoleKind.CORE for x in r['roles']),
+            'head': lambda r: any(x.role == RoleKind.HEAD for x in r['roles']),
+            'delegate': lambda r: any(x.role == RoleKind.DELEGATE for x in r['roles']),
+            'invited': lambda r: any(x.status == RoleStatus.PENDING for x in r['roles']),
+            'norole': lambda r: not r['user'].is_superuser and not r['roles'],
+        }
+        if role_filter in role_filters:
+            rows = [r for r in rows if role_filters[role_filter](r)]
+        view_mode = 'tree' if request.GET.get('view') == 'tree' else 'list'
+        departments = Department.objects.all() if roles.is_core(request.user) else \
+            roles.managed_departments(request.user)
         page = Paginator(rows, 50).get_page(request.GET.get('page'))
         return render(request, 'netbox_user_pin/user_list.html', {
             'page': page,
             'rows': page.object_list,
+            'tree': _department_tree(departments.order_by('name'), rows,
+                                     with_unassigned=roles.is_core(request.user),
+                                     keep_empty=not (q or status or department_filter or role_filter))
+            if view_mode == 'tree' else None,
+            'view_mode': view_mode,
+            'departments': departments.order_by('name'),
+            'department_filter': department_filter,
+            'role_filter': role_filter,
+            'querystring': request.GET.urlencode(),
             'q': request.GET.get('q', ''),
             'status': status,
             'summary': summary,
@@ -632,6 +665,40 @@ class UserPinListView(AdminViewMixin, View):
         })
 
 
+def _department_tree(departments, rows, with_unassigned=False, keep_empty=True):
+    """
+    [{department, status, head: [rows], on_leave: [rows], delegates: [rows], members: [rows]}, …] – the head first,
+    then the delegates, then the other members. ``rows`` are dicts with at least 'user' (see UserPinListView).
+    """
+    by_user = {r['user'].pk: r for r in rows}
+    tree = []
+    for department in departments:
+        roles_here = PinDelegate.objects.filter(department=department, status__in=OPEN_ROLE_STATUSES)
+        head_ids = [r.user_id for r in roles_here if r.role == RoleKind.HEAD and r.is_effective]
+        leave_ids = [r.user_id for r in roles_here if r.role == RoleKind.HEAD and r.status == RoleStatus.ON_LEAVE]
+        delegate_ids = [r.user_id for r in roles_here if r.role == RoleKind.DELEGATE and r.is_effective
+                        and r.user_id not in head_ids]
+        member_ids = list(DepartmentMember.objects.filter(department=department).order_by(
+            'user__username').values_list('user_id', flat=True))
+        taken = set(head_ids) | set(leave_ids) | set(delegate_ids)
+        branch = {
+            'department': department,
+            'status': roles.department_status(department),
+            'head': [by_user[i] for i in head_ids if i in by_user],
+            'on_leave': [by_user[i] for i in leave_ids if i in by_user],
+            'delegates': [by_user[i] for i in delegate_ids if i in by_user],
+            'members': [by_user[i] for i in member_ids if i in by_user and i not in taken],
+            'pending': roles_here.filter(status=RoleStatus.PENDING).count(),
+        }
+        if keep_empty or branch['head'] or branch['on_leave'] or branch['delegates'] or branch['members']:
+            tree.append(branch)
+    unassigned = None
+    if with_unassigned:
+        member_ids = set(DepartmentMember.objects.values_list('user_id', flat=True))
+        unassigned = [r for r in rows if r['user'].pk not in member_ids]
+    return {'departments': tree, 'unassigned': unassigned}
+
+
 class UserPinActionView(AdminViewMixin, View):
     permission_required = 'netbox_user_pin.change_userpin'
     actions = (
@@ -639,8 +706,11 @@ class UserPinActionView(AdminViewMixin, View):
         'clear-lockout', 'force-change',
     )
 
+    # everyday actions need only the PIN; resets and suspension need PIN + 2FA
+    pin_only = ('allow', 'deny', 'default', 'clear-lockout', 'force-change')
+
     def post(self, request, pk, action):
-        if (response := step_up_gate(request)) is not None:
+        if (response := step_up_gate(request, 'settings' if action in self.pin_only else 'full')) is not None:
             return response
         user = get_object_or_404(get_user_model(), pk=pk)
         if action not in self.actions:
@@ -1047,6 +1117,7 @@ class DepartmentListView(AdminViewMixin, View):
             head = roles.effective_head(department)
             rows.append({
                 'department': department,
+                'status': roles.department_status(department),
                 'head': head,
                 'delegates': roles.department_delegates(department).count(),
                 'members': DepartmentMember.objects.filter(department=department).count(),
@@ -1054,8 +1125,15 @@ class DepartmentListView(AdminViewMixin, View):
             })
         transfers = [t for t in TransferRequest.objects.filter(status=TransferStatus.PENDING).select_related(
             'user', 'from_department', 'to_department') if roles.can_decide_transfer(t, request.user)]
+        settings = service.get_settings()
+        people = [{'user': u, 'name': service.full_name(u, settings),
+                   'is_set': bool(getattr(u, 'user_pin', None) and u.user_pin.is_set),
+                   'has_2fa': bool(getattr(u, 'user_pin', None) and u.user_pin.has_2fa)}
+                  for u in get_user_model().objects.filter(pin_membership__department__in=departments)
+                  .select_related('user_pin').order_by('username')]
         return render(request, self.template_name, {
             'rows': rows,
+            'tree': _department_tree(departments.order_by('name'), people),
             'is_core': is_core,
             'form': form or DepartmentForm(),
             'transfers': transfers,
@@ -1071,7 +1149,7 @@ class DepartmentListView(AdminViewMixin, View):
         return self._render(request)
 
     def post(self, request):
-        if (response := step_up_gate(request)) is not None:
+        if (response := step_up_gate(request, 'settings')) is not None:
             return response
         action = request.POST.get('action')
         try:
@@ -1169,6 +1247,7 @@ class DepartmentView(AdminViewMixin, View):
                 users=user_model.objects.exclude(pk__in=member_ids).exclude(pk__in=core_busy),
                 departments=Department.objects.filter(pk=department.pk)),
             'has_others': others.exists(),
+            'status': roles.department_status(department),
             'hand_over_open': open_roles.filter(role=RoleKind.HEAD).exclude(temporary_until=None).exists(),
             'settings': settings,
             **_step_up_context(request),
@@ -1180,11 +1259,14 @@ class DepartmentView(AdminViewMixin, View):
             return response
         return self._render(request, department)
 
+    # moving people and deciding moves need only the PIN; roles and dissolving need PIN + 2FA
+    pin_only = ('add-member', 'remove-member', 'move', 'transfer-approve', 'transfer-reject', 'transfer-cancel')
+
     def post(self, request, pk):
         department = self._department(request, pk)
-        if (response := step_up_gate(request)) is not None:
-            return response
         action = request.POST.get('action', '')
+        if (response := step_up_gate(request, 'settings' if action in self.pin_only else 'full')) is not None:
+            return response
         is_core = roles.is_core(request.user)
         my_role = roles.role_in(request.user, department)
         handler = getattr(self, f'_post_{action.replace("-", "_")}', None)

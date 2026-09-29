@@ -134,6 +134,16 @@ def is_head(user, department):
     return headed_departments(user).filter(pk=department.pk).exists()
 
 
+def department_status(department):
+    """'ok' = head and at least MIN_DEPARTMENT_DELEGATES delegates, 'warn' = head but too few delegates,
+    'error' = no active head."""
+    if effective_head(department) is None:
+        return 'error'
+    if department_delegates(department).count() < MIN_DEPARTMENT_DELEGATES:
+        return 'warn'
+    return 'ok'
+
+
 def is_manager(user):
     """CORE, or head / delegate of a department."""
     return is_core(user) or managed_departments(user).exists()
@@ -440,6 +450,11 @@ def invite(user, kind, actor, department=None, hours=24, can_edit=False, tempora
                                       ).exclude(temporary_until=None).exists():
             raise ValidationError(_('There already is a temporary hand-over in this department.'))
     _check_can_hold(user, kind, department, replaces=replaces, temporary=temporary)
+    if kind == RoleKind.DELEGATE and not PinDelegate.objects.filter(
+            department=department, role=RoleKind.HEAD,
+            status__in=(RoleStatus.ACTIVE, RoleStatus.ON_LEAVE, RoleStatus.RESIGNING)).exists():
+        raise ValidationError(_('The department {department} has no head yet. Appoint the head first, then the '
+                                'delegates.').format(department=department))
     substitute_for = effective_head(department) if temporary else None
     if substitute_for is not None and substitute_for.is_temporary:
         substitute_for = None

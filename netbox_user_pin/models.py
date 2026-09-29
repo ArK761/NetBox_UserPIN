@@ -129,8 +129,9 @@ class PinSettings(models.Model):
     require_2fa_settings = models.BooleanField(
         verbose_name=_('Require 2FA also for settings'),
         default=False,
-        help_text=_('Off: changes on the Settings and Mail pages need only your PIN (you are logged in anyway). '
-                    'Actions on other users and delegates always need PIN + 2FA.'),
+        help_text=_('Off: changes on the Settings and Mail pages and everyday actions (allow PIN, moves between '
+                    'departments) need only your PIN (you are logged in anyway). Resets, suspension and roles always '
+                    'need PIN + 2FA.'),
     )
     step_up_minutes = models.PositiveIntegerField(
         verbose_name=_('Administrative window (minutes)'),

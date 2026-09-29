@@ -1110,7 +1110,7 @@ class SettingsPinOnlyAndDomainPopupTest(PinTestCase):
         self.client.post(reverse('plugins:netbox_user_pin:unlock'), {'pin': GOOD_PIN, 'scope': 'user-pin-admin'})
         self.ajax = {'HTTP_X_REQUESTED_WITH': 'XMLHttpRequest'}
 
-    def test_pin_only_for_settings_but_2fa_for_users(self):
+    def test_pin_only_for_settings_and_everyday_actions(self):
         # without confirmation an AJAX call asks for the pop-up
         response = self.client.post(reverse('plugins:netbox_user_pin:mail'), {'action': 'add-domain',
                                                                                'domain': 'a.sk'}, **self.ajax)
@@ -1124,9 +1124,11 @@ class SettingsPinOnlyAndDomainPopupTest(PinTestCase):
         from netbox_user_pin.models import AllowedDomain
         domain = AllowedDomain.objects.get(domain='firma.sk')
         self.assertIn(f'verify={domain.pk}', response.url)
-        # actions on other users still need PIN + 2FA
+        # allowing a PIN needs only the PIN, a suspension still needs PIN + 2FA
         other = User.objects.create_user('other', password='pw')
         url = reverse('plugins:netbox_user_pin:user_action', kwargs={'pk': other.pk, 'action': 'allow'})
+        self.assertNotIn(reverse('plugins:netbox_user_pin:step_up'), self.client.post(url).url)
+        url = reverse('plugins:netbox_user_pin:user_action', kwargs={'pk': other.pk, 'action': 'suspend'})
         self.assertIn(reverse('plugins:netbox_user_pin:step_up'), self.client.post(url).url)
         # and when 'Require 2FA also for settings' is on, the PIN-only window is not enough
         settings = PinSettings.load()
@@ -1504,3 +1506,53 @@ class RolesTest(PinTestCase):
         self.client.post(url, {'action': 'invite-delegate', 'user': m1.pk, 'hours': 36})
         role = PinDelegate.objects.get(user=m1)
         self.assertEqual((role.status, role.invite_hours), ('pending', 36))
+
+    def test_delegate_needs_head_and_status(self):
+        from netbox_user_pin import roles
+        department = roles.create_department('Empty', self.boss)
+        self.assertEqual(roles.department_status(department), 'error')
+        with self.assertRaises(ValidationError):
+            roles.invite(self.person('lonely'), 'delegate', self.boss, department=department)
+        it, head, (del1, del2), _m = self.make_department()
+        self.assertEqual(roles.department_status(it), 'ok')
+        roles.end_role(PinDelegate.objects.get(user=del1, department=it), self.boss)
+        self.assertEqual(roles.department_status(it), 'warn')
+
+    def test_pin_only_for_everyday_actions(self):
+        department, head, _dels, (m1,) = self.make_department()
+        self.client.force_login(self.boss)
+        self.client.post(reverse('plugins:netbox_user_pin:unlock'), {'pin': GOOD_PIN, 'scope': 'user-pin-admin'})
+        # a PIN-only confirmation (no 2FA code)
+        response = self.client.post(reverse('plugins:netbox_user_pin:step_up'), {'pin': GOOD_PIN, 'level': 'settings'})
+        self.assertEqual(response.status_code, 302)
+        self.client.post(reverse('plugins:netbox_user_pin:user_action', kwargs={'pk': m1.pk, 'action': 'allow'}))
+        self.assertEqual(UserPin.objects.get(user=m1).access, PinAccess.ALLOWED)
+        other = self.person('other')
+        url = reverse('plugins:netbox_user_pin:department', kwargs={'pk': department.pk})
+        self.client.post(url, {'action': 'move', 'direction': 'in', 'user': other.pk, 'department': department.pk})
+        from netbox_user_pin import roles
+        self.assertEqual(roles.department_of(other), department)
+        # sensitive actions still need PIN + 2FA
+        response = self.client.post(reverse('plugins:netbox_user_pin:user_action',
+                                            kwargs={'pk': m1.pk, 'action': 'suspend'}))
+        self.assertIn(reverse('plugins:netbox_user_pin:step_up'), response.url)
+        self.assertFalse(UserPin.objects.get(user=m1).suspended)
+
+    def test_user_filters_and_tree(self):
+        department, head, (del1, del2), (m1,) = self.make_department()
+        self.person('loner')
+        admin_login(self.client, self.boss, secret=self.secrets[self.boss.pk])
+        url = reverse('plugins:netbox_user_pin:user_list')
+        response = self.client.get(url, {'department': 'none'})
+        self.assertContains(response, 'loner')
+        self.assertNotContains(response, 'm1@firma.sk')
+        response = self.client.get(url, {'role': 'delegate'})
+        self.assertContains(response, 'del1')
+        self.assertNotContains(response, 'loner')
+        response = self.client.get(url, {'view': 'tree'})
+        self.assertContains(response, 'pin-dot ok')
+        self.assertContains(response, 'Without a department')
+        roles_ = __import__('netbox_user_pin.roles', fromlist=['x'])
+        roles_.create_department('NoHead', self.boss)
+        self.assertContains(self.client.get(url, {'view': 'tree'}), 'pin-dot error')
+        self.assertContains(self.client.get(reverse('plugins:netbox_user_pin:department_list')), 'pin-dot error')

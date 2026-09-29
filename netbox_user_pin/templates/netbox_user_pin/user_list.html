@@ -27,9 +27,35 @@
       <option value="not_allowed"{% if status == 'not_allowed' %} selected{% endif %}>{% trans "Not permitted" %}</option>
     </select>
   </div>
+  <div class="col-auto">
+    <select name="department" class="form-select">
+      <option value="">{% trans "All departments" %}</option>
+      <option value="none"{% if department_filter == 'none' %} selected{% endif %}>{% trans "Without a department" %}</option>
+      {% for d in departments %}<option value="{{ d.pk }}"{% if department_filter == d.pk|stringformat:'s' %} selected{% endif %}>{{ d.name }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="col-auto">
+    <select name="role" class="form-select">
+      <option value="">{% trans "All roles" %}</option>
+      <option value="master"{% if role_filter == 'master' %} selected{% endif %}>{% trans "master" %}</option>
+      <option value="core"{% if role_filter == 'core' %} selected{% endif %}>CORE</option>
+      <option value="head"{% if role_filter == 'head' %} selected{% endif %}>{% trans "head" %}</option>
+      <option value="delegate"{% if role_filter == 'delegate' %} selected{% endif %}>{% trans "delegate" %}</option>
+      <option value="invited"{% if role_filter == 'invited' %} selected{% endif %}>{% trans "invited" %}</option>
+      <option value="norole"{% if role_filter == 'norole' %} selected{% endif %}>{% trans "without a role" %}</option>
+    </select>
+  </div>
+  <input type="hidden" name="view" value="{{ view_mode }}">
   <div class="col-auto"><button class="btn btn-primary" type="submit"><i class="mdi mdi-magnify"></i> {% trans "Search" %}</button></div>
+  <div class="col-auto btn-group">
+    <a class="btn {% if view_mode == 'list' %}btn-secondary{% else %}btn-outline-secondary{% endif %}" href="?q={{ q|urlencode }}&status={{ status }}&department={{ department_filter }}&role={{ role_filter }}&view=list"><i class="mdi mdi-format-list-bulleted"></i> {% trans "List" %}</a>
+    <a class="btn {% if view_mode == 'tree' %}btn-secondary{% else %}btn-outline-secondary{% endif %}" href="?q={{ q|urlencode }}&status={{ status }}&department={{ department_filter }}&role={{ role_filter }}&view=tree"><i class="mdi mdi-file-tree"></i> {% trans "By departments" %}</a>
+  </div>
   <div class="col text-end text-secondary small align-self-center">{% trans "Mode" %}: <strong>{{ settings.get_access_mode_display }}</strong> · {% blocktrans with days=settings.max_age_days %}rotation every {{ days }} days{% endblocktrans %}</div>
 </form>
+{% if view_mode == 'tree' %}
+{% include 'netbox_user_pin/inc/department_tree.html' with link=True %}
+{% else %}
 <div class="card">
   <div class="table-responsive">
   <table class="table table-hover">
@@ -105,6 +131,7 @@
   </div>
 </div>
 {% include 'netbox_user_pin/inc/pager.html' %}
+{% endif %}
 {% for row in rows %}{% if row.has_2fa and row.manageable %}
   <div class="modal fade" id="cli-{{ row.user.pk }}" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg"><div class="modal-content">

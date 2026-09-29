@@ -9,11 +9,11 @@
         <div class="alert alert-danger d-none" id="step-up-error"><div></div></div>
         <label class="form-label" for="step-up-pin">{% trans "Your PIN" %}</label>
         <input type="password" class="form-control mb-3" id="step-up-pin" inputmode="numeric" autocomplete="off" required>
-        {% if step_up_otp %}
+        <div id="step-up-otp-box">
           <label class="form-label" for="step-up-otp">{% trans "2FA code" %}</label>
-          <input type="text" class="form-control" id="step-up-otp" inputmode="numeric" autocomplete="one-time-code" required>
+          <input type="text" class="form-control" id="step-up-otp" inputmode="numeric" autocomplete="one-time-code">
           <div class="form-text">{% trans "6 digits from your authenticator app, or a backup code." %}</div>
-        {% endif %}
+        </div>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">{% trans "Cancel" %}</button>
@@ -24,7 +24,16 @@
 </div>
 <script>
 window.addEventListener('load', function () {
-  var active = {% if step_up_active %}true{% else %}false{% endif %};
+  // two levels: 'full' (PIN + 2FA when required) and 'settings' (PIN only unless configured otherwise)
+  var pageLevel = '{{ step_up_level|default:"full" }}';
+  var active = {full: {% if step_up_full_active %}true{% else %}false{% endif %},
+                settings: {% if step_up_settings_active %}true{% else %}false{% endif %}};
+  active[pageLevel] = active[pageLevel] || {% if step_up_active %}true{% else %}false{% endif %};
+  var needsOtp = {full: {% if step_up_full_otp %}true{% else %}false{% endif %},
+                  settings: {% if step_up_settings_otp %}true{% else %}false{% endif %}};
+  needsOtp[pageLevel] = {% if step_up_otp %}true{% else %}false{% endif %};
+  var level = pageLevel;
+  function levelOf(form) { var l = form && form.getAttribute('data-step-up'); return (l === 'settings' || l === 'full') ? l : pageLevel; }
   var modalEl = document.getElementById('step-up-modal');
   var ModalClass = window.Modal || (window.bootstrap && window.bootstrap.Modal);
   if (!modalEl || !ModalClass) return;   // fallback: forms go to the confirmation page
@@ -36,6 +45,10 @@ window.addEventListener('load', function () {
   }
   function open(form, callback) {
     pending = form; pendingCallback = callback || null; errorBox.classList.add('d-none');
+    level = levelOf(form);
+    var otpBox = document.getElementById('step-up-otp-box');
+    otpBox.classList.toggle('d-none', !needsOtp[level]);
+    document.getElementById('step-up-otp').required = needsOtp[level];
     document.getElementById('step-up-pin').value = '';
     var otpInput = document.getElementById('step-up-otp'); if (otpInput) { otpInput.value = ''; }
     modal.show(); setTimeout(function () { document.getElementById('step-up-pin').focus(); }, 300);
@@ -46,7 +59,7 @@ window.addEventListener('load', function () {
       if (!window.confirm(form.dataset.confirm)) { e.preventDefault(); e.stopImmediatePropagation(); return; }
       form.dataset.confirmed = '1';
     }
-    if (active || !form.hasAttribute('data-step-up')) return;
+    if (!form.hasAttribute('data-step-up') || active[levelOf(form)]) return;
     e.preventDefault();
     open(form);
   }, true);
@@ -60,14 +73,14 @@ window.addEventListener('load', function () {
     var otpInput = document.getElementById('step-up-otp');
     var body = new URLSearchParams({pin: document.getElementById('step-up-pin').value,
                                     otp: otpInput ? otpInput.value : '',
-                                    level: '{{ step_up_level|default:"full" }}',
+                                    level: level,
                                     csrfmiddlewaretoken: csrf()});
     fetch('{% url "plugins:netbox_user_pin:step_up" %}', {
       method: 'POST', body: body, credentials: 'same-origin',
       headers: {'X-CSRFToken': csrf(), 'X-Requested-With': 'XMLHttpRequest'}
     }).then(function (r) { return r.json(); }).then(function (data) {
       if (data.ok) {
-        active = true; modal.hide();
+        active[level] = true; if (level === 'full') { active.settings = true; } modal.hide();
         if (pending) { pending.submit(); }
         else if (pendingCallback) { pendingCallback(); }
         else { window.location.reload(); }
@@ -75,7 +88,7 @@ window.addEventListener('load', function () {
         errorBox.querySelector('div').textContent = data.errors.join(' ');
         errorBox.classList.remove('d-none');
       }
-    }).catch(function () { window.location.href = '{% url "plugins:netbox_user_pin:step_up" %}?level={{ step_up_level|default:"full" }}&next=' + encodeURIComponent(window.location.pathname); });
+    }).catch(function () { window.location.href = '{% url "plugins:netbox_user_pin:step_up" %}?level=' + level + '&next=' + encodeURIComponent(window.location.pathname); });
   });
 });
 </script>
