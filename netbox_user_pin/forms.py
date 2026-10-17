@@ -7,6 +7,7 @@ from .models import PinSettings
 
 __all__ = (
     'AreaForm',
+    'AreaRequestForm',
     'AreaGrantForm',
     'AreaDecideForm',
     'AreaOwnerForm',
@@ -433,15 +434,35 @@ class PinSettingsForm(_StyledModelForm):
 # Protected areas
 #
 
+def target_choices():
+    """Grouped choices of every app and object type that can be protected: ('dcim', [('dcim', 'whole app'), ...])."""
+    from django.apps import apps
+
+    from .areas import NEVER
+
+    groups = []
+    for config in sorted(apps.get_app_configs(), key=lambda c: c.label):
+        if config.label in NEVER:
+            continue
+        models = [m for m in config.get_models() if not m._meta.auto_created and not m._meta.proxy]
+        if not models:
+            continue
+        items = [(config.label, _('— everything in %(app)s —') % {'app': config.verbose_name})]
+        items += [(f'{config.label}.{m._meta.model_name}', str(m._meta.verbose_name).capitalize())
+                  for m in sorted(models, key=lambda m: m._meta.verbose_name)]
+        groups.append((f'{config.verbose_name} ({config.label})', items))
+    return groups
+
+
 class AreaForm(forms.Form):
     name = forms.CharField(label=_('Name'), max_length=100, widget=forms.TextInput(attrs={'class': 'form-control'}))
     description = forms.CharField(label=_('Description'), max_length=200, required=False,
                                   widget=forms.TextInput(attrs={'class': 'form-control'}))
-    targets = forms.CharField(
-        label=_('Protected apps and object types'), required=False,
-        widget=forms.Textarea(attrs={'class': 'form-control', 'rows': 4, 'placeholder': 'dcim\nusers.user'}),
-        help_text=_('One per line: an app (e.g. dcim, ipam, netbox_libreoxi) protects everything in it, '
-                    'app.model (e.g. users.user, dcim.device) one object type.'),
+    targets = forms.MultipleChoiceField(
+        label=_('Protected apps and object types'), choices=(),
+        widget=forms.SelectMultiple(attrs={'class': 'form-select', 'size': 14}),
+        help_text=_('Choose a whole app or single object types (Ctrl / Shift for several). Only what you choose is '
+                    'protected; the rights and the rows each profile sees are set per profile.'),
     )
     max_hours = forms.IntegerField(label=_('Longest temporary access (hours)'), min_value=1, max_value=24 * 30,
                                    initial=24, widget=forms.NumberInput(attrs={'class': 'form-control'}))
@@ -454,10 +475,8 @@ class AreaForm(forms.Form):
         if plugin:  # targets and the switch of a plugin area belong to the plugin
             del self.fields['targets']
             del self.fields['enabled']
-
-    def clean_targets(self):
-        from . import areas
-        return areas.parse_targets(self.cleaned_data.get('targets'))
+        else:
+            self.fields['targets'].choices = target_choices()
 
 
 class AreaOwnerForm(forms.Form):
@@ -472,12 +491,24 @@ class AreaOwnerForm(forms.Form):
 class AreaProfileForm(forms.Form):
     name = forms.CharField(label=_('Profile'), max_length=100, widget=forms.TextInput(attrs={'class': 'form-control'}))
     rights = forms.MultipleChoiceField(label=_('Rights'), choices=(), widget=forms.CheckboxSelectMultiple)
+    filters = forms.CharField(
+        label=_('Rows the profile shows'), required=False,
+        widget=forms.Textarea(attrs={'class': 'form-control', 'rows': 3,
+                                     'placeholder': 'dcim.device: name__istartswith=PRINTER'}),
+        help_text=_('Optional, one line per object type: app.model: lookup=value (several with &). Without a line the '
+                    'profile shows every row of the type. E.g. dcim.device: name__istartswith=PRINTER'),
+    )
 
     def __init__(self, *args, area=None, **kwargs):
         super().__init__(*args, **kwargs)
+        self.area = area
         from . import areas
         self.fields['rights'].choices = [(r, areas.right_label(area, r)) for r in areas.rights_available(area)] \
             if area else []
+
+    def clean_filters(self):
+        from . import areas
+        return areas.parse_filters(self.cleaned_data.get('filters'), self.area) if self.area else {}
 
 
 ACCESS_HOURS = ((1, _('1 hour')), (4, _('4 hours')), (8, _('8 hours')), (24, _('24 hours')), (72, _('3 days')),
@@ -509,3 +540,10 @@ class AreaGrantForm(_AccessChoice):
         super().__init__(*args, area=area, **kwargs)
         self.fields['user'].queryset = get_user_model().objects.filter(is_active=True).order_by('username')
         self.order_fields(['user', 'profile', 'hours'])
+
+
+class AreaRequestForm(forms.Form):
+    note = forms.CharField(label=_('Why do you need the access?'), max_length=200, min_length=5,
+                           widget=forms.TextInput(attrs={'class': 'form-control'}))
+    scope = forms.CharField(label=_('What exactly (section, group, object …)'), max_length=200, required=False,
+                            widget=forms.TextInput(attrs={'class': 'form-control'}))

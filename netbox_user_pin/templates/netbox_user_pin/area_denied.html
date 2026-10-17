@@ -8,11 +8,13 @@
       <h2 class="card-header"><i class="mdi mdi-shield-lock"></i> {% trans "This area is protected" %}</h2>
       <div class="card-body">
         <p>{% blocktrans with name=area.name %}Access to <strong>{{ name }}</strong> is decided by its owners with a PIN grant. Your NetBox role does not matter here.{% endblocktrans %}</p>
+        {% if owners %}<p class="text-secondary">{% trans "Access is managed by:" %} <strong>{% for u in owners %}{{ u.username }}{% if not forloop.last %}, {% endif %}{% endfor %}</strong></p>{% endif %}
         {% if pending %}
           <div class="alert alert-info"><i class="mdi mdi-clock-outline"></i> {% blocktrans with when=pending.created|date:"Y-m-d H:i" %}Your request from {{ when }} is waiting for the owners. You will get an e-mail when they decide.{% endblocktrans %}</div>
         {% elif has_owners %}
           <form method="post" action="{% url 'plugins:netbox_user_pin:area_request' key=area.key %}">{% csrf_token %}<input type="hidden" name="next" value="{{ next }}">
-            <div class="mb-3"><label class="form-label">{% trans "Note for the owners (optional)" %}</label><input class="form-control" type="text" name="note" maxlength="200"></div>
+            <div class="mb-3"><label class="form-label">{% trans "Why do you need the access?" %} *</label><input class="form-control" type="text" name="note" maxlength="200" minlength="5" required></div>
+            <div class="mb-3"><label class="form-label">{% trans "What exactly (section, group, object …)" %}</label><input class="form-control" type="text" name="scope" maxlength="200"></div>
             <button class="btn btn-primary" type="submit"><i class="mdi mdi-email-fast"></i> {% trans "Request access" %}</button>
           </form>
         {% else %}

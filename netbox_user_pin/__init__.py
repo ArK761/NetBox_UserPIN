@@ -1,6 +1,6 @@
 from netbox.plugins import PluginConfig
 
-__version__ = '0.12.1'
+__version__ = '0.13.0'
 
 
 class UserPinConfig(PluginConfig):
@@ -37,6 +37,8 @@ class UserPinConfig(PluginConfig):
         self._register_event_types()
         from . import areas, jobs  # noqa: F401  (jobs registers the hourly system job)
         areas.connect_signals()
+        from . import area_guard
+        area_guard.install()
 
     @staticmethod
     def _register_event_types():

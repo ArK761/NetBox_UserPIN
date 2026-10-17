@@ -44,8 +44,13 @@ class AreaTestCase(PinTestCase):
     def profile(self, area, name='Read'):
         return area.profiles.get(name=name)
 
-    def login(self, user):
+    def login(self, user, unlock=True):
+        """Log in; a user who holds access has to unlock the PIN to enter an area."""
         self.client.force_login(user)
+        if unlock:
+            if not service.has_pin(user):
+                service.set_pin(user, GOOD_PIN)
+            self.client.post(reverse('plugins:netbox_user_pin:unlock'), {'pin': GOOD_PIN})
 
 
 class GuardTest(AreaTestCase):
@@ -55,6 +60,7 @@ class GuardTest(AreaTestCase):
         response = self.client.get(DEVICES)
         self.assertEqual(response.status_code, 403)
         self.assertContains(response, 'Request access', status_code=403)
+        self.assertContains(response, 'owner1', status_code=403)  # who manages the access is named
 
     def test_denied_page_speaks_the_plugin_language(self):
         self.make_area()
@@ -112,13 +118,36 @@ class GuardTest(AreaTestCase):
         areas.grant_access(area, self.appadmin, self.profile(area), None, self.owner1)
         self.assertEqual(self.client.get('/api/dcim/devices/', HTTP_ACCEPT='application/json').status_code, 200)
 
-    def test_menu_entry_is_hidden_for_the_superuser(self):
+    def test_the_door_stays_visible_but_the_key_is_needed(self):
         area = self.make_area()
         self.login(self.appadmin)
         html = self.client.get('/dcim/sites/').content.decode()
-        self.assertNotIn('href="/dcim/devices/"', html)
+        self.assertIn('href="/dcim/devices/"', html)  # menu entry visible for everybody
+        self.assertEqual(self.client.get(DEVICES).status_code, 403)  # entering is refused
         areas.grant_access(area, self.appadmin, self.profile(area), None, self.owner1)
-        self.assertIn('href="/dcim/devices/"', self.client.get('/dcim/sites/').content.decode())
+        self.assertEqual(self.client.get(DEVICES).status_code, 200)
+
+    def test_a_user_with_access_must_unlock_the_pin(self):
+        area = self.make_area()
+        user = self.appadmin
+        areas.grant_access(area, user, self.profile(area), None, self.owner1)
+        self.login(user, unlock=False)
+        response = self.client.get(DEVICES)
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('/user-pin/set/', response['Location'])  # no PIN yet: set one first
+        service.set_pin(user, GOOD_PIN)
+        response = self.client.get(DEVICES)
+        self.assertIn('/user-pin/unlock/', response['Location'])
+        self.client.post(reverse('plugins:netbox_user_pin:unlock'), {'pin': GOOD_PIN})
+        self.assertEqual(self.client.get(DEVICES).status_code, 200)
+
+    def test_pin_replaces_the_netbox_permissions_of_a_normal_user(self):
+        area = self.make_area()
+        normal = User.objects.create_user('normal', 'n@example.com')  # no NetBox permissions at all
+        areas.grant_access(area, normal, self.profile(area), None, self.owner1)
+        self.login(normal)
+        self.assertEqual(self.client.get(DEVICES).status_code, 200)
+        self.assertEqual(self.client.get('/dcim/sites/').status_code, 403)  # NetBox says no outside the area
 
     def test_master_keeps_access_until_owners_exist(self):
         area = self.make_area(owners=False)
@@ -225,9 +254,10 @@ class RequestFlowTest(AreaTestCase):
         area = self.make_area()
         self.login(self.appadmin)
         response = self.client.post(reverse('plugins:netbox_user_pin:area_request', kwargs={'key': area.key}),
-                                    {'note': 'need the devices'})
+                                    {'note': 'need the devices', 'scope': 'tenant group X'})
         self.assertEqual(response.status_code, 302)
         req = AreaRequest.objects.get(user=self.appadmin)
+        self.assertEqual((req.note, req.scope), ('need the devices', 'tenant group X'))
         self.assertEqual(req.status, AreaRequestStatus.PENDING)
         self.assertEqual(areas.pending_requests_for(self.owner1).count(), 1)
         self.assertEqual(areas.pending_requests_for(self.appadmin).count(), 0)
@@ -248,7 +278,7 @@ class RequestFlowTest(AreaTestCase):
 
     def test_decision_needs_step_up(self):
         area = self.make_area()
-        areas.request_access(area, self.appadmin)
+        areas.request_access(area, self.appadmin, 'I need the devices')
         req = AreaRequest.objects.get()
         service.set_pin(self.owner1, GOOD_PIN)
         enable_2fa(self.owner1)
@@ -263,17 +293,17 @@ class RequestFlowTest(AreaTestCase):
 
     def test_deny_and_cancel(self):
         area = self.make_area()
-        req = areas.request_access(area, self.appadmin)
+        req = areas.request_access(area, self.appadmin, 'I need the devices')
         areas.decide_request(req, self.owner1, False)
         self.assertEqual(AreaRequest.objects.get(pk=req.pk).status, AreaRequestStatus.DENIED)
-        req2 = areas.request_access(area, self.appadmin)
+        req2 = areas.request_access(area, self.appadmin, 'I need the devices')
         areas.cancel_request(req2, self.appadmin)
         self.assertEqual(AreaRequest.objects.get(pk=req2.pk).status, AreaRequestStatus.CANCELLED)
 
     def test_no_owners_no_request(self):
         area = self.make_area(owners=False)
         with self.assertRaises(ValidationError):
-            areas.request_access(area, self.appadmin)
+            areas.request_access(area, self.appadmin, 'I need the devices')
 
     def test_user_can_end_their_own_access(self):
         area = self.make_area()
@@ -329,12 +359,18 @@ class PluginAreaTest(AreaTestCase):
         areas.add_owner(area, self.owner1, self.master)
         user = User.objects.get(pk=self.appadmin.pk)
         area_guard.arm_user(user)
-        self.assertFalse(user.has_perm('dcim.view_site'))
+        self.assertTrue(user.has_perm('dcim.view_site'))  # no key at all: the door is visible
         areas.grant_access(area, self.appadmin, area.profiles.get(name='Basic'), None, self.owner1)
         user = User.objects.get(pk=self.appadmin.pk)
         area_guard.arm_user(user)
         self.assertTrue(user.has_perm('dcim.view_site'))
         self.assertFalse(user.has_perm('dcim.delete_site'))
+        self.assertFalse(user.has_perm('dcim.secret_site'))  # a permission named after a right of the plugin
+        areas.grant_access(area, self.appadmin, area.profiles.get(name='Secrets'), None, self.owner1)
+        user = User.objects.get(pk=self.appadmin.pk)
+        area_guard.arm_user(user)
+        self.assertTrue(user.has_perm('dcim.secret_site'))
+        self.assertEqual(areas.API_VERSION, 1)
 
 
 class PagesTest(AreaTestCase):
@@ -406,3 +442,69 @@ class BuildBadgeTest(AreaTestCase):
                 self.assertEqual(build.plugin_build(), {'version': '1.2.3', 'commit': 'abcdef1234567890', 'short': 'abcdef1'})
         finally:
             build.plugin_build.cache_clear()
+
+
+class RowsAndReasonTest(AreaTestCase):
+    def setUp(self):
+        super().setUp()
+        from dcim.models import Device, DeviceRole, DeviceType, Manufacturer, Site
+        role = DeviceRole.objects.create(name='r', slug='r')
+        site = Site.objects.create(name='s', slug='s')
+        kind = DeviceType.objects.create(manufacturer=Manufacturer.objects.create(name='m', slug='m'), model='t', slug='t')
+        for name in ('PRINTER_A', 'PRINTER_B', 'SWITCH_A'):
+            Device.objects.create(name=name, role=role, site=site, device_type=kind)
+        self.area = self.make_area()
+        self.profile_printers = areas.save_profile(
+            self.area, 'Printers', ['view'], self.owner1,
+            filters=areas.parse_filters('dcim.device: name__istartswith=PRINTER', self.area))
+
+    def test_only_the_rows_of_the_profile_are_shown(self):
+        areas.grant_access(self.area, self.appadmin, self.profile_printers, None, self.owner1)
+        self.login(self.appadmin)
+        html = self.client.get(DEVICES).content.decode()
+        self.assertIn('PRINTER_A', html)
+        self.assertNotIn('SWITCH_A', html)
+        api = self.client.get('/api/dcim/devices/', HTTP_ACCEPT='application/json').json()
+        self.assertEqual(api['count'], 2)
+        self.assertEqual({d['name'] for d in api['results']}, {'PRINTER_A', 'PRINTER_B'})
+
+    def test_a_profile_without_a_filter_shows_everything(self):
+        areas.grant_access(self.area, self.appadmin, self.profile(self.area), None, self.owner1)
+        self.login(self.appadmin)
+        self.assertEqual(self.client.get('/api/dcim/devices/', HTTP_ACCEPT='application/json').json()['count'], 3)
+
+    def test_owners_see_everything_and_outsiders_nothing_in_the_drop_downs(self):
+        self.login(self.owner1)
+        self.assertEqual(self.client.get('/api/dcim/devices/', HTTP_ACCEPT='application/json').json()['count'], 3)
+        self.login(self.appadmin)
+        self.assertEqual(self.client.get('/api/dcim/devices/?q=prin', HTTP_ACCEPT='application/json').status_code, 403)
+
+    def test_filters_are_validated(self):
+        for bad in ('dcim.device name=1', 'dcim.device: nonsense_field=1', 'ipam.prefix: prefix=1', 'dcim.device: name'):
+            with self.assertRaises(ValidationError, msg=bad):
+                areas.parse_filters(bad, self.area)
+        self.assertEqual(areas.parse_filters('dcim.device: name__istartswith=PRINTER & status=active', self.area),
+                         {'dcim.device': {'name__istartswith': 'PRINTER', 'status': 'active'}})
+        self.assertEqual(areas.format_filters({'dcim.device': {'name__istartswith': 'P'}}),
+                         'dcim.device: name__istartswith=P')
+
+    def test_a_reason_is_required(self):
+        with self.assertRaises(ValidationError):
+            areas.request_access(self.area, self.appadmin, '')
+        self.login(self.appadmin)
+        self.client.post(reverse('plugins:netbox_user_pin:area_request', kwargs={'key': self.area.key}), {'note': 'x'})
+        self.assertFalse(AreaRequest.objects.exists())
+
+    def test_grantees_may_use_a_pin(self):
+        from netbox_user_pin.models import PinAccess, PinAccessMode
+        settings = PinSettings.load()
+        settings.access_mode = PinAccessMode.ALLOWED_ONLY
+        settings.save()
+        normal = User.objects.create_user('normal2', 'n2@example.com')
+        self.assertFalse(service.is_allowed(normal))
+        areas.grant_access(self.area, normal, self.profile(self.area), 1, self.owner1)
+        self.assertTrue(service.is_allowed(normal))
+        denied = User.objects.create_user('denied', 'd@example.com')
+        service.set_access(denied, PinAccess.DENIED, self.master)
+        with self.assertRaises(ValidationError):
+            areas.grant_access(self.area, denied, self.profile(self.area), 1, self.owner1)

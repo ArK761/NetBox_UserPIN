@@ -9,7 +9,7 @@ from django.utils.translation import gettext as _
 from django.views import View
 
 from . import areas, roles, service
-from .forms import AreaDecideForm, AreaForm, AreaGrantForm, AreaOwnerForm, AreaProfileForm
+from .forms import AreaDecideForm, AreaForm, AreaGrantForm, AreaOwnerForm, AreaProfileForm, AreaRequestForm
 from .mixins import PinRequiredMixin, step_up_gate
 from .models import (
     AreaGrant, AreaProfile, AreaRequest, AreaRequestStatus, PinEventAction, ProtectedArea,
@@ -94,12 +94,13 @@ class AreaView(AreaViewMixin, View):
             'area': area, 'status': code, 'status_label': label, 'targets': areas.targets_of(area),
             'owners': list(areas.owners(area)), 'is_owner': mine, 'can_manage': areas.can_manage(request.user, area),
             'bootstrap': not area.owners.exists(),
-            'profiles': [(p, [areas.right_label(area, r) for r in p.rights]) for p in area.profiles.all()],
+            'profiles': [(p, [areas.right_label(area, r) for r in p.rights], areas.format_filters(p.filters))
+                         for p in area.profiles.all()],
             'active_grants': [g for g in grants if g.is_active], 'old_grants': [g for g in grants if not g.is_active][:15],
             'pending': [(r, AreaDecideForm(area=area)) for r in pending],
             'area_form': forms.get('area_form') or AreaForm(plugin=area.plugin, initial={
                 'name': area.name, 'description': area.description, 'max_hours': area.max_hours,
-                'enabled': area.enabled, 'targets': '\n'.join(area.targets or [])}),
+                'enabled': area.enabled, 'targets': list(area.targets or [])}),
             'owner_form': AreaOwnerForm(), 'profile_form': forms.get('profile_form') or AreaProfileForm(area=area),
             'grant_form': forms.get('grant_form') or AreaGrantForm(area=area),
             'rights': [(r, areas.right_label(area, r)) for r in areas.rights_available(area)],
@@ -145,7 +146,7 @@ class AreaView(AreaViewMixin, View):
                     return self._render(request, area, profile_form=form)
                 profile = AreaProfile.objects.filter(area=area, pk=request.POST.get('pk') or 0).first()
                 areas.save_profile(area, form.cleaned_data['name'], form.cleaned_data['rights'], request.user,
-                                   profile=profile, request=request)
+                                   profile=profile, request=request, filters=form.cleaned_data['filters'])
                 messages.success(request, _('Profile saved.'))
             elif action == 'profile-delete':
                 areas.delete_profile(get_object_or_404(AreaProfile, pk=request.POST.get('pk'), area=area),
@@ -188,8 +189,13 @@ class AreaRequestView(LoginRequiredMixin, View):
 
     def post(self, request, key):
         area = get_object_or_404(ProtectedArea, key=key)
+        form = AreaRequestForm(request.POST)
+        if not form.is_valid():
+            messages.error(request, _('Write why you need the access (at least a few words).'))
+            return redirect(_next_url(request, 'plugins:netbox_user_pin:my_access'))
         try:
-            areas.request_access(area, request.user, note=request.POST.get('note', ''), request=request)
+            areas.request_access(area, request.user, note=form.cleaned_data['note'], request=request,
+                                 scope=form.cleaned_data['scope'])
             messages.success(request, _('The owners of "{area}" were asked for access. You will get an e-mail '
                                         'when they decide.').format(area=area.name))
         except ValidationError as exc:

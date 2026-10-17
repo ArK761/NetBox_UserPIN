@@ -4815,6 +4815,94 @@ msgstr ""
 "Oblasti, ich vlastníci a udelené prístupy sa spravujú na stránke <a "
 "href=\"%(areas_url)s\">Chránené oblasti</a>."
 
+msgid ""
+"Use \"app.model: lookup=value\", e.g. dcim.device: "
+"name__istartswith=PRINTER."
+msgstr ""
+"Použite „app.model: lookup=hodnota“, napr. dcim.device: "
+"name__istartswith=PRINTER."
+
+msgid "\"%(target)s\" is not protected by this area."
+msgstr "„%(target)s“ táto oblasť nechráni."
+
+msgid "Use lookup=value, e.g. name__istartswith=PRINTER."
+msgstr "Použite lookup=hodnota, napr. name__istartswith=PRINTER."
+
+msgid "The filter for \"%(target)s\" is not valid: %(error)s"
+msgstr "Filter pre „%(target)s“ nie je platný: %(error)s"
+
+msgid "%(user)s is not permitted to use a PIN (denied by an administrator)."
+msgstr "%(user)s nesmie používať PIN (zakázal to administrátor)."
+
+msgid "Write why you need the access (at least a few words)."
+msgstr "Napíšte, prečo prístup potrebujete (aspoň pár slov)."
+
+msgid ""
+"%(user)s asks for access to the area \"%(area)s\".\n"
+"\n"
+"Why: %(reason)s\n"
+"What exactly: %(scope)s\n"
+"\n"
+"Open User PIN > Protected areas to grant or deny it (confirm with your PIN and 2FA)."
+msgstr ""
+"%(user)s žiada o prístup do oblasti „%(area)s“.\n"
+"\n"
+"Prečo: %(reason)s\n"
+"Čo presne: %(scope)s\n"
+"\n"
+"Otvorte User PIN > Chránené oblasti a žiadosť udeľte alebo zamietnite (potvrďte PINom a 2FA)."
+
+msgid "— everything in %(app)s —"
+msgstr "— všetko v %(app)s —"
+
+msgid ""
+"Choose a whole app or single object types (Ctrl / Shift for several). Only "
+"what you choose is protected; the rights and the rows each profile sees are "
+"set per profile."
+msgstr ""
+"Vyberte celú aplikáciu alebo jednotlivé typy objektov (Ctrl / Shift pre "
+"viac). Chránené je len to, čo vyberiete; práva a riadky, ktoré profil vidí, "
+"sa nastavujú v profile."
+
+msgid "Rows the profile shows"
+msgstr "Riadky, ktoré profil vidí"
+
+msgid ""
+"Optional, one line per object type: app.model: lookup=value (several with "
+"&). Without a line the profile shows every row of the type. E.g. "
+"dcim.device: name__istartswith=PRINTER"
+msgstr ""
+"Nepovinné, jeden riadok pre typ objektu: app.model: lookup=hodnota (viac cez"
+" &). Bez riadka profil vidí všetky riadky typu. Napr. dcim.device: "
+"name__istartswith=PRINTER"
+
+msgid "Why do you need the access?"
+msgstr "Prečo prístup potrebujete?"
+
+msgid "What exactly (section, group, object …)"
+msgstr "Čo presne (sekcia, skupina, objekt …)"
+
+msgid "Why:"
+msgstr "Prečo:"
+
+msgid "What exactly:"
+msgstr "Čo presne:"
+
+msgid "Rows shown"
+msgstr "Zobrazené riadky"
+
+msgid "all rows"
+msgstr "všetky riadky"
+
+msgid "Edit"
+msgstr "Upraviť"
+
+msgid "Save profile"
+msgstr "Uložiť profil"
+
+msgid "Access is managed by:"
+msgstr "Prístup spravuje:"
+
 #~ msgid ""
 #~ "There is no other administrator or delegate with PIN and 2FA who could "
 #~ "confirm."

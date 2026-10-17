@@ -17,7 +17,7 @@
         <tbody>
           {% for req, form in pending %}
           <tr>
-            <td>{{ req.user.username }}{% if req.note %}<div class="small text-secondary">{{ req.note }}</div>{% endif %}</td>
+            <td>{{ req.user.username }}{% if req.note %}<div class="small"><strong>{% trans "Why:" %}</strong> {{ req.note }}</div>{% endif %}{% if req.scope %}<div class="small"><strong>{% trans "What exactly:" %}</strong> {{ req.scope }}</div>{% endif %}</td>
             <td>{{ req.created|date:"Y-m-d H:i" }}</td>
             <td>{% if is_owner and req.user_id != request.user.pk %}
               <form method="post" class="d-flex flex-wrap gap-2 align-items-center" data-step-up="full">{% csrf_token %}<input type="hidden" name="pk" value="{{ req.pk }}">
@@ -63,23 +63,37 @@
     <div class="card">
       <h2 class="card-header">{% trans "Profiles" %}</h2>
       <table class="table">
-        <thead><tr><th>{% trans "Profile" %}</th><th>{% trans "Rights" %}</th><th></th></tr></thead>
+        <thead><tr><th>{% trans "Profile" %}</th><th>{% trans "Rights" %}</th><th>{% trans "Rows shown" %}</th><th></th></tr></thead>
         <tbody>
-          {% for p, labels in profiles %}
-          <tr><td>{{ p.name }}</td><td>{{ labels|join:", " }}</td>
-            <td class="text-end">{% if can_manage %}<form method="post" class="d-inline" data-step-up="full">{% csrf_token %}<input type="hidden" name="pk" value="{{ p.pk }}"><input type="hidden" name="action" value="profile-delete"><button class="btn btn-sm btn-outline-danger" type="submit">{% trans "Delete" %}</button></form>{% endif %}</td></tr>
+          {% for p, labels, rows in profiles %}
+          <tr><td>{{ p.name }}</td><td>{{ labels|join:", " }}</td><td>{% if rows %}<code class="small">{{ rows|linebreaksbr }}</code>{% else %}<span class="text-secondary">{% trans "all rows" %}</span>{% endif %}</td>
+            <td class="text-end text-nowrap">{% if can_manage %}
+              <button type="button" class="btn btn-sm btn-outline-secondary pin-profile-edit" data-pk="{{ p.pk }}" data-name="{{ p.name }}" data-rights="{{ p.rights|join:',' }}" data-filters="{{ rows }}">{% trans "Edit" %}</button>
+              <form method="post" class="d-inline" data-step-up="full">{% csrf_token %}<input type="hidden" name="pk" value="{{ p.pk }}"><input type="hidden" name="action" value="profile-delete"><button class="btn btn-sm btn-outline-danger" type="submit">{% trans "Delete" %}</button></form>{% endif %}</td></tr>
           {% endfor %}
         </tbody>
       </table>
       {% if can_manage %}
       <div class="card-body">
-        <form method="post" data-step-up="full">{% csrf_token %}<input type="hidden" name="action" value="profile-save">
-          <div class="d-flex flex-wrap gap-3 align-items-end">
-            <div>{{ profile_form.name.label_tag }}<br>{{ profile_form.name }}</div>
-            <div>{% for value, label in rights %}<label class="me-3"><input type="checkbox" class="form-check-input" name="rights" value="{{ value }}"> {{ label }}</label>{% endfor %}</div>
-            <button class="btn btn-outline-primary" type="submit">{% trans "Add profile" %}</button>
-          </div>
+        <form method="post" data-step-up="full" id="pin-profile-form">{% csrf_token %}<input type="hidden" name="action" value="profile-save"><input type="hidden" name="pk" value="">
+          <div class="mb-2">{{ profile_form.name.label_tag }}<br>{{ profile_form.name }}</div>
+          <div class="mb-2">{% for value, label in rights %}<label class="me-3"><input type="checkbox" class="form-check-input" name="rights" value="{{ value }}"> {{ label }}</label>{% endfor %}</div>
+          <div class="mb-2">{{ profile_form.filters.label_tag }}<br>{{ profile_form.filters }}<div class="form-text">{{ profile_form.filters.help_text }}</div>{% for e in profile_form.filters.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}</div>
+          <button class="btn btn-outline-primary" type="submit">{% trans "Save profile" %}</button>
         </form>
+        <script>
+          document.querySelectorAll('.pin-profile-edit').forEach(function (button) {
+            button.addEventListener('click', function () {
+              var form = document.getElementById('pin-profile-form');
+              form.elements['pk'].value = button.dataset.pk;
+              form.elements['name'].value = button.dataset.name;
+              var rights = button.dataset.rights.split(',');
+              form.querySelectorAll('input[name=rights]').forEach(function (box) { box.checked = rights.indexOf(box.value) >= 0; });
+              form.elements['filters'].value = button.dataset.filters;
+              form.scrollIntoView({behavior: 'smooth'});
+            });
+          });
+        </script>
       </div>
       {% endif %}
     </div>

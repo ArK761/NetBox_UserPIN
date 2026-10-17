@@ -30,6 +30,7 @@ from datetime import timedelta
 from django.apps import apps
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import DatabaseError, transaction
+from django.db.models import Q
 from django.utils import timezone
 from django.utils.translation import gettext as _
 
@@ -40,6 +41,7 @@ from .models import (
 
 logger = logging.getLogger('netbox_user_pin')
 
+API_VERSION = 1  # for plugins: register / can / require / get_area / is_owner / denied_response
 GENERIC_RIGHTS = ('view', 'add', 'change', 'delete')
 DEFAULT_PROFILES = (
     ('Read', ('view',)),
@@ -216,8 +218,91 @@ def _memo_rights(user, area):
     return entry[1]
 
 
+def _unrestricted(user, area):
+    """Owners (and, before owners exist, superusers) see every row."""
+    if is_owner(user, area):
+        return True
+    return user.is_superuser and not AreaOwner.objects.filter(area=area).exists()
+
+
+def row_filter(user, area, app_label, model, action='view'):
+    """
+    ``None``: no access. ``Q()``: every row. Otherwise a ``Q`` with the rows the user's profiles show.
+    NetBox permissions and their constraints are not consulted inside a protected area.
+    """
+    if not getattr(user, 'is_authenticated', False) or action not in _memo_rights(user, area):
+        return None
+    if _unrestricted(user, area):
+        return Q()
+    combined = None
+    for grant in active_grants(user, area):
+        if action not in grant.profile.rights:
+            continue
+        lookups = (grant.profile.filters or {}).get(f'{app_label}.{model}')
+        if not lookups:
+            return Q()  # one profile without a filter for this type shows everything of it
+        combined = Q(**lookups) if combined is None else combined | Q(**lookups)
+    return combined
+
+
+def parse_filters(text, area):
+    """
+    Lines ``app.model: lookup=value`` (several lookups: separate them with ``&``) -> {"app.model": {lookup: value}}.
+    Example: ``dcim.device: name__istartswith=PRINTER``. The lookups are checked against the model.
+    """
+    from django.core.exceptions import FieldError
+    result = {}
+    allowed = set(targets_of(area))
+    for raw in (text or '').splitlines():
+        line = raw.strip()
+        if not line or line.startswith('#'):
+            continue
+        target, sep, rest = line.partition(':')
+        target = target.strip().lower()
+        if not sep or '.' not in target:
+            raise ValidationError(_('Use "app.model: lookup=value", e.g. dcim.device: name__istartswith=PRINTER.'))
+        app_label, model_name = target.split('.', 1)
+        if target not in allowed and app_label not in allowed:
+            raise ValidationError(_('"%(target)s" is not protected by this area.') % {'target': target})
+        lookups = {}
+        for part in rest.split('&'):
+            key, equals, value = part.strip().partition('=')
+            if not equals or not key.strip():
+                raise ValidationError(_('Use lookup=value, e.g. name__istartswith=PRINTER.'))
+            lookups[key.strip()] = value.strip()
+        try:
+            apps.get_model(app_label, model_name)._default_manager.filter(**lookups).query  # noqa: B018
+        except (LookupError, FieldError, ValueError, TypeError) as exc:
+            raise ValidationError(_('The filter for "%(target)s" is not valid: %(error)s') % {
+                'target': target, 'error': exc})
+        result[target] = lookups
+    return result
+
+
+def format_filters(filters):
+    return '\n'.join(f'{target}: ' + ' & '.join(f'{k}={v}' for k, v in lookups.items())
+                     for target, lookups in (filters or {}).items())
+
+
+def _ensure_pin_allowed(user, actor, request=None):
+    """Owners and grantees unlock a PIN to enter: allow them to use one (unless an administrator denied it)."""
+    from .models import PinAccess
+    if service.is_allowed(user):
+        return
+    user_pin = getattr(user, 'user_pin', None)
+    if user_pin is not None and user_pin.access == PinAccess.DENIED:
+        raise ValidationError(_('%(user)s is not permitted to use a PIN (denied by an administrator).') % {
+            'user': user.username})
+    service.set_access(user, PinAccess.ALLOWED, actor, request=request)
+
+
 def check_perm(user, perm):
-    """For ``User.has_perm``: ``None`` when no area covers the permission, otherwise ``(allowed, area)``."""
+    """
+    For ``User.has_perm``: ``None`` when no area covers the permission, otherwise ``(allowed, area)``.
+
+    In a protected area the PIN grants decide alone; the NetBox permissions of the user are not asked. A user who
+    holds no key at all still sees the door (menu item, tab): ``True`` here, and the guard refuses the entry.
+    """
     app_label, _dot, codename = perm.partition('.')
     if not codename or not active_areas():
         return None
@@ -225,7 +310,11 @@ def check_perm(user, perm):
     area = area_for(app_label, model or None, package=app_label)
     if area is None:
         return None
-    return can(user, area, action if action in GENERIC_RIGHTS else 'change'), area
+    rights = _memo_rights(user, area)
+    if not rights:
+        return True, area
+    # a permission named after a right of the area (e.g. app.config_model) asks for exactly that right
+    return (action if action in rights_available(area) else 'change') in rights, area
 
 
 def right_for_request(request, view_class=None, view_kwargs=None):
@@ -302,6 +391,7 @@ def create_area(name, targets, owners_, actor, description='', max_hours=24, req
         AreaProfile.objects.create(area=area, name=name_, rights=list(rights))
     _log(PinEventAction.AREA_CREATED, area, actor, request=request, detail=f'targets: {", ".join(targets)}')
     for user in owners_:
+        _ensure_pin_allowed(user, actor, request)
         _add_owner(area, user, actor, request)
     clear_cache()
     return area
@@ -332,6 +422,7 @@ def add_owner(area, user, actor, request=None):
         raise PermissionDenied
     if not user.is_active:
         raise ValidationError(_('The account is not active.'))
+    _ensure_pin_allowed(user, actor, request)
     owner = _add_owner(area, user, actor, request)
     clear_cache()
     return owner
@@ -379,7 +470,7 @@ def delete_area(area, actor, request=None):
     clear_cache()
 
 
-def save_profile(area, name, rights, actor, profile=None, request=None):
+def save_profile(area, name, rights, actor, profile=None, request=None, filters=None):
     if not _core_or_owner(actor, area):
         raise PermissionDenied
     known = set(rights_available(area))
@@ -389,11 +480,12 @@ def save_profile(area, name, rights, actor, profile=None, request=None):
     if profile is None:
         if AreaProfile.objects.filter(area=area, name=name).exists():
             raise ValidationError(_('A profile with this name exists.'))
-        profile = AreaProfile.objects.create(area=area, name=name, rights=rights)
+        profile = AreaProfile.objects.create(area=area, name=name, rights=rights, filters=filters or {})
     else:
-        profile.name, profile.rights = name, rights
+        profile.name, profile.rights, profile.filters = name, rights, filters or {}
         profile.save()
-    _log(PinEventAction.AREA_CHANGED, area, actor, request=request, detail=f'profile {name}: {", ".join(rights)}')
+    _log(PinEventAction.AREA_CHANGED, area, actor, request=request,
+         detail=f'profile {name}: {", ".join(rights)}' + (f' | rows: {format_filters(filters)}' if filters else ''))
     return profile
 
 
@@ -422,7 +514,7 @@ def _notify(req, users, text, subject):
         service.send_user_mail(user, subject, text)
 
 
-def request_access(area, user, note='', request=None):
+def request_access(area, user, note='', request=None, scope=''):
     """A user asks the owners for access. One waiting request per user and area."""
     area = get_area(area)
     if area is None or not user.is_authenticated or not user.is_active:
@@ -430,15 +522,19 @@ def request_access(area, user, note='', request=None):
     existing = AreaRequest.objects.filter(area=area, user=user, status=AreaRequestStatus.PENDING).first()
     if existing:
         return existing
+    if len((note or '').strip()) < 5:
+        raise ValidationError(_('Write why you need the access (at least a few words).'))
     recipients = owners(area)
     if not recipients:
         raise ValidationError(_('The area has no owners yet. Ask the administrator to appoint them.'))
-    req = AreaRequest.objects.create(area=area, user=user, note=note[:200])
-    _log(PinEventAction.AREA_REQUESTED, area, user, user=user, request=request, detail=note[:200])
+    req = AreaRequest.objects.create(area=area, user=user, note=note.strip()[:200], scope=(scope or '').strip()[:200])
+    _log(PinEventAction.AREA_REQUESTED, area, user, user=user, request=request,
+         detail=f'{req.note}' + (f' | {req.scope}' if req.scope else ''))
     label = service.user_label(user)
     _notify(req, recipients, _(
-        '%(user)s asks for access to the area "%(area)s".\n\nOpen User PIN > Protected areas to grant or deny it '
-        '(confirm with your PIN and 2FA).') % {'user': label, 'area': area.name},
+        '%(user)s asks for access to the area "%(area)s".\n\nWhy: %(reason)s\nWhat exactly: %(scope)s\n\n'
+        'Open User PIN > Protected areas to grant or deny it (confirm with your PIN and 2FA).') % {
+        'user': label, 'area': area.name, 'reason': req.note, 'scope': req.scope or '-'},
         _('Access request: %(area)s') % {'area': area.name})
     return req
 
@@ -484,6 +580,7 @@ def grant_access(area, user, profile, hours, actor, request=None, notify=True):
         raise ValidationError(_('Owners already hold every right in their area.'))
     if profile is None or profile.area_id != area.pk:
         raise ValidationError(_('Choose a profile of this area.'))
+    _ensure_pin_allowed(user, actor, request)
     expires = None
     if hours is not None:
         if not 1 <= int(hours) <= area.max_hours:

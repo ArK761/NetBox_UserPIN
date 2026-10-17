@@ -267,24 +267,31 @@ All are sent with `sender=UserPin` and kwargs `user`, `request`, `scope` (+ `act
 ## Protected areas
 
 An area protects the objects of one or more apps (`dcim`, `ipam`, `netbox_libreoxi` …) or object types
-(`users.user`, `dcim.device` …). Inside an area **nobody is a god**: not the NetBox role decides but a PIN grant that
-the area's **owners** give – the master (superuser) included.
+(`users.user`, `dcim.device` …), chosen from a list. Inside an area **nobody is a god**: the NetBox role and the
+NetBox permissions of a user are **not asked at all** – a PIN grant given by the area's **owners** decides, the
+master (superuser) included. The door (menu entry, tab) stays visible for everybody; whoever has no key is
+refused on entering and told who manages the access.
 
 ```
 master / CORE   create an area, appoint the first owners          (then they lose any say over it)
-owners          decide who gets access (PIN + 2FA), profiles, more owners, deactivate or delete the area
-user            asks for access (e-mail + bell to the owners) → owners grant a profile for a time or without limit
+owners          decide who gets access (PIN + 2FA): profiles, rows, grants, more owners, deactivate / delete
+user            asks for access with a reason (+ what exactly) → owners grant a profile for a time or without limit
 ```
 
 - **Two ways to switch it on.** *Settings → Protect areas and objects* makes the areas you define on the
   **Protected areas** page protect. Independently of that, a plugin that registers an area (see below) is protected
   as soon as **its own "PIN integration" switch is on**.
-- **Rights and profiles**: `view`, `add`, `change`, `delete` (+ rights a plugin defines). Default profiles Read /
-  Edit / Full; owners can add their own. A grant is for 1 hour … 30 days (limit per area) or without a time limit.
+- **Profiles** = rights (`view`, `add`, `change`, `delete` + rights a plugin defines) **and rows**: a profile may
+  show only some rows of an object type, e.g. `dcim.device: name__istartswith=PRINTER` or
+  `tenancy.tenant: cf_type=printer`-style lookups (`custom_field_data__type=PRINTER`). The filter applies to lists,
+  details, the REST API and drop-down lists alike. Default profiles Read / Edit / Full; owners add their own.
+- **A grant** is for 1 hour … 30 days (limit per area) or without a time limit. A grantee is allowed to use a PIN
+  automatically (unless an administrator denied it) and **unlocks the PIN to enter** the area.
+- **Requests** need a reason (and optionally what exactly is needed); the owners get a bell notification and an
+  e-mail with both. Nobody decides about his own request; owners cannot grant themselves anything.
 - **Bootstrap**: until owners are appointed only superusers have access, so an area cannot lock everybody out.
-  Once owners exist the master cannot change them, grant access or deactivate the area. An owner cannot be removed
-  when he is the last one; the protection cannot be switched off while areas with owners are active.
-- **Nobody decides about his own request** and owners cannot grant themselves anything (they hold every right).
+  Once owners exist the master cannot change them, grant access or deactivate the area. The last owner cannot be
+  removed; the protection cannot be switched off while areas with owners are active.
 - **Emergency** (server shell, audited): `python manage.py userpin_area_owners <area-key> --set user1 user2`.
 - Everything is written to the audit log (requests, grants, revocations, refused accesses, owner changes).
 
@@ -292,14 +299,14 @@ user            asks for access (e-mail + bell to the owners) → owners grant a
 
 | Where | How |
 |---|---|
-| NetBox pages: lists, detail, add / edit / delete, bulk actions, plugin pages | middleware refuses without the right (`view` for reading, `add` / `change` / `delete` by the kind of view) and shows *Request access* |
-| REST API (session and token) | 403 with a JSON message |
-| Menu items and object tabs | `has_perm` of the user is answered by the PIN grants for protected objects, so the entry disappears – for superusers too |
-| NetBox permissions | for a NetBox area the NetBox permission is still needed **as well**; a plugin area is decided by the PIN grant alone |
+| NetBox pages: lists, detail, add / edit / delete, bulk actions, plugin pages | middleware refuses without the right (`view` for reading, `add` / `change` / `delete` by the kind of view); the PIN has to be unlocked |
+| Rows | `RestrictedQuerySet.restrict` of NetBox is wrapped: in a protected area it returns the rows the PIN profiles allow (none without a grant) instead of NetBox's own constraints – lists, details, REST API, drop-downs |
+| REST API (session and token) | refused without the right (403 JSON); no PIN unlock step for tokens |
+| Menu items and object tabs | `has_perm` is answered by the PIN grants; a user without any key still sees the door |
 
-**Not covered**: GraphQL, and lists that mix objects of several types (global search, change log, dashboard
-widgets). Anybody with root / database access on the server can bypass any plugin; the audit log is the answer to
-that, not a technical lock.
+**Not covered**: GraphQL, hiding single *fields* of an object (NetBox has no field permissions), and lists that mix
+objects of several types (global search, change log, dashboard widgets). Anybody with root / database access on the
+server can bypass any plugin; the audit log is the answer to that, not a technical lock.
 
 ### Using it from a plugin
 
@@ -312,10 +319,11 @@ areas.register('netbox_libreoxi', 'LibreOXI', targets=['netbox_libreoxi'],
                profiles=[('Logs only', ['view']), ('Configurations', ['view', 'config']), ('Manager', ['view', 'config', 'change'])],
                enabled=lambda: LibreOXISettings.objects.first().pin_integration)
 
-# in a view, for the finer rights
+# in a view, for the finer rights (a permission named "<app>.config_<model>" asks for the right "config")
 if (response := areas.require(request, 'netbox_libreoxi', 'config')) is not None:
-    return response            # shows the "request access" page
+    return response            # shows the "no access - request it" page
 areas.can(request.user, 'netbox_libreoxi', 'config')   # True / False
+areas.API_VERSION                                       # 1
 ```
 
 ## Security model

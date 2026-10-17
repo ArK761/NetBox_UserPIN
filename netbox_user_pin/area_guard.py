@@ -37,11 +37,7 @@ def arm_user(user):
         verdict = areas.check_perm(user, perm)
         if verdict is None:
             return original(perm, obj)
-        allowed, area = verdict
-        if not allowed:
-            return False
-        # A plugin area is decided by PIN alone; a NetBox area still needs the NetBox permission as well.
-        return True if area.plugin else original(perm, obj)
+        return verdict[0]  # inside a protected area the PIN decides alone
 
     user.has_perm = has_perm
     user._userpin_armed = True
@@ -103,7 +99,8 @@ def denied_response(request, area, right='view'):
     # the page is shown on an ordinary NetBox URL, so the language of the plugin is switched on by hand
     with translation.override(service.get_settings().language or 'en'):
         response = render(request, 'netbox_user_pin/area_denied.html', {
-            'area': area, 'right': right, 'pending': pending, 'has_owners': bool(areas.owners(area)),
+            'area': area, 'right': right, 'pending': pending, 'owners': areas.owners(area),
+            'has_owners': bool(areas.owners(area)),
             'next': request.get_full_path(),
         }, status=403)
         response.render() if hasattr(response, 'render') else None
@@ -138,6 +135,60 @@ class AreaGuardMiddleware:
             return redirect(f'{django_settings.LOGIN_URL}?{urlencode({"next": request.get_full_path()})}')
         right = areas.right_for_request(request, cls, view_kwargs)
         if areas.can(user, area, right):
+            # whoever holds access unlocks the PIN to enter (not before the owners exist, and the REST API has no
+            # unlock step)
+            if not api and areas.owners(area):
+                from .mixins import pin_gate
+                if (response := pin_gate(request, scope=f'area-{area.key}')) is not None:
+                    return response
             return None
         _throttled_log(user, area, right, request)
         return denied_response(request, area, right)
+
+
+def install():
+    """
+    Two small hooks into NetBox, installed once at start:
+
+    * ``RestrictedQuerySet.restrict`` (lists, details, bulk actions, REST API, drop-down lists): in a protected area
+      the rows the PIN profiles allow, instead of NetBox's own permission constraints, superusers included.
+    * the REST API authentication classes hand over a user that is armed like the one of a page request.
+    """
+    try:
+        from netbox.api.authentication import TokenAuthentication
+        from rest_framework.authentication import SessionAuthentication
+        from utilities.querysets import RestrictedQuerySet
+    except ImportError:
+        logger.warning('NetBox internals not found: the row filter of the protected areas is not installed.')
+        return
+
+    if not getattr(RestrictedQuerySet.restrict, '_userpin', False):
+        original = RestrictedQuerySet.restrict
+
+        def restrict(self, user, action='view'):
+            meta = self.model._meta
+            area = areas.area_for(meta.app_label, meta.model_name, package=meta.app_label)
+            if area is None:
+                return original(self, user, action)
+            query = areas.row_filter(user, area, meta.app_label, meta.model_name, action)
+            if query is None:
+                return self.none()
+            return self.filter(query) if query else self
+
+        restrict._userpin = True
+        RestrictedQuerySet.restrict = restrict
+
+    for cls in (TokenAuthentication, SessionAuthentication):
+        if getattr(cls.authenticate, '_userpin', False):
+            continue
+
+        def wrap(method):
+            def authenticate(self, request):
+                result = method(self, request)
+                if result and areas.active_areas():
+                    arm_user(result[0])
+                return result
+            authenticate._userpin = True
+            return authenticate
+
+        cls.authenticate = wrap(cls.authenticate)

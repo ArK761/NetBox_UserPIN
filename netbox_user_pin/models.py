@@ -787,6 +787,9 @@ class AreaProfile(models.Model):
     area = models.ForeignKey(ProtectedArea, on_delete=models.CASCADE, related_name='profiles')
     name = models.CharField(verbose_name=_('Profile'), max_length=100)
     rights = models.JSONField(default=list)
+    # Which rows the profile shows, per object type: {"dcim.device": {"name__istartswith": "PRINTER"}}.
+    # No entry for a type = every row of it.
+    filters = models.JSONField(default=dict, blank=True)
 
     class Meta:
         verbose_name = _('area profile')
@@ -837,7 +840,8 @@ class AreaRequest(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='area_requests')
     status = models.CharField(max_length=10, choices=AreaRequestStatus.choices, default=AreaRequestStatus.PENDING,
                               db_index=True)
-    note = models.CharField(max_length=200, blank=True)
+    note = models.CharField(max_length=200, blank=True, help_text='The reason of the request.')
+    scope = models.CharField(max_length=200, blank=True, help_text='What exactly is needed (section, group ...).')
     created = models.DateTimeField(default=timezone.now)
     decided = models.DateTimeField(null=True, blank=True)
     decided_by_name = models.CharField(max_length=150, blank=True)
