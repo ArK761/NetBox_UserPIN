@@ -5063,6 +5063,94 @@ msgstr "Správcovia ochrany:"
 msgid "Search…"
 msgstr "Hľadať…"
 
+msgid "Unknown mode."
+msgstr "Neznámy režim."
+
+msgid "Saved ({n} changes)."
+msgstr "Uložené ({n} zmien)."
+
+msgid "Only values containing \"%(text)s\" are allowed."
+msgstr "Povolené sú len hodnoty obsahujúce „%(text)s“."
+
+msgid "Hidden"
+msgstr "Skryté"
+
+msgid "Read only"
+msgstr "Len čítať"
+
+msgid "Read and write"
+msgstr "Čítať a zapisovať"
+
+msgid "field rule"
+msgstr "pravidlo poľa"
+
+msgid "field rules"
+msgstr "pravidlá polí"
+
+msgid "Fields"
+msgstr "Polia"
+
+msgid "Fields of an object type"
+msgstr "Polia typu objektu"
+
+msgid ""
+"Choose who the rules are for and the object type, then set each field: "
+"hidden, read only or read and write. Custom fields linked to other objects "
+"can show only the values that contain a text (must include). 'Nobody' hides "
+"a field from everybody in the area, owners included."
+msgstr ""
+"Vyberte, pre koho pravidlá platia, a typ objektu, potom nastavte každé pole:"
+" skryté, len čítať alebo čítať a zapisovať. Custom fields viazané na iné "
+"objekty môžu ukazovať len hodnoty, ktoré obsahujú text (musí obsahovať). "
+"„Nikto“ skryje pole pre všetkých v oblasti, aj pre vlastníkov."
+
+msgid "Rules for"
+msgstr "Pravidlá pre"
+
+msgid "Nobody sees it"
+msgstr "Nikto to nevidí"
+
+msgid "Object type"
+msgstr "Typ objektu"
+
+msgid "Field"
+msgstr "Pole"
+
+msgid "Kind"
+msgstr "Druh"
+
+msgid "Rule"
+msgstr "Pravidlo"
+
+msgid "Values must include"
+msgstr "Hodnoty musia obsahovať"
+
+msgid "custom field"
+msgstr "custom field"
+
+msgid "field"
+msgstr "pole"
+
+msgid "No fields."
+msgstr "Žiadne polia."
+
+msgid "Save rules"
+msgstr "Uložiť pravidlá"
+
+msgid ""
+"Default: a profile that may add or change sees and writes every field, a "
+"read-only profile only reads. Applied in forms, tables and the REST API; "
+"custom fields also in the detail page. The fixed fields of an object's "
+"detail page are drawn by NetBox model by model and are not hidden there."
+msgstr ""
+"Predvolené: profil, ktorý smie pridávať alebo meniť, vidí a zapisuje každé "
+"pole, profil len na čítanie iba číta. Platí vo formulároch, tabuľkách a REST"
+" API; custom fields aj v detaile. Pevné polia detailu objektu NetBox kreslí "
+"ručne po modeloch a tam sa neskrývajú."
+
+msgid "Fields nobody sees"
+msgstr "Polia, ktoré nikto nevidí"
+
 #~ msgid ""
 #~ "There is no other administrator or delegate with PIN and 2FA who could "
 #~ "confirm."

@@ -312,8 +312,22 @@ user            asks for access with a reason (+ what exactly) → owners grant 
 | REST API (session and token) | refused without the right (403 JSON); no PIN unlock step for tokens |
 | Menu items and object tabs | `has_perm` is answered by the PIN grants; a user without any key still sees the door |
 
-**Not covered**: GraphQL, hiding single *fields* of an object (NetBox has no field permissions), and lists that mix
-objects of several types (global search, change log, dashboard widgets). Anybody with root / database access on the
+**Field rules** (profile → *Fields*, and *Fields nobody sees*): per profile and object type every field is *hidden*,
+*read only* or *read and write*; a custom field linked to other objects can be limited to the values that **contain
+a text** (e.g. only hardware containing `PRINTER`). A rule without a profile hides a field from everybody in the area,
+owners included. Applied where NetBox shows or takes the data:
+
+| | custom fields | model fields |
+|---|---|---|
+| detail page | hidden / value filter | **not covered** (NetBox draws the fixed fields by hand, model by model) |
+| edit forms | removed / disabled; the drop-down is narrowed and the value checked on save | removed / disabled |
+| tables | column removed | column removed |
+| REST API | omitted / value filter / writes ignored | omitted / read only |
+
+A hidden custom field keeps its stored data (saving an object never wipes it).
+
+**Not covered**: GraphQL, filters in lists (`?cf_name=…`), exports, the fixed fields of the detail page and lists that
+mix objects of several types (global search, change log, dashboard widgets). Anybody with root / database access on the
 server can bypass any plugin; the audit log is the answer to that, not a technical lock.
 
 ### Using it from a plugin

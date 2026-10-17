@@ -32,6 +32,7 @@ urlpatterns = [
     path('my-roles/', views.MyRolesView.as_view(), name='my_roles'),
     path('areas/', area_views.AreaListView.as_view(), name='areas'),
     path('areas/<int:pk>/', area_views.AreaView.as_view(), name='area'),
+    path('areas/<int:pk>/fields/', area_views.AreaFieldsView.as_view(), name='area_fields'),
     path('areas/<slug:key>/request/', area_views.AreaRequestView.as_view(), name='area_request'),
     path('access/', area_views.MyAccessView.as_view(), name='my_access'),
     path('invitation/<int:pk>/', views.InvitationView.as_view(), name='invitation'),

@@ -1,0 +1,52 @@
+{% extends 'generic/_base.html' %}
+{% load userpin_tags i18n %}
+{% block title %}{{ area.name }} – {% trans "Fields" %}{% endblock %}
+{% block content %}
+{% pin_build %}
+{% include 'netbox_user_pin/inc/step_up_bar.html' %}
+<p><a href="{% url 'plugins:netbox_user_pin:area' pk=area.pk %}"><i class="mdi mdi-arrow-left"></i> {{ area.name }}</a></p>
+<div class="card">
+  <h2 class="card-header">{% trans "Fields of an object type" %}</h2>
+  <div class="card-body">
+    <p class="text-secondary">{% trans "Choose who the rules are for and the object type, then set each field: hidden, read only or read and write. Custom fields linked to other objects can show only the values that contain a text (must include). 'Nobody' hides a field from everybody in the area, owners included." %}</p>
+    <form method="get" class="d-flex flex-wrap gap-3 align-items-end">
+      <div><label class="form-label">{% trans "Rules for" %}</label>
+        <select name="profile" class="form-select" onchange="this.form.submit()">
+          {% for p in profiles %}<option value="{{ p.pk }}" {% if profile and p.pk == profile.pk %}selected{% endif %}>{% trans "Profile" %}: {{ p.name }}</option>{% endfor %}
+          <option value="nobody" {% if nobody %}selected{% endif %}>{% trans "Nobody sees it" %}</option>
+        </select></div>
+      <div><label class="form-label">{% trans "Object type" %}</label>
+        <select name="target" class="form-select" onchange="this.form.submit()">
+          {% for t, label in targets %}<option value="{{ t }}" {% if t == target %}selected{% endif %}>{{ label }}</option>{% endfor %}
+        </select></div>
+      <div class="flex-grow-1"><input type="search" class="form-control pin-filter" data-target="#pin-fields" placeholder="{% trans 'Search…' %}"></div>
+    </form>
+  </div>
+  <form method="post" data-step-up="full">{% csrf_token %}
+    <input type="hidden" name="profile" value="{% if nobody %}nobody{% else %}{{ profile.pk }}{% endif %}"><input type="hidden" name="target" value="{{ target }}">
+    <table class="table table-hover pin-sortable" id="pin-fields">
+      <thead><tr><th data-sort="text">{% trans "Field" %}</th><th data-sort="text">{% trans "Kind" %}</th><th>{% trans "Rule" %}</th><th>{% trans "Values must include" %}</th></tr></thead>
+      <tbody>
+        {% for row in rows %}
+        <tr>
+          <td><strong>{{ row.label }}</strong> <code class="small text-secondary">{{ row.key }}</code></td>
+          <td>{% if row.kind == 'custom' %}<span class="badge text-bg-cyan">{% trans "custom field" %}</span>{% else %}{% trans "field" %}{% endif %}</td>
+          <td class="text-nowrap">
+            <label class="me-2"><input type="radio" name="mode__{{ row.key }}" value="default" {% if row.mode == 'default' %}checked{% endif %}> {% trans "Default" %}</label>
+            <label class="me-2"><input type="radio" name="mode__{{ row.key }}" value="hidden" {% if row.mode == 'hidden' %}checked{% endif %}> {% trans "Hidden" %}</label>
+            {% if not nobody %}
+            <label class="me-2"><input type="radio" name="mode__{{ row.key }}" value="read" {% if row.mode == 'read' %}checked{% endif %}> {% trans "Read only" %}</label>
+            <label><input type="radio" name="mode__{{ row.key }}" value="write" {% if row.mode == 'write' %}checked{% endif %}> {% trans "Read and write" %}</label>
+            {% endif %}
+          </td>
+          <td>{% if row.kind == 'custom' and not nobody %}<input type="text" class="form-control form-control-sm" name="contains__{{ row.key }}" value="{{ row.contains }}" maxlength="200" placeholder="PRINTER">{% endif %}</td>
+        </tr>
+        {% empty %}<tr><td colspan="4" class="text-secondary">{% trans "No fields." %}</td></tr>{% endfor %}
+      </tbody>
+    </table>
+    {% if can_manage %}<div class="card-body text-end"><button type="submit" class="btn btn-primary">{% trans "Save rules" %}</button></div>{% endif %}
+  </form>
+</div>
+<p class="text-secondary small">{% trans "Default: a profile that may add or change sees and writes every field, a read-only profile only reads. Applied in forms, tables and the REST API; custom fields also in the detail page. The fixed fields of an object's detail page are drawn by NetBox model by model and are not hidden there." %}</p>
+{% include 'netbox_user_pin/inc/table_tools.html' %}
+{% endblock %}

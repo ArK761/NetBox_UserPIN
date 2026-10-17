@@ -8,18 +8,18 @@ from django.utils import timezone
 from django.utils.translation import gettext as _
 from django.views import View
 
-from . import areas, roles, service
+from . import areas, fieldrules, roles, service
 from .forms import (
     AreaDecideForm, AreaForm, AreaGrantForm, AreaOwnerForm, AreaProfileForm, AreaRequestForm, AreaTargetForm,
     KeeperForm,
 )
 from .mixins import PinRequiredMixin, step_up_gate
 from .models import (
-    AreaGrant, AreaProfile, AreaRequest, AreaRequestStatus, PinEventAction, ProtectedArea,
+    AreaFieldRule, AreaGrant, AreaProfile, AreaRequest, AreaRequestStatus, PinEventAction, ProtectedArea,
 )
 from .views import ADMIN_SCOPE, _errors, _next_url, _step_up_context
 
-__all__ = ('AreaListView', 'AreaRequestView', 'AreaView', 'MyAccessView')
+__all__ = ('AreaFieldsView', 'AreaListView', 'AreaRequestView', 'AreaView', 'MyAccessView')
 
 
 class AreaViewMixin(LoginRequiredMixin, PinRequiredMixin):
@@ -234,6 +234,63 @@ class AreaView(AreaViewMixin, View):
         except ValidationError as exc:
             _errors(request, exc)
         return redirect('plugins:netbox_user_pin:area', pk=area.pk)
+
+
+class AreaFieldsView(AreaViewMixin, View):
+    """Field rules of one profile (or of nobody) for one object type of the area."""
+    template_name = 'netbox_user_pin/area_fields.html'
+
+    def _area(self, request, pk):
+        area = get_object_or_404(ProtectedArea, pk=pk)
+        if not areas.can_see(request.user, area):
+            raise PermissionDenied
+        return area
+
+    def _choice(self, request, area):
+        """(profile or None, 'nobody' flag, target)."""
+        raw = request.POST.get('profile') or request.GET.get('profile') or ''
+        nobody = raw == 'nobody'
+        profile = None if nobody else (area.profiles.filter(pk=raw).first() if raw.isdigit() else area.profiles.first())
+        targets = areas.area_models(area)
+        target = request.POST.get('target') or request.GET.get('target') or (targets[0] if targets else '')
+        return profile, nobody, (target if target in targets else (targets[0] if targets else ''))
+
+    def _render(self, request, area):
+        profile, nobody, target = self._choice(request, area)
+        rows = []
+        if target:
+            app_label, _dot, model = target.partition('.')
+            rules = {r.field: r for r in AreaFieldRule.objects.filter(area=area, profile=profile, target=target)}
+            for key, label, kind in fieldrules.fields_of(app_label, model):
+                rule = rules.get(key)
+                rows.append({'key': key, 'label': label, 'kind': kind, 'mode': rule.mode if rule else 'default',
+                             'contains': rule.contains if rule else ''})
+        return render(request, self.template_name, {
+            'area': area, 'profile': profile, 'nobody': nobody, 'target': target, 'rows': rows,
+            'profiles': area.profiles.all(), 'targets': [(t, _target_label(t)) for t in areas.area_models(area)],
+            'can_manage': areas.can_manage(request.user, area),
+            'settings': service.get_settings(), **_step_up_context(request),
+        })
+
+    def get(self, request, pk):
+        return self._render(request, self._area(request, pk))
+
+    def post(self, request, pk):
+        area = self._area(request, pk)
+        if (response := step_up_gate(request, 'full')) is not None:
+            return response
+        profile, nobody, target = self._choice(request, area)
+        try:
+            app_label, _dot, model = target.partition('.')
+            rules = {key: (request.POST.get(f'mode__{key}', 'default'), request.POST.get(f'contains__{key}', ''))
+                     for key, _label, _kind in fieldrules.fields_of(app_label, model)}
+            count = areas.save_field_rules(area, None if nobody else profile, target, rules, request.user,
+                                           request=request)
+            messages.success(request, _('Saved ({n} changes).').format(n=count))
+        except ValidationError as exc:
+            _errors(request, exc)
+        return redirect(f"{reverse('plugins:netbox_user_pin:area_fields', kwargs={'pk': area.pk})}"
+                        f"?profile={'nobody' if nobody else (profile.pk if profile else '')}&target={target}")
 
 
 class AreaRequestView(LoginRequiredMixin, View):

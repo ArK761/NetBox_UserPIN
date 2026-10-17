@@ -1,6 +1,6 @@
 from netbox.plugins import PluginConfig
 
-__version__ = '0.14.1'
+__version__ = '0.15.0'
 
 
 class UserPinConfig(PluginConfig):
@@ -39,6 +39,8 @@ class UserPinConfig(PluginConfig):
         areas.connect_signals()
         from . import area_guard
         area_guard.install()
+        from . import fieldrules
+        fieldrules.install()
 
     @staticmethod
     def _register_event_types():

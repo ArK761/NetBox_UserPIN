@@ -62,13 +62,15 @@
     {% endif %}
 
     <div class="card">
-      <h2 class="card-header">{% trans "Profiles" %}</h2>
+      <h2 class="card-header d-flex justify-content-between align-items-center">{% trans "Profiles" %}
+        <a class="btn btn-sm btn-outline-warning" href="{% url 'plugins:netbox_user_pin:area_fields' pk=area.pk %}?profile=nobody"><i class="mdi mdi-eye-off"></i> {% trans "Fields nobody sees" %}</a></h2>
       <table class="table">
         <thead><tr><th>{% trans "Profile" %}</th><th>{% trans "Rights" %}</th><th>{% trans "Rows shown" %}</th><th></th></tr></thead>
         <tbody>
           {% for p, labels, rows in profiles %}
           <tr><td>{{ p.name }}</td><td>{{ labels|join:", " }}</td><td>{% if rows %}<code class="small">{{ rows|linebreaksbr }}</code>{% else %}<span class="text-secondary">{% trans "all rows" %}</span>{% endif %}</td>
             <td class="text-end text-nowrap">{% if can_manage %}
+              <a class="btn btn-sm btn-outline-info" href="{% url 'plugins:netbox_user_pin:area_fields' pk=area.pk %}?profile={{ p.pk }}">{% trans "Fields" %}</a>
               <button type="button" class="btn btn-sm btn-outline-secondary pin-profile-edit" data-pk="{{ p.pk }}" data-name="{{ p.name }}" data-rights="{{ p.rights|join:',' }}" data-filters="{{ rows }}">{% trans "Edit" %}</button>
               <form method="post" class="d-inline" data-step-up="full">{% csrf_token %}<input type="hidden" name="pk" value="{{ p.pk }}"><input type="hidden" name="action" value="profile-delete"><button class="btn btn-sm btn-outline-danger" type="submit">{% trans "Delete" %}</button></form>{% endif %}</td></tr>
           {% endfor %}

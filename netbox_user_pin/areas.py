@@ -36,7 +36,7 @@ from django.utils.translation import gettext as _
 
 from . import roles, service
 from .models import (
-    AreaGrant, AreaOwner, AreaProfile, AreaRequest, AreaRequestStatus, PinEventAction, PolicyKeeper, ProtectedArea,
+    AreaFieldMode, AreaFieldRule, AreaGrant, AreaOwner, AreaProfile, AreaRequest, AreaRequestStatus, PinEventAction, PolicyKeeper, ProtectedArea,
 )
 
 logger = logging.getLogger('netbox_user_pin')
@@ -764,6 +764,59 @@ def remove_target(area, target, actor, request=None):
     _log(PinEventAction.AREA_CHANGED, area, actor, request=request, detail=f'object removed: {target}')
     clear_cache()
     return True
+
+
+def area_models(area):
+    """['app.model']: the object types of the area, an app expanded into its models."""
+    result = []
+    for target in targets_of(area):
+        if '.' in target:
+            result.append(target)
+            continue
+        try:
+            config = apps.get_app_config(target)
+        except LookupError:
+            continue
+        result += [f'{config.label}.{m._meta.model_name}' for m in config.get_models()
+                   if not m._meta.auto_created and not m._meta.proxy]
+    return sorted(set(result))
+
+
+def save_field_rules(area, profile, target, rules, actor, request=None):
+    """
+    ``rules``: {field: (mode or 'default', contains)}. 'default' removes the rule. ``profile=None`` is the rule
+    "nobody sees it" (only 'hidden' / 'default').
+    """
+    if not _core_or_owner(actor, area):
+        raise PermissionDenied
+    if target not in area_models(area):
+        raise ValidationError(_('"%(target)s" is not protected by this area.') % {'target': target})
+    if profile is not None and profile.area_id != area.pk:
+        raise ValidationError(_('Choose a profile of this area.'))
+    changed = []
+    for field, (mode, contains) in rules.items():
+        existing = AreaFieldRule.objects.filter(area=area, profile=profile, target=target, field=field)
+        if mode in ('', 'default', None) or (profile is None and mode != AreaFieldMode.HIDDEN):
+            if existing.delete()[0]:
+                changed.append(f'{field}: default')
+            continue
+        if mode not in AreaFieldMode.values:
+            raise ValidationError(_('Unknown mode.'))
+        rule = existing.first()
+        contains = (contains or '').strip()[:200]
+        if rule is None:
+            AreaFieldRule.objects.create(area=area, profile=profile, target=target, field=field, mode=mode,
+                                         contains=contains)
+            changed.append(f'{field}: {mode}' + (f' contains "{contains}"' if contains else ''))
+        elif (rule.mode, rule.contains) != (mode, contains):
+            rule.mode, rule.contains = mode, contains
+            rule.save()
+            changed.append(f'{field}: {mode}' + (f' contains "{contains}"' if contains else ''))
+    if changed:
+        who = profile.name if profile else 'NOBODY'
+        _log(PinEventAction.AREA_CHANGED, area, actor, request=request,
+             detail=f'field rules {target} / {who}: ' + '; '.join(changed))
+    return len(changed)
 
 
 def denied_response(request, area, right='view'):

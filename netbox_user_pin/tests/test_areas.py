@@ -439,7 +439,9 @@ class BuildBadgeTest(AreaTestCase):
         build.plugin_build.cache_clear()
         try:
             with mock.patch('importlib.metadata.distribution', return_value=Dist()):
-                self.assertEqual(build.plugin_build(), {'version': '1.2.3', 'commit': 'abcdef1234567890', 'short': 'abcdef1'})
+                from netbox_user_pin import __version__
+                self.assertEqual(build.plugin_build(),  # the version is the one of the code, the commit is pip's record
+                                 {'version': __version__, 'commit': 'abcdef1234567890', 'short': 'abcdef1'})
         finally:
             build.plugin_build.cache_clear()
 

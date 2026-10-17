@@ -8,6 +8,7 @@ __all__ = (
     'AllowedDomain',
     'AreaGrant',
     'AreaOwner',
+    'AreaFieldRule',
     'AreaProfile',
     'AreaRequest',
     'AreaRequestStatus',
@@ -883,3 +884,35 @@ class PolicyKeeper(models.Model):
 
     def __str__(self):
         return str(self.user)
+
+
+class AreaFieldMode(models.TextChoices):
+    HIDDEN = 'hidden', _('Hidden')
+    READ = 'read', _('Read only')
+    WRITE = 'write', _('Read and write')
+
+
+class AreaFieldRule(models.Model):
+    """
+    What a profile may do with one field of an object type: hidden, read only or read and write; for a custom field
+    the values may be limited to those that contain a text ("must include PRINTER"). A rule without a profile hides
+    the field from everybody in the area, owners included ("nobody sees it").
+    ``field`` is the name of a model field, or ``cf:<name>`` for a custom field.
+    """
+    area = models.ForeignKey(ProtectedArea, on_delete=models.CASCADE, related_name='field_rules')
+    profile = models.ForeignKey(AreaProfile, on_delete=models.CASCADE, null=True, blank=True,
+                                related_name='field_rules')
+    target = models.CharField(max_length=100, help_text='app_label.model')
+    field = models.CharField(max_length=150)
+    mode = models.CharField(max_length=10, choices=AreaFieldMode.choices, default=AreaFieldMode.WRITE)
+    contains = models.CharField(max_length=200, blank=True)
+
+    class Meta:
+        verbose_name = _('field rule')
+        verbose_name_plural = _('field rules')
+        ordering = ('target', 'field')
+        constraints = [models.UniqueConstraint(fields=('area', 'profile', 'target', 'field'),
+                                               name='userpin_area_field_rule_unique')]
+
+    def __str__(self):
+        return f'{self.target}.{self.field}: {self.mode}'
