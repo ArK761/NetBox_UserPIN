@@ -1,7 +1,9 @@
 {% extends 'generic/_base.html' %}
-{% load i18n %}
+{% load userpin_tags i18n %}
 {% block title %}{% trans "Access to a protected area" %}{% endblock %}
 {% block content %}
+{% pin_build %}
+<div class="text-center mb-3"><span class="badge text-bg-dark fs-6"><i class="mdi mdi-shield-lock"></i> {% trans "Protected by the User PIN plugin" %}</span></div>
 <div class="row justify-content-center">
   <div class="col-12 col-lg-7 col-xl-6">
     {% if deny %}

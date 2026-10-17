@@ -179,7 +179,7 @@ def rights_available(area):
 
 
 def right_label(area, right):
-    info = _registry.get(area.key) if area.plugin else None
+    info = _registry.get(area.key) if area is not None and area.plugin else None
     if info and right in info['rights']:
         return info['rights'][right]
     return {'view': _('View'), 'add': _('Add'), 'change': _('Change'), 'delete': _('Delete')}.get(right, right)

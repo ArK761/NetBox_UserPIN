@@ -95,7 +95,7 @@ def _request_context(request, area, right, target):
     rights = areas.rights_available(area) if area else list(areas.GENERIC_RIGHTS)
     return {
         'target': target or '', 'target_label': _target_label(target) if target else '',
-        'right': right, 'rights': [(r, areas.right_label(area, r) if area else r.capitalize()) for r in rights],
+        'right': right, 'rights': [(r, areas.right_label(area, r)) for r in rights],
     }
 
 

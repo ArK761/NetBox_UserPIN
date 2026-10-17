@@ -5318,6 +5318,9 @@ msgstr ""
 msgid "What do you need?"
 msgstr "Čo potrebuješ?"
 
+msgid "Protected by the User PIN plugin"
+msgstr "Chránené pluginom User PIN"
+
 #~ msgid ""
 #~ "There is no other administrator or delegate with PIN and 2FA who could "
 #~ "confirm."
