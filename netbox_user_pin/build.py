@@ -12,7 +12,6 @@ def plugin_build():
     version, commit = __version__, ''
     try:
         distribution = metadata.distribution('netbox-user-pin')
-        version = distribution.version or version
         direct_url = distribution.read_text('direct_url.json')
         commit = (json.loads(direct_url).get('vcs_info') or {}).get('commit_id', '') if direct_url else ''
     except Exception:
