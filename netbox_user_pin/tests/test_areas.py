@@ -394,7 +394,7 @@ class PagesTest(AreaTestCase):
     def test_create_area_from_the_page(self):
         admin_login(self.client, self.master)
         response = self.client.post(reverse('plugins:netbox_user_pin:areas'), {
-            'action': 'create', 'name': 'IPAM', 'targets': 'ipam', 'max_hours': 12})
+            'action': 'create', 'name': 'IPAM', 'target': 'ipam', 'max_hours': 12})
         self.assertEqual(response.status_code, 302, response.content[:300])
         self.assertTrue(ProtectedArea.objects.filter(name='IPAM', targets=['ipam']).exists())
 
@@ -528,3 +528,119 @@ class ProfileViewTest(AreaTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'The profile was not saved')
         self.assertContains(response, 'Choose at least one right.')
+
+
+class DefaultDenyTest(AreaTestCase):
+    def setUp(self):
+        super().setUp()
+        self.keeper = User.objects.create_superuser('keeper', 'k@example.com', 'x')  # exempt from the default deny; NetBox decides for it
+        service.set_pin(self.keeper, GOOD_PIN)
+        enable_2fa(self.keeper)
+        self.plain = User.objects.create_user('plain', 'p@example.com')
+
+    def add_keeper(self):
+        return areas.add_keeper(self.keeper, self.master)
+
+    def test_keeper_needs_pin_and_2fa(self):
+        with self.assertRaises(ValidationError):
+            areas.add_keeper(self.plain, self.master)
+        self.add_keeper()
+
+    def test_only_keepers_manage_keepers_and_the_switch(self):
+        with self.assertRaises(ValidationError):
+            areas.set_default_deny(True, self.master)  # no keeper yet
+        self.add_keeper()
+        with self.assertRaises(PermissionDenied):
+            areas.set_default_deny(True, self.master)  # the master is no keeper
+        with self.assertRaises(PermissionDenied):
+            areas.add_keeper(self.plain, self.master)
+        areas.set_default_deny(True, self.keeper)
+        self.assertTrue(PinSettings.load().default_deny)
+        areas.set_default_deny(False, self.keeper)
+        self.assertFalse(PinSettings.load().default_deny)
+
+    def test_the_last_keeper_stays_and_cannot_drop_2fa(self):
+        self.add_keeper()
+        with self.assertRaises(ValidationError):
+            areas.remove_keeper(self.keeper, self.keeper)
+        with self.assertRaises(ValidationError):
+            service.disable_totp(self.keeper)
+        other = User.objects.create_user('keeper2', 'k2@example.com')
+        service.set_pin(other, GOOD_PIN)
+        enable_2fa(other)
+        areas.add_keeper(other, self.keeper)
+        areas.remove_keeper(self.keeper, other)  # another keeper takes over
+        self.assertEqual([k.username for k in areas.keepers()], ['keeper2'])
+
+    def test_what_no_area_allows_is_denied_except_for_keepers(self):
+        self.add_keeper()
+        areas.set_default_deny(True, self.keeper)
+        self.login(self.appadmin)
+        response = self.client.get('/dcim/sites/')
+        self.assertContains(response, 'Access denied', status_code=403)
+        self.assertEqual(self.client.get('/api/dcim/sites/', HTTP_ACCEPT='application/json').status_code, 403)
+        self.assertEqual(self.client.get('/user/profile/').status_code, 200)  # own account stays open
+        self.assertEqual(self.client.get('/user/notifications/').status_code, 200)
+        self.login(self.keeper)
+        self.assertEqual(self.client.get('/dcim/sites/').status_code, 200)  # exempt
+        self.client.logout()
+        self.assertEqual(self.client.get('/login/').status_code, 200)
+
+    def test_areas_still_decide_inside_their_objects_while_default_deny_is_on(self):
+        area = self.make_area(targets=('dcim.site',))
+        self.add_keeper()
+        areas.set_default_deny(True, self.keeper)
+        self.login(self.appadmin)
+        self.assertEqual(self.client.get('/dcim/sites/').status_code, 403)
+        areas.grant_access(area, self.appadmin, self.profile(area), None, self.owner1)
+        self.assertEqual(self.client.get('/dcim/sites/').status_code, 200)
+        self.assertEqual(self.client.get('/dcim/devices/').status_code, 403)  # not in any area: default deny
+
+    def test_off_means_off_and_the_command_can_switch_it_off(self):
+        from io import StringIO
+
+        from django.core.management import call_command
+        self.add_keeper()
+        areas.set_default_deny(True, self.keeper)
+        out = StringIO()
+        call_command('userpin_default_deny', '--off', stdout=out)
+        self.assertFalse(PinSettings.load().default_deny)
+        areas.clear_cache()
+        self.login(self.appadmin)
+        self.assertEqual(self.client.get('/dcim/sites/').status_code, 200)
+        call_command('userpin_default_deny', stdout=out)
+        self.assertIn('off', out.getvalue())
+
+    def test_keepers_page_actions(self):
+        admin_login(self.client, self.master)
+        url = reverse('plugins:netbox_user_pin:areas')
+        response = self.client.post(url, {'action': 'keeper-add', 'user': self.keeper.pk})
+        self.assertEqual(response.status_code, 302, response.content[:300])
+        self.assertEqual([k.username for k in areas.keepers()], ['keeper'])
+
+
+class TargetsAndToolsTest(AreaTestCase):
+    def test_targets_are_added_and_removed_one_by_one(self):
+        area = self.make_area(owners=False)
+        admin_login(self.client, self.master)
+        url = reverse('plugins:netbox_user_pin:area', kwargs={'pk': area.pk})
+        self.assertEqual(self.client.post(url, {'action': 'target-add', 'target': 'dcim.site'}).status_code, 302)
+        area.refresh_from_db()
+        self.assertEqual(area.targets, ['dcim.device', 'dcim.site'])
+        self.client.post(url, {'action': 'target-remove', 'target': 'dcim.device'})
+        area.refresh_from_db()
+        self.assertEqual(area.targets, ['dcim.site'])
+        with self.assertRaises(ValidationError):
+            areas.remove_target(area, 'dcim.site', self.master)  # the last one stays
+        with self.assertRaises(ValidationError):
+            areas.add_target(area, 'netbox_user_pin', self.master)
+
+    def test_search_and_sort_helpers_are_on_the_pages(self):
+        area = self.make_area()
+        admin_login(self.client, self.owner1)
+        html = self.client.get(reverse('plugins:netbox_user_pin:areas')).content.decode()
+        self.assertIn('pin-filter', html)
+        self.assertIn('pin-sortable', html)
+        html = self.client.get(reverse('plugins:netbox_user_pin:area', kwargs={'pk': area.pk})).content.decode()
+        self.assertIn('pin-searchable', html)
+        self.assertIn('table_tools'.replace('table_tools', 'pin-sortable'), html)

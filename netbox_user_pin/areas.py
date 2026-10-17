@@ -36,7 +36,7 @@ from django.utils.translation import gettext as _
 
 from . import roles, service
 from .models import (
-    AreaGrant, AreaOwner, AreaProfile, AreaRequest, AreaRequestStatus, PinEventAction, ProtectedArea,
+    AreaGrant, AreaOwner, AreaProfile, AreaRequest, AreaRequestStatus, PinEventAction, PolicyKeeper, ProtectedArea,
 )
 
 logger = logging.getLogger('netbox_user_pin')
@@ -54,7 +54,12 @@ CACHE_SECONDS = 5
 EVENT_TYPE = 'netbox_user_pin_area_request'
 
 _registry = {}
-_cache = {'at': 0.0, 'areas': None}
+_cache = {'at': 0.0, 'areas': None, 'deny': False, 'keepers': frozenset()}
+# Never refused by the default deny: what every logged-in user needs to work with their own account in NetBox.
+DEFAULT_DENY_EXEMPT = frozenset({
+    'extras.bookmark', 'extras.notification', 'extras.notificationgroup', 'extras.subscription', 'extras.dashboard',
+    'users.userconfig', 'users.token',
+})
 
 
 #
@@ -120,12 +125,45 @@ def _load_active():
     return active
 
 
+def _refresh():
+    _cache['areas'] = _load_active()
+    try:
+        keepers = frozenset(PolicyKeeper.objects.filter(user__is_active=True).values_list('user_id', flat=True))
+        _cache['deny'] = bool(service.get_settings().default_deny and keepers)
+        _cache['keepers'] = keepers
+    except DatabaseError:
+        _cache['deny'], _cache['keepers'] = False, frozenset()
+    _cache['at'] = time.monotonic()
+
+
 def active_areas():
-    now = time.monotonic()
-    if _cache['areas'] is None or now - _cache['at'] > CACHE_SECONDS:
-        _cache['areas'] = _load_active()
-        _cache['at'] = now
+    if _cache['areas'] is None or time.monotonic() - _cache['at'] > CACHE_SECONDS:
+        _refresh()
     return _cache['areas']
+
+
+def default_deny_active():
+    active_areas()
+    return _cache['deny']
+
+
+def protection_on():
+    """Does anything protect (an active area or the default deny)?"""
+    return bool(active_areas()) or _cache['deny']
+
+
+def is_keeper(user):
+    active_areas()
+    return bool(getattr(user, 'is_authenticated', False) and user.pk in _cache['keepers'])
+
+
+def default_deny_blocks(user, app_label, model, package=None):
+    """Is this object type refused by "deny everything not allowed" (it is in no active area)?"""
+    if not default_deny_active() or app_label in NEVER or package in NEVER:
+        return False
+    if f'{app_label}.{model}' in DEFAULT_DENY_EXEMPT:
+        return False
+    return not is_keeper(user)
 
 
 def targets_of(area):
@@ -633,6 +671,99 @@ def reset_owners(area, new_owners, actor_label='server command'):
     service.log_event(PinEventAction.AREA_CHANGED, scope=area.key,
                       detail=f'OWNERS RESET by {actor_label}: {", ".join(u.username for u in new_owners)}')
     clear_cache()
+
+
+def keepers():
+    return [k.user for k in PolicyKeeper.objects.select_related('user').filter(user__is_active=True)]
+
+
+def can_manage_keepers(actor):
+    """Keepers; as long as there are none, CORE / the master appoint the first one."""
+    if PolicyKeeper.objects.exists():
+        return is_keeper(actor)
+    return roles.is_core(actor)
+
+
+def add_keeper(user, actor, request=None):
+    if not can_manage_keepers(actor):
+        raise PermissionDenied
+    if not user.is_active:
+        raise ValidationError(_('The account is not active.'))
+    if not (service.has_pin(user) and service.has_2fa(user)):
+        raise ValidationError(_('%(user)s must have a PIN and 2FA set up first (My PIN).') % {'user': user.username})
+    _ensure_pin_allowed(user, actor, request)
+    keeper, created = PolicyKeeper.objects.get_or_create(user=user, defaults={'added_by_name': actor.username})
+    if created:
+        service.log_event(PinEventAction.KEEPER_ADDED, user=user, actor=actor, request=request)
+        service.send_user_mail(user, _('You are a protection keeper'), _(
+            'You were appointed a protection keeper: you can switch "deny everything not allowed" on and off and '
+            'hand the duty over. You cannot remove your 2FA or resign alone; another keeper has to take over.'),
+            request=request)
+        clear_cache()
+    return keeper
+
+
+def remove_keeper(user, actor, request=None):
+    """Only a keeper removes a keeper; the last one stays, and nobody leaves alone (another keeper must remain)."""
+    if not is_keeper(actor):
+        raise PermissionDenied
+    keeper = PolicyKeeper.objects.filter(user=user).first()
+    if keeper is None:
+        return
+    if PolicyKeeper.objects.count() <= 1:
+        raise ValidationError(_('The last keeper cannot be removed. Appoint another keeper first.'))
+    keeper.delete()
+    service.log_event(PinEventAction.KEEPER_REMOVED, user=user, actor=actor, request=request)
+    clear_cache()
+
+
+def set_default_deny(on, actor, request=None):
+    settings = service.get_settings()
+    if bool(on) == settings.default_deny:
+        return
+    if not PolicyKeeper.objects.exists():
+        raise ValidationError(_('Appoint a protection keeper first (with PIN and 2FA).'))
+    if not is_keeper(actor):
+        raise PermissionDenied
+    settings.default_deny = bool(on)
+    settings.save()
+    service.log_event(PinEventAction.DENY_ENABLED if on else PinEventAction.DENY_DISABLED, actor=actor,
+                      request=request)
+    clear_cache()
+
+
+def add_target(area, target, actor, request=None):
+    """Add one app / object type to the area (chosen from the list)."""
+    if area.plugin:
+        raise ValidationError(_('The objects of a plugin area are set by the plugin.'))
+    if not _core_or_owner(actor, area):
+        raise PermissionDenied
+    (target,) = parse_targets(target)
+    if target in (area.targets or []):
+        return False
+    area.targets = list(area.targets or []) + [target]
+    area.save()
+    _log(PinEventAction.AREA_CHANGED, area, actor, request=request, detail=f'object added: {target}')
+    clear_cache()
+    return True
+
+
+def remove_target(area, target, actor, request=None):
+    if area.plugin:
+        raise ValidationError(_('The objects of a plugin area are set by the plugin.'))
+    if not _core_or_owner(actor, area):
+        raise PermissionDenied
+    targets = list(area.targets or [])
+    if target not in targets:
+        return False
+    if len(targets) <= 1:
+        raise ValidationError(_('An area needs at least one protected object type.'))
+    targets.remove(target)
+    area.targets = targets
+    area.save()
+    _log(PinEventAction.AREA_CHANGED, area, actor, request=request, detail=f'object removed: {target}')
+    clear_cache()
+    return True
 
 
 def denied_response(request, area, right='view'):

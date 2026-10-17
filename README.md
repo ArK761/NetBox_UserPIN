@@ -289,6 +289,14 @@ user            asks for access with a reason (+ what exactly) → owners grant 
   automatically (unless an administrator denied it) and **unlocks the PIN to enter** the area.
 - **Requests** need a reason (and optionally what exactly is needed); the owners get a bell notification and an
   e-mail with both. Nobody decides about his own request; owners cannot grant themselves anything.
+- **Several areas add up**: a user's rights are the union of what the areas grant him (no order of rules; whoever is
+  not granted anything is denied). Lists can be sorted by ID or alphabetically and searched; the drop-downs for
+  users have a search box. Object types are added one by one from a grouped list (like in NetBoxSelf Audit).
+- **Deny everything not allowed** (Protected areas page): what no active area covers is denied to everybody
+  except the **protection keepers**. It is switched on by hand and only when a keeper exists. A keeper needs a PIN
+  and 2FA, is exempt from the deny (NetBox's own permissions apply to him), cannot turn 2FA off and cannot leave
+  alone – another keeper has to take over; the last keeper cannot be removed. Login, the own profile, bookmarks,
+  notifications and the user's own preferences stay open. Server emergency: `manage.py userpin_default_deny --off`.
 - **Bootstrap**: until owners are appointed only superusers have access, so an area cannot lock everybody out.
   Once owners exist the master cannot change them, grant access or deactivate the area. The last owner cannot be
   removed; the protection cannot be switched off while areas with owners are active.

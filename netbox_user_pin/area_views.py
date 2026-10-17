@@ -9,7 +9,10 @@ from django.utils.translation import gettext as _
 from django.views import View
 
 from . import areas, roles, service
-from .forms import AreaDecideForm, AreaForm, AreaGrantForm, AreaOwnerForm, AreaProfileForm, AreaRequestForm
+from .forms import (
+    AreaDecideForm, AreaForm, AreaGrantForm, AreaOwnerForm, AreaProfileForm, AreaRequestForm, AreaTargetForm,
+    KeeperForm,
+)
 from .mixins import PinRequiredMixin, step_up_gate
 from .models import (
     AreaGrant, AreaProfile, AreaRequest, AreaRequestStatus, PinEventAction, ProtectedArea,
@@ -22,6 +25,19 @@ __all__ = ('AreaListView', 'AreaRequestView', 'AreaView', 'MyAccessView')
 class AreaViewMixin(LoginRequiredMixin, PinRequiredMixin):
     """Logged in, allowed to use a PIN and unlocked."""
     pin_scope = ADMIN_SCOPE
+
+
+def _target_label(target):
+    """'dcim.device' -> 'DCIM › Device'; 'dcim' -> 'DCIM (everything)'."""
+    from django.apps import apps
+    app_label, _dot, model = target.partition('.')
+    try:
+        config = apps.get_app_config(app_label)
+        if not model:
+            return _('%(app)s (everything)') % {'app': config.verbose_name}
+        return f'{config.verbose_name} › {str(apps.get_model(app_label, model)._meta.verbose_name).capitalize()}'
+    except LookupError:
+        return target
 
 
 def _status(area):
@@ -52,8 +68,11 @@ class AreaListView(AreaViewMixin, View):
                 'mine': areas.is_owner(request.user, area), 'targets': areas.targets_of(area),
             })
         return render(request, self.template_name, {
-            'rows': rows, 'is_core': core, 'form': form or AreaForm(),
+            'rows': rows, 'is_core': core, 'form': form or AreaForm(create=True),
             'waiting': areas.pending_requests_for(request.user).count(),
+            'deny_on': service.get_settings().default_deny, 'keepers': areas.keepers(),
+            'is_keeper': areas.is_keeper(request.user), 'can_keepers': areas.can_manage_keepers(request.user),
+            'keeper_form': KeeperForm(),
             'settings': service.get_settings(), **_step_up_context(request),
         })
 
@@ -63,17 +82,39 @@ class AreaListView(AreaViewMixin, View):
     def post(self, request):
         if (response := step_up_gate(request, 'full')) is not None:
             return response
-        if request.POST.get('action') != 'create' or not roles.is_core(request.user):
-            raise PermissionDenied
-        form = AreaForm(request.POST)
-        if not form.is_valid():
-            return self._render(request, form=form)
-        data = form.cleaned_data
-        area = areas.create_area(data['name'], data['targets'], [], request.user, data['description'],
-                                 data['max_hours'], request=request)
-        messages.success(request, _('Area "{name}" created. Appoint its owners now - until then only the master '
-                                    'has access to it.').format(name=area.name))
-        return redirect('plugins:netbox_user_pin:area', pk=area.pk)
+        action = request.POST.get('action')
+        from django.contrib.auth import get_user_model
+        try:
+            if action == 'create':
+                if not roles.is_core(request.user):
+                    raise PermissionDenied
+                form = AreaForm(request.POST, create=True)
+                if not form.is_valid():
+                    return self._render(request, form=form)
+                data = form.cleaned_data
+                area = areas.create_area(data['name'], areas.parse_targets(data['target']), [], request.user,
+                                         data['description'], data['max_hours'], request=request)
+                messages.success(request, _('Area "{name}" created. Appoint its owners now - until then only the '
+                                            'master has access to it.').format(name=area.name))
+                return redirect('plugins:netbox_user_pin:area', pk=area.pk)
+            if action == 'keeper-add':
+                form = KeeperForm(request.POST)
+                if form.is_valid():
+                    areas.add_keeper(form.cleaned_data['user'], request.user, request=request)
+                    messages.success(request, _('Protection keeper appointed.'))
+            elif action == 'keeper-remove':
+                areas.remove_keeper(get_object_or_404(get_user_model(), pk=request.POST.get('pk')), request.user,
+                                    request=request)
+                messages.success(request, _('Protection keeper removed.'))
+            elif action in ('deny-on', 'deny-off'):
+                areas.set_default_deny(action == 'deny-on', request.user, request=request)
+                messages.success(request, _('Everything not allowed is now denied.') if action == 'deny-on'
+                                 else _('"Deny everything not allowed" is switched off.'))
+            else:
+                raise PermissionDenied
+        except ValidationError as exc:
+            _errors(request, exc)
+        return redirect('plugins:netbox_user_pin:areas')
 
 
 class AreaView(AreaViewMixin, View):
@@ -100,7 +141,9 @@ class AreaView(AreaViewMixin, View):
             'pending': [(r, AreaDecideForm(area=area)) for r in pending],
             'area_form': forms.get('area_form') or AreaForm(plugin=area.plugin, initial={
                 'name': area.name, 'description': area.description, 'max_hours': area.max_hours,
-                'enabled': area.enabled, 'targets': list(area.targets or [])}),
+                'enabled': area.enabled}),
+            'target_form': AreaTargetForm(exclude=areas.targets_of(area)),
+            'target_labels': [(t, _target_label(t)) for t in areas.targets_of(area)],
             'owner_form': AreaOwnerForm(), 'profile_form': forms.get('profile_form') or AreaProfileForm(area=area),
             'grant_form': forms.get('grant_form') or AreaGrantForm(area=area),
             'rights': [(r, areas.right_label(area, r)) for r in areas.rights_available(area)],
@@ -124,13 +167,22 @@ class AreaView(AreaViewMixin, View):
                     return self._render(request, area, area_form=form)
                 data = form.cleaned_data
                 areas.update_area(area, request.user, name=data['name'], description=data['description'],
-                                  targets=data.get('targets'), enabled=data.get('enabled'),
-                                  max_hours=data['max_hours'], request=request)
+                                  enabled=data.get('enabled'), max_hours=data['max_hours'], request=request)
                 messages.success(request, _('Saved.'))
             elif action == 'delete':
                 areas.delete_area(area, request.user, request=request)
                 messages.success(request, _('Area deleted.'))
                 return redirect('plugins:netbox_user_pin:areas')
+            elif action == 'target-add':
+                form = AreaTargetForm(request.POST, exclude=areas.targets_of(area))
+                if form.is_valid():
+                    areas.add_target(area, form.cleaned_data['target'], request.user, request=request)
+                    messages.success(request, _('Object type added.'))
+                else:
+                    messages.error(request, _('Choose an object type.'))
+            elif action == 'target-remove':
+                areas.remove_target(area, request.POST.get('target', ''), request.user, request=request)
+                messages.success(request, _('Object type removed.'))
             elif action == 'owner-add':
                 form = AreaOwnerForm(request.POST)
                 if form.is_valid():

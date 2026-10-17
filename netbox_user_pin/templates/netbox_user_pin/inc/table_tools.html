@@ -1,0 +1,64 @@
+{% load i18n %}
+<script>
+  (function () {
+    var SEARCH = "{% trans 'Search…' %}";
+    // live search of a table: <input class="pin-filter" data-target="#table-id">
+    document.querySelectorAll('input.pin-filter').forEach(function (input) {
+      input.placeholder = input.placeholder || SEARCH;
+      input.addEventListener('input', function () {
+        var query = input.value.toLowerCase();
+        document.querySelectorAll(input.dataset.target + ' tbody tr').forEach(function (row) {
+          row.hidden = !!query && row.textContent.toLowerCase().indexOf(query) < 0;
+        });
+      });
+    });
+    // sortable columns: table.pin-sortable, <th data-sort="text|num"> (sort value: data-v of the cell or its text)
+    document.querySelectorAll('table.pin-sortable').forEach(function (table) {
+      table.querySelectorAll('th[data-sort]').forEach(function (th) {
+        th.style.cursor = 'pointer';
+        var arrow = document.createElement('span');
+        arrow.className = 'text-secondary ms-1';
+        arrow.textContent = '⇅';
+        th.appendChild(arrow);
+        var ascending = true;
+        th.addEventListener('click', function () {
+          var body = table.tBodies[0], rows = Array.prototype.slice.call(body.rows), column = th.cellIndex;
+          var numeric = th.dataset.sort === 'num';
+          var value = function (row) {
+            var cell = row.cells[column], text = (cell.dataset.v || cell.textContent).trim();
+            return numeric ? parseFloat(text) || 0 : text.toLowerCase();
+          };
+          rows.sort(function (a, b) {
+            var x = value(a), y = value(b);
+            return (x < y ? -1 : x > y ? 1 : 0) * (ascending ? 1 : -1);
+          });
+          rows.forEach(function (row) { body.appendChild(row); });
+          table.querySelectorAll('th span').forEach(function (s) { s.textContent = '⇅'; });
+          arrow.textContent = ascending ? '▲' : '▼';
+          ascending = !ascending;
+        });
+      });
+    });
+    // searchable drop-downs: select.pin-searchable gets a search box that narrows the options while typing
+    document.querySelectorAll('select.pin-searchable').forEach(function (select) {
+      var box = document.createElement('input');
+      box.type = 'search';
+      box.className = 'form-control form-control-sm mb-1';
+      box.placeholder = SEARCH;
+      select.parentNode.insertBefore(box, select);
+      var all = Array.prototype.slice.call(select.options).map(function (o) { return {value: o.value, text: o.text}; });
+      box.addEventListener('input', function () {
+        var query = box.value.toLowerCase(), selected = select.value;
+        select.innerHTML = '';
+        all.forEach(function (item) {
+          if (!query || item.value === '' || item.value === selected || item.text.toLowerCase().indexOf(query) >= 0) {
+            var option = document.createElement('option');
+            option.value = item.value; option.text = item.text; option.selected = item.value === selected;
+            select.appendChild(option);
+          }
+        });
+        if (query && select.options.length > 1 && !select.value) { select.selectedIndex = 1; }
+      });
+    });
+  })();
+</script>

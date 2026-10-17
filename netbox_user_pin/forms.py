@@ -7,6 +7,8 @@ from .models import PinSettings
 
 __all__ = (
     'AreaForm',
+    'AreaTargetForm',
+    'KeeperForm',
     'AreaRequestForm',
     'AreaGrantForm',
     'AreaDecideForm',
@@ -454,34 +456,57 @@ def target_choices():
     return groups
 
 
+SEARCHABLE = {'class': 'form-select pin-searchable'}
+
+
 class AreaForm(forms.Form):
     name = forms.CharField(label=_('Name'), max_length=100, widget=forms.TextInput(attrs={'class': 'form-control'}))
     description = forms.CharField(label=_('Description'), max_length=200, required=False,
                                   widget=forms.TextInput(attrs={'class': 'form-control'}))
-    targets = forms.MultipleChoiceField(
-        label=_('Protected apps and object types'), choices=(),
-        widget=forms.SelectMultiple(attrs={'class': 'form-select', 'size': 14}),
-        help_text=_('Choose a whole app or single object types (Ctrl / Shift for several). Only what you choose is '
-                    'protected; the rights and the rows each profile sees are set per profile.'),
+    target = forms.ChoiceField(
+        label=_('Protected object type'), choices=(),
+        widget=forms.Select(attrs={'class': 'form-select'}),
+        help_text=_('The first object type of the area; more are added on the area page.'),
     )
     max_hours = forms.IntegerField(label=_('Longest temporary access (hours)'), min_value=1, max_value=24 * 30,
                                    initial=24, widget=forms.NumberInput(attrs={'class': 'form-control'}))
     enabled = forms.BooleanField(label=_('Active'), required=False, initial=True,
                                  widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}))
 
-    def __init__(self, *args, plugin=False, **kwargs):
+    def __init__(self, *args, plugin=False, create=False, **kwargs):
         super().__init__(*args, **kwargs)
         self.plugin = plugin
-        if plugin:  # targets and the switch of a plugin area belong to the plugin
-            del self.fields['targets']
+        if create:
+            self.fields['target'].choices = [('', _('— choose the object type —'))] + target_choices()
             del self.fields['enabled']
-        else:
-            self.fields['targets'].choices = target_choices()
+        else:  # the objects of an existing area are added / removed one by one on its page
+            del self.fields['target']
+            if plugin:  # the switch of a plugin area belongs to the plugin
+                del self.fields['enabled']
+
+
+class AreaTargetForm(forms.Form):
+    target = forms.ChoiceField(label=_('Add an object type'), choices=(),
+                               widget=forms.Select(attrs={'class': 'form-select'}))
+
+    def __init__(self, *args, exclude=(), **kwargs):
+        super().__init__(*args, **kwargs)
+        groups = [(label, [item for item in items if item[0] not in exclude]) for label, items in target_choices()]
+        self.fields['target'].choices = [('', _('— choose the object type —'))] + [g for g in groups if g[1]]
+
+
+class KeeperForm(forms.Form):
+    user = UserChoiceField(queryset=get_user_model().objects.none(), label=_('User'), with_email=True,
+                           widget=forms.Select(attrs=SEARCHABLE))
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['user'].queryset = get_user_model().objects.filter(is_active=True).order_by('username')
 
 
 class AreaOwnerForm(forms.Form):
     user = UserChoiceField(queryset=get_user_model().objects.none(), label=_('User'), with_email=True,
-                           widget=forms.Select(attrs={'class': 'form-select'}))
+                           widget=forms.Select(attrs=SEARCHABLE))
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -535,7 +560,7 @@ class AreaDecideForm(_AccessChoice):
 
 class AreaGrantForm(_AccessChoice):
     user = UserChoiceField(queryset=get_user_model().objects.none(), label=_('User'), with_email=True,
-                           widget=forms.Select(attrs={'class': 'form-select'}))
+                           widget=forms.Select(attrs=SEARCHABLE))
 
     def __init__(self, *args, area=None, **kwargs):
         super().__init__(*args, area=area, **kwargs)

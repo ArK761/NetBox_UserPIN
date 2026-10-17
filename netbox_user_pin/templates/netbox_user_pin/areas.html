@@ -7,15 +7,41 @@
 {% include 'netbox_user_pin/inc/step_up_bar.html' %}
 {% if waiting %}<div class="alert alert-warning"><i class="mdi mdi-key-alert"></i> {% blocktrans count n=waiting %}{{ n }} access request is waiting for your decision.{% plural %}{{ n }} access requests are waiting for your decision.{% endblocktrans %}</div>{% endif %}
 {% if not settings.areas_enabled %}<div class="alert alert-secondary"><div>{% trans "The protection of your own areas is off (Settings → Protected areas). Areas of plugins with a PIN integration protect as soon as the plugin's integration is switched on." %}</div></div>{% endif %}
+<div class="card {% if deny_on %}border-danger{% endif %}">
+  <h2 class="card-header"><i class="mdi mdi-shield-off{% if not deny_on %}-outline{% endif %}"></i> {% trans "Deny everything not allowed" %}
+    <span class="badge text-bg-{% if deny_on %}red{% else %}secondary{% endif %} ms-2">{% if deny_on %}{% trans "ON" %}{% else %}{% trans "off" %}{% endif %}</span></h2>
+  <div class="card-body">
+    <p class="text-secondary">{% trans "When it is on, whatever no protected area allows is denied to everybody except the protection keepers (they are exempt, so nobody locks himself out). Login and the own profile stay open. It can only be switched on when a keeper with PIN + 2FA exists; the keepers switch it on and off and hand the duty over." %}</p>
+    <h6>{% trans "Protection keepers" %}</h6>
+    <ul class="list-group list-group-flush mb-3">
+      {% for u in keepers %}
+      <li class="list-group-item d-flex justify-content-between align-items-center">{{ u.username }}
+        {% if is_keeper and keepers|length > 1 %}<form method="post" class="d-inline" data-step-up="full">{% csrf_token %}<input type="hidden" name="pk" value="{{ u.pk }}"><input type="hidden" name="action" value="keeper-remove"><button class="btn btn-sm btn-outline-danger" type="submit">{% trans "Remove" %}</button></form>{% endif %}</li>
+      {% empty %}<li class="list-group-item text-secondary">{% trans "No keeper yet." %}</li>{% endfor %}
+    </ul>
+    {% if can_keepers %}
+    <form method="post" class="d-flex gap-2 align-items-start mb-3" data-step-up="full">{% csrf_token %}<input type="hidden" name="action" value="keeper-add"><div class="flex-grow-1">{{ keeper_form.user }}</div><button class="btn btn-primary" type="submit">{% trans "Appoint keeper" %}</button></form>
+    <p class="small text-secondary">{% trans "A keeper needs a PIN and 2FA, cannot turn 2FA off and cannot leave alone: another keeper has to take over." %}</p>
+    {% endif %}
+    {% if is_keeper %}
+    <form method="post" data-step-up="full">{% csrf_token %}
+      {% if deny_on %}<button class="btn btn-outline-secondary" name="action" value="deny-off" type="submit">{% trans "Switch off" %}</button>
+      {% else %}<button class="btn btn-danger" name="action" value="deny-on" type="submit">{% trans "Switch on: deny everything not allowed" %}</button>{% endif %}
+    </form>
+    {% endif %}
+  </div>
+</div>
 <div class="row">
   <div class="col-12 {% if is_core %}col-xl-8{% endif %}">
     <div class="card">
       <h2 class="card-header">{% trans "Protected areas" %}</h2>
-      <table class="table table-hover">
-        <thead><tr><th>{% trans "Area" %}</th><th>{% trans "Protects" %}</th><th>{% trans "Owners" %}</th><th>{% trans "Access" %}</th><th></th></tr></thead>
+      <div class="card-body pb-0"><input type="search" class="form-control form-control-sm pin-filter" data-target="#pin-areas"></div>
+      <table class="table table-hover pin-sortable" id="pin-areas">
+        <thead><tr><th data-sort="num">#</th><th data-sort="text">{% trans "Area" %}</th><th>{% trans "Protects" %}</th><th data-sort="text">{% trans "Owners" %}</th><th data-sort="num">{% trans "Access" %}</th><th></th></tr></thead>
         <tbody>
           {% for row in rows %}
             <tr>
+              <td class="text-secondary">{{ row.area.pk }}</td>
               <td><span class="pin-dot {% if row.status == 'ok' %}ok{% else %}warn{% endif %}" title="{{ row.status_label }}"></span><a href="{% url 'plugins:netbox_user_pin:area' pk=row.area.pk %}"><strong>{{ row.area.name }}</strong></a>{% if row.area.plugin %} <span class="badge text-bg-cyan">{% trans "plugin" %}</span>{% endif %}<div class="small text-secondary">{{ row.status_label }}</div></td>
               <td>{% for t in row.targets %}<code>{{ t }}</code> {% endfor %}</td>
               <td>{% for u in row.owners %}{{ u.username }}{% if not forloop.last %}, {% endif %}{% empty %}<span class="badge text-bg-orange">{% trans "none – only the master has access" %}</span>{% endfor %}{% if row.owners|length == 1 %} <span class="badge text-bg-orange" title="{% trans 'Appoint at least two owners' %}"><i class="mdi mdi-alert"></i></span>{% endif %}</td>
@@ -23,7 +49,7 @@
               <td class="text-end">{% if row.mine %}<span class="badge text-bg-purple">{% trans "you are an owner" %}</span>{% endif %} <a class="btn btn-sm btn-outline-primary" href="{% url 'plugins:netbox_user_pin:area' pk=row.area.pk %}">{% trans "Open" %}</a></td>
             </tr>
           {% empty %}
-            <tr><td colspan="5" class="text-secondary">{% trans "No areas." %}</td></tr>
+            <tr><td colspan="6" class="text-secondary">{% trans "No areas." %}</td></tr>
           {% endfor %}
         </tbody>
       </table>
@@ -38,7 +64,7 @@
         <form method="post" class="object-edit" data-step-up="full">{% csrf_token %}<input type="hidden" name="action" value="create">
           {% render_field form.name %}
           {% render_field form.description %}
-          {% render_field form.targets %}
+          {% render_field form.target %}
           {% render_field form.max_hours %}
           <div class="text-end"><button type="submit" class="btn btn-primary">{% trans "Create" %}</button></div>
         </form>
@@ -48,4 +74,5 @@
   </div>
   {% endif %}
 </div>
+{% include 'netbox_user_pin/inc/table_tools.html' %}
 {% endblock %}

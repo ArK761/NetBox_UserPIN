@@ -4906,6 +4906,163 @@ msgstr "Prístup spravuje:"
 msgid "The profile was not saved:"
 msgstr "Profil sa neuložil:"
 
+msgid "%(user)s must have a PIN and 2FA set up first (My PIN)."
+msgstr "%(user)s musí mať najprv nastavený PIN a 2FA (Môj PIN)."
+
+msgid "You are a protection keeper"
+msgstr "Ste správca ochrany"
+
+msgid ""
+"You were appointed a protection keeper: you can switch \"deny everything not"
+" allowed\" on and off and hand the duty over. You cannot remove your 2FA or "
+"resign alone; another keeper has to take over."
+msgstr ""
+"Boli ste vymenovaný za správcu ochrany: môžete zapínať a vypínať „zakázať "
+"všetko, čo nie je povolené“ a odovzdať túto povinnosť. 2FA si nemôžete "
+"zrušiť ani sa vzdať sám; musí vás nahradiť iný správca."
+
+msgid "The last keeper cannot be removed. Appoint another keeper first."
+msgstr "Posledného správcu nemožno odobrať. Najprv vymenujte iného správcu."
+
+msgid "Appoint a protection keeper first (with PIN and 2FA)."
+msgstr "Najprv vymenujte správcu ochrany (s PINom a 2FA)."
+
+msgid "The objects of a plugin area are set by the plugin."
+msgstr "Objekty oblasti pluginu určuje plugin."
+
+msgid "An area needs at least one protected object type."
+msgstr "Oblasť potrebuje aspoň jeden chránený typ objektu."
+
+msgid "%(app)s (everything)"
+msgstr "%(app)s (všetko)"
+
+msgid "Protection keeper appointed."
+msgstr "Správca ochrany vymenovaný."
+
+msgid "Protection keeper removed."
+msgstr "Správca ochrany odobraný."
+
+msgid "Everything not allowed is now denied."
+msgstr "Všetko, čo nie je povolené, je teraz zakázané."
+
+msgid "\"Deny everything not allowed\" is switched off."
+msgstr "„Zakázať všetko, čo nie je povolené“ je vypnuté."
+
+msgid "Object type added."
+msgstr "Typ objektu pridaný."
+
+msgid "Choose an object type."
+msgstr "Vyberte typ objektu."
+
+msgid "Object type removed."
+msgstr "Typ objektu odobraný."
+
+msgid "Protected object type"
+msgstr "Chránený typ objektu"
+
+msgid "The first object type of the area; more are added on the area page."
+msgstr "Prvý typ objektu oblasti; ďalšie sa pridávajú na stránke oblasti."
+
+msgid "— choose the object type —"
+msgstr "— vyber typ objektu —"
+
+msgid "Add an object type"
+msgstr "Pridať typ objektu"
+
+msgid "Deny everything not allowed"
+msgstr "Zakázať všetko, čo nie je povolené"
+
+msgid ""
+"Everything that no protected area allows is denied to everybody except the "
+"protection keepers. Needs at least one keeper (PIN + 2FA)."
+msgstr ""
+"Všetko, čo nepovoľuje žiadna chránená oblasť, je zakázané pre všetkých okrem"
+" správcov ochrany. Vyžaduje aspoň jedného správcu (PIN + 2FA)."
+
+msgid "Protection keeper appointed"
+msgstr "Správca ochrany vymenovaný"
+
+msgid "Protection keeper removed"
+msgstr "Správca ochrany odobraný"
+
+msgid "Default deny switched on"
+msgstr "Zakázať všetko zapnuté"
+
+msgid "Default deny switched off"
+msgstr "Zakázať všetko vypnuté"
+
+msgid "protection keeper"
+msgstr "správca ochrany"
+
+msgid "protection keepers"
+msgstr "správcovia ochrany"
+
+msgid ""
+"A protection keeper cannot turn 2FA off. Another keeper has to take over "
+"first."
+msgstr ""
+"Správca ochrany nemôže vypnúť 2FA. Najprv ho musí nahradiť iný správca."
+
+msgid "ON"
+msgstr "ZAPNUTÉ"
+
+msgid "off"
+msgstr "vypnuté"
+
+msgid ""
+"When it is on, whatever no protected area allows is denied to everybody "
+"except the protection keepers (they are exempt, so nobody locks himself "
+"out). Login and the own profile stay open. It can only be switched on when a"
+" keeper with PIN + 2FA exists; the keepers switch it on and off and hand the"
+" duty over."
+msgstr ""
+"Keď je zapnuté, všetko, čo nepovoľuje žiadna chránená oblasť, je zakázané "
+"pre všetkých okrem správcov ochrany (tí sú výnimka, aby sa nikto nezamkol). "
+"Prihlásenie a vlastný profil ostávajú otvorené. Zapnúť sa dá, len keď "
+"existuje správca s PINom + 2FA; správcovia ho zapínajú, vypínajú a "
+"odovzdávajú povinnosť."
+
+msgid "Protection keepers"
+msgstr "Správcovia ochrany"
+
+msgid "No keeper yet."
+msgstr "Zatiaľ žiadny správca."
+
+msgid "Appoint keeper"
+msgstr "Vymenovať správcu"
+
+msgid ""
+"A keeper needs a PIN and 2FA, cannot turn 2FA off and cannot leave alone: "
+"another keeper has to take over."
+msgstr ""
+"Správca potrebuje PIN a 2FA, nemôže vypnúť 2FA a nemôže odísť sám: musí ho "
+"nahradiť iný správca."
+
+msgid "Switch off"
+msgstr "Vypnúť"
+
+msgid "Switch on: deny everything not allowed"
+msgstr "Zapnúť: zakázať všetko, čo nie je povolené"
+
+msgid "Protected objects"
+msgstr "Chránené objekty"
+
+msgid "Access denied"
+msgstr "Prístup zamietnutý"
+
+msgid ""
+"Everything that is not explicitly allowed is denied. No protected area gives"
+" you access to this."
+msgstr ""
+"Všetko, čo nie je výslovne povolené, je zakázané. Žiadna chránená oblasť vám"
+" k tomuto nedáva prístup."
+
+msgid "Protection keepers:"
+msgstr "Správcovia ochrany:"
+
+msgid "Search…"
+msgstr "Hľadať…"
+
 #~ msgid ""
 #~ "There is no other administrator or delegate with PIN and 2FA who could "
 #~ "confirm."

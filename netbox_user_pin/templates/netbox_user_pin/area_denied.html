@@ -4,6 +4,15 @@
 {% block content %}
 <div class="row justify-content-center">
   <div class="col-12 col-lg-7 col-xl-6">
+    {% if deny %}
+    <div class="card border-danger">
+      <h2 class="card-header"><i class="mdi mdi-shield-off"></i> {% trans "Access denied" %}</h2>
+      <div class="card-body">
+        <p>{% trans "Everything that is not explicitly allowed is denied. No protected area gives you access to this." %}</p>
+        {% if keepers %}<p class="text-secondary">{% trans "Protection keepers:" %} <strong>{% for u in keepers %}{{ u.username }}{% if not forloop.last %}, {% endif %}{% endfor %}</strong></p>{% endif %}
+      </div>
+    </div>
+    {% else %}
     <div class="card border-warning">
       <h2 class="card-header"><i class="mdi mdi-shield-lock"></i> {% trans "This area is protected" %}</h2>
       <div class="card-body">
@@ -22,6 +31,7 @@
         {% endif %}
       </div>
     </div>
+    {% endif %}
   </div>
 </div>
 {% endblock %}

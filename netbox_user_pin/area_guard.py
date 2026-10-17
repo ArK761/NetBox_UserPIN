@@ -90,8 +90,17 @@ def _throttled_log(user, area, right, request):
 
 
 def denied_response(request, area, right='view'):
+    """``area=None``: refused by "deny everything not allowed"."""
     user = request.user
     wants_json = request.path_info.startswith('/api/') or 'application/json' in request.headers.get('Accept', '')
+    if area is None:
+        if wants_json:
+            return JsonResponse({'detail': 'Denied: nothing allows this and everything else is denied.'}, status=403)
+        with translation.override(service.get_settings().language or 'en'):
+            response = render(request, 'netbox_user_pin/area_denied.html', {
+                'area': None, 'deny': True, 'keepers': areas.keepers(), 'next': request.get_full_path()}, status=403)
+            response.render() if hasattr(response, 'render') else None
+        return response
     if wants_json:
         return JsonResponse({'detail': f'Access to the protected area "{area.name}" requires a PIN grant.'}, status=403)
     pending = (AreaRequest.objects.filter(area=area, user=user, status=AreaRequestStatus.PENDING).first()
@@ -116,23 +125,28 @@ class AreaGuardMiddleware:
         return self.get_response(request)
 
     def process_view(self, request, view_func, view_args, view_kwargs):
-        if not areas.active_areas():
+        if not areas.protection_on():
             return None
         cls = getattr(view_func, 'view_class', None) or getattr(view_func, 'cls', None)
         model = _model_of(cls) if cls is not None else None
         package = (cls.__module__ if cls is not None else getattr(view_func, '__module__', '') or '').split('.')[0]
         if model is None and package not in getattr(django_settings, 'PLUGINS', ()):
             return None  # views without objects (login, logout, own profile ...) are never refused; plugin pages are
-        area = areas.area_for(model._meta.app_label if model else None, model._meta.model_name if model else None,
-                              package=package)
-        if area is None:
-            return None
+        app_label = model._meta.app_label if model else None
+        model_name = model._meta.model_name if model else None
+        area = areas.area_for(app_label, model_name, package=package)
         api = _is_api(request, view_func)
+        if area is None and not areas.default_deny_active():
+            return None
         user = _api_user(request, cls) if api and cls is not None else request.user
         if user is None or not getattr(user, 'is_authenticated', False):
             if api:
                 return JsonResponse({'detail': 'Authentication required.'}, status=403)
             return redirect(f'{django_settings.LOGIN_URL}?{urlencode({"next": request.get_full_path()})}')
+        if area is None:  # "deny everything not allowed" reaches what no area covers
+            if not areas.default_deny_blocks(user, app_label, model_name, package):
+                return None
+            return denied_response(request, None)
         right = areas.right_for_request(request, cls, view_kwargs)
         if areas.can(user, area, right):
             # whoever holds access unlocks the PIN to enter (not before the owners exist, and the REST API has no

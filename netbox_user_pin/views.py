@@ -353,7 +353,11 @@ class TotpManageView(AllowedUserMixin, View):
                 result = service.verify_second_factor(request.user, form.cleaned_data['otp'], request=request)
             if result:
                 if action == 'disable':
-                    service.disable_totp(request.user, request=request)
+                    try:
+                        service.disable_totp(request.user, request=request)
+                    except ValidationError as exc:
+                        _errors(request, exc)
+                        return redirect('plugins:netbox_user_pin:my_pin')
                     messages.success(request, _('Two-factor authentication has been disabled.'))
                     return redirect('plugins:netbox_user_pin:my_pin')
                 codes = service.new_backup_codes(request.user, request=request)

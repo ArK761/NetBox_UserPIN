@@ -745,6 +745,10 @@ def _clear_totp(user):
 
 def disable_totp(user, request=None):
     """Turn 2FA off for oneself (caller must have verified PIN + 2FA)."""
+    from . import areas
+    if areas.is_keeper(user):
+        raise ValidationError(_('A protection keeper cannot turn 2FA off. Another keeper has to take over first.'),
+                              code='keeper')
     _clear_totp(user)
     log_event(PinEventAction.TOTP_DISABLED, user=user, actor=user, request=request)
     notify(user, _('Two-factor authentication disabled'),

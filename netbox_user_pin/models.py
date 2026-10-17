@@ -11,6 +11,7 @@ __all__ = (
     'AreaProfile',
     'AreaRequest',
     'AreaRequestStatus',
+    'PolicyKeeper',
     'ProtectedArea',
     'ApprovalAction',
     'ApprovalRequest',
@@ -181,6 +182,12 @@ class PinSettings(models.Model):
                                               default=True)
     four_eyes_settings = models.BooleanField(verbose_name=_('… for settings and mail settings'), default=True)
     four_eyes_access = models.BooleanField(verbose_name=_('… for allowing / denying PIN use'), default=False)
+    default_deny = models.BooleanField(
+        verbose_name=_('Deny everything not allowed'),
+        default=False,
+        help_text=_('Everything that no protected area allows is denied to everybody except the protection keepers. '
+                    'Needs at least one keeper (PIN + 2FA).'),
+    )
     areas_enabled = models.BooleanField(
         verbose_name=_('Protect areas and objects'),
         default=False,
@@ -416,6 +423,10 @@ class PinEventAction(models.TextChoices):
     AREA_REVOKED = 'area_revoked', _('Access to an area revoked')
     AREA_CANCELLED = 'area_cancelled', _('Access request cancelled')
     AREA_BLOCKED = 'area_blocked', _('Access to an area refused')
+    KEEPER_ADDED = 'keeper_added', _('Protection keeper appointed')
+    KEEPER_REMOVED = 'keeper_removed', _('Protection keeper removed')
+    DENY_ENABLED = 'deny_enabled', _('Default deny switched on')
+    DENY_DISABLED = 'deny_disabled', _('Default deny switched off')
     ERROR = 'error', _('Error')
 
 
@@ -854,3 +865,21 @@ class AreaRequest(models.Model):
 
     def __str__(self):
         return f'{self.user} -> {self.area} ({self.status})'
+
+
+class PolicyKeeper(models.Model):
+    """
+    Holds the "deny everything not allowed" switch: can switch it on / off and hand the duty over. Exempt from it, so
+    that nobody locks himself out. Needs a PIN and 2FA and cannot get rid of the duty alone.
+    """
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='policy_keeper')
+    since = models.DateTimeField(default=timezone.now)
+    added_by_name = models.CharField(max_length=150, blank=True)
+
+    class Meta:
+        verbose_name = _('protection keeper')
+        verbose_name_plural = _('protection keepers')
+        ordering = ('user__username',)
+
+    def __str__(self):
+        return str(self.user)
