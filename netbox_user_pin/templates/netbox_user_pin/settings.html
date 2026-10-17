@@ -51,6 +51,11 @@
         {% render_field form.approval_valid_minutes %}
         {% render_field form.break_glass %}
       </div>
+      <div class="field-group mb-4">
+        <h2 class="mb-3">{% trans "Protected areas" %}</h2>
+        {% render_field form.areas_enabled %}
+        <p class="text-secondary small">{% url 'plugins:netbox_user_pin:areas' as areas_url %}{% blocktrans %}Areas, their owners and the access grants are managed on the <a href="{{ areas_url }}">Protected areas</a> page.{% endblocktrans %}</p>
+      </div>
       <p class="text-secondary small">{% url 'plugins:netbox_user_pin:mail' as mail_url %}{% blocktrans %}E-mail, notifications and self-service recovery are configured under <a href="{{ mail_url }}">Mail</a>.{% endblocktrans %}</p>
       {% if can_edit %}<div class="text-end"><button type="submit" class="btn btn-primary">{% trans "Save" %}</button></div>{% endif %}
     </form>

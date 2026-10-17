@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import views
+from . import area_views, views
 
 app_name = 'netbox_user_pin'
 
@@ -30,5 +30,9 @@ urlpatterns = [
     path('departments/', views.DepartmentListView.as_view(), name='department_list'),
     path('departments/<int:pk>/', views.DepartmentView.as_view(), name='department'),
     path('my-roles/', views.MyRolesView.as_view(), name='my_roles'),
+    path('areas/', area_views.AreaListView.as_view(), name='areas'),
+    path('areas/<int:pk>/', area_views.AreaView.as_view(), name='area'),
+    path('areas/<slug:key>/request/', area_views.AreaRequestView.as_view(), name='area_request'),
+    path('access/', area_views.MyAccessView.as_view(), name='my_access'),
     path('invitation/<int:pk>/', views.InvitationView.as_view(), name='invitation'),
 ]

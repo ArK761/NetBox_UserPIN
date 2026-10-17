@@ -6,6 +6,11 @@ from django.contrib.auth import get_user_model
 from .models import PinSettings
 
 __all__ = (
+    'AreaForm',
+    'AreaGrantForm',
+    'AreaDecideForm',
+    'AreaOwnerForm',
+    'AreaProfileForm',
     'ApprovalForm',
     'BackupCodesForm',
     'BreakGlassForm',
@@ -393,7 +398,7 @@ class PinSettingsForm(_StyledModelForm):
             'unlock_minutes', 'sliding_unlock', 'scope_mode', 'require_2fa_unlock',
             'max_attempts', 'lockout_minutes', 'require_2fa_admin', 'require_2fa_settings', 'step_up_minutes', 'reset_valid_hours',
             'four_eyes', 'four_eyes_delegates', 'four_eyes_settings', 'four_eyes_access', 'approval_valid_minutes',
-            'break_glass',
+            'break_glass', 'areas_enabled',
         )
         widgets = {
             'blocked_pins': forms.Textarea(attrs={'rows': 3, 'class': 'form-control'}),
@@ -416,4 +421,91 @@ class PinSettingsForm(_StyledModelForm):
             if Department.objects.exists():
                 self.add_error('four_eyes', _('Four-eyes approval cannot be switched off while a department '
                                               'exists. Dissolve the departments first.'))
+        if 'areas_enabled' in cleaned and not cleaned['areas_enabled'] and self.instance.areas_enabled:
+            from .models import ProtectedArea
+            if ProtectedArea.objects.filter(plugin=False, enabled=True, owners__isnull=False).exists():
+                self.add_error('areas_enabled', _('The protection cannot be switched off while areas with owners are '
+                                                  'active. Only the owners of an area can deactivate it.'))
         return cleaned
+
+
+#
+# Protected areas
+#
+
+class AreaForm(forms.Form):
+    name = forms.CharField(label=_('Name'), max_length=100, widget=forms.TextInput(attrs={'class': 'form-control'}))
+    description = forms.CharField(label=_('Description'), max_length=200, required=False,
+                                  widget=forms.TextInput(attrs={'class': 'form-control'}))
+    targets = forms.CharField(
+        label=_('Protected apps and object types'), required=False,
+        widget=forms.Textarea(attrs={'class': 'form-control', 'rows': 4, 'placeholder': 'dcim\nusers.user'}),
+        help_text=_('One per line: an app (e.g. dcim, ipam, netbox_libreoxi) protects everything in it, '
+                    'app.model (e.g. users.user, dcim.device) one object type.'),
+    )
+    max_hours = forms.IntegerField(label=_('Longest temporary access (hours)'), min_value=1, max_value=24 * 30,
+                                   initial=24, widget=forms.NumberInput(attrs={'class': 'form-control'}))
+    enabled = forms.BooleanField(label=_('Active'), required=False, initial=True,
+                                 widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}))
+
+    def __init__(self, *args, plugin=False, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.plugin = plugin
+        if plugin:  # targets and the switch of a plugin area belong to the plugin
+            del self.fields['targets']
+            del self.fields['enabled']
+
+    def clean_targets(self):
+        from . import areas
+        return areas.parse_targets(self.cleaned_data.get('targets'))
+
+
+class AreaOwnerForm(forms.Form):
+    user = UserChoiceField(queryset=get_user_model().objects.none(), label=_('User'), with_email=True,
+                           widget=forms.Select(attrs={'class': 'form-select'}))
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['user'].queryset = get_user_model().objects.filter(is_active=True).order_by('username')
+
+
+class AreaProfileForm(forms.Form):
+    name = forms.CharField(label=_('Profile'), max_length=100, widget=forms.TextInput(attrs={'class': 'form-control'}))
+    rights = forms.MultipleChoiceField(label=_('Rights'), choices=(), widget=forms.CheckboxSelectMultiple)
+
+    def __init__(self, *args, area=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        from . import areas
+        self.fields['rights'].choices = [(r, areas.right_label(area, r)) for r in areas.rights_available(area)] \
+            if area else []
+
+
+ACCESS_HOURS = ((1, _('1 hour')), (4, _('4 hours')), (8, _('8 hours')), (24, _('24 hours')), (72, _('3 days')),
+                (168, _('7 days')), (720, _('30 days')), (0, _('No time limit')))
+
+
+class _AccessChoice(forms.Form):
+    profile = forms.ModelChoiceField(queryset=None, label=_('Profile'),
+                                     widget=forms.Select(attrs={'class': 'form-select'}))
+    hours = forms.TypedChoiceField(choices=ACCESS_HOURS, coerce=int, initial=4, label=_('For how long'),
+                                   widget=forms.Select(attrs={'class': 'form-select'}))
+
+    def __init__(self, *args, area=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['profile'].queryset = area.profiles.all() if area else self.fields['profile'].queryset
+        self.fields['hours'].choices = [(h, label) for h, label in ACCESS_HOURS if h == 0 or not area
+                                        or h <= area.max_hours]
+
+
+class AreaDecideForm(_AccessChoice):
+    pass
+
+
+class AreaGrantForm(_AccessChoice):
+    user = UserChoiceField(queryset=get_user_model().objects.none(), label=_('User'), with_email=True,
+                           widget=forms.Select(attrs={'class': 'form-select'}))
+
+    def __init__(self, *args, area=None, **kwargs):
+        super().__init__(*args, area=area, **kwargs)
+        self.fields['user'].queryset = get_user_model().objects.filter(is_active=True).order_by('username')
+        self.order_fields(['user', 'profile', 'hours'])

@@ -39,6 +39,9 @@ sensitive pages ("enter your PIN to continue"), so the PIN logic exists only onc
   (the picker shows account, name and the e-mail address it will go to)
 - First and last name shown next to the account in Users, CORE and Departments (Settings → General, can be turned off)
 - Append-only **audit log** of every PIN event (never contains a PIN, hash or code)
+- **Protected areas** (0.12): parts of NetBox (any app, or one object type such as `users.user`) and plugins whose
+  objects are shown only to people who hold a **PIN grant from the area's owners** – whatever their NetBox role is,
+  **superusers included** (see below)
 - Settings page in the UI, stable API + signals for other plugins
 
 Requires NetBox **4.7+** (Python 3.12+).
@@ -260,6 +263,60 @@ Signals (`netbox_user_pin.signals`) – e.g. to copy events into your own audit 
 `pin_set`, `pin_changed`, `pin_reset`, `pin_unlocked`, `pin_failed`, `pin_locked_out`, `pin_locked`.
 All are sent with `sender=UserPin` and kwargs `user`, `request`, `scope` (+ `actor`, `remaining_attempts`,
 `until` where relevant).
+
+## Protected areas
+
+An area protects the objects of one or more apps (`dcim`, `ipam`, `netbox_libreoxi` …) or object types
+(`users.user`, `dcim.device` …). Inside an area **nobody is a god**: not the NetBox role decides but a PIN grant that
+the area's **owners** give – the master (superuser) included.
+
+```
+master / CORE   create an area, appoint the first owners          (then they lose any say over it)
+owners          decide who gets access (PIN + 2FA), profiles, more owners, deactivate or delete the area
+user            asks for access (e-mail + bell to the owners) → owners grant a profile for a time or without limit
+```
+
+- **Two ways to switch it on.** *Settings → Protect areas and objects* makes the areas you define on the
+  **Protected areas** page protect. Independently of that, a plugin that registers an area (see below) is protected
+  as soon as **its own "PIN integration" switch is on**.
+- **Rights and profiles**: `view`, `add`, `change`, `delete` (+ rights a plugin defines). Default profiles Read /
+  Edit / Full; owners can add their own. A grant is for 1 hour … 30 days (limit per area) or without a time limit.
+- **Bootstrap**: until owners are appointed only superusers have access, so an area cannot lock everybody out.
+  Once owners exist the master cannot change them, grant access or deactivate the area. An owner cannot be removed
+  when he is the last one; the protection cannot be switched off while areas with owners are active.
+- **Nobody decides about his own request** and owners cannot grant themselves anything (they hold every right).
+- **Emergency** (server shell, audited): `python manage.py userpin_area_owners <area-key> --set user1 user2`.
+- Everything is written to the audit log (requests, grants, revocations, refused accesses, owner changes).
+
+### What is enforced
+
+| Where | How |
+|---|---|
+| NetBox pages: lists, detail, add / edit / delete, bulk actions, plugin pages | middleware refuses without the right (`view` for reading, `add` / `change` / `delete` by the kind of view) and shows *Request access* |
+| REST API (session and token) | 403 with a JSON message |
+| Menu items and object tabs | `has_perm` of the user is answered by the PIN grants for protected objects, so the entry disappears – for superusers too |
+| NetBox permissions | for a NetBox area the NetBox permission is still needed **as well**; a plugin area is decided by the PIN grant alone |
+
+**Not covered**: GraphQL, and lists that mix objects of several types (global search, change log, dashboard
+widgets). Anybody with root / database access on the server can bypass any plugin; the audit log is the answer to
+that, not a technical lock.
+
+### Using it from a plugin
+
+```python
+from netbox_user_pin import areas
+
+# in ready(): the area is active while the plugin's own PIN integration switch is on
+areas.register('netbox_libreoxi', 'LibreOXI', targets=['netbox_libreoxi'],
+               rights={'config': 'View device configurations'},
+               profiles=[('Logs only', ['view']), ('Configurations', ['view', 'config']), ('Manager', ['view', 'config', 'change'])],
+               enabled=lambda: LibreOXISettings.objects.first().pin_integration)
+
+# in a view, for the finer rights
+if (response := areas.require(request, 'netbox_libreoxi', 'config')) is not None:
+    return response            # shows the "request access" page
+areas.can(request.user, 'netbox_libreoxi', 'config')   # True / False
+```
 
 ## Security model
 

@@ -4335,6 +4335,486 @@ msgstr "Overovací kód bol odoslaný na {email}."
 msgid "Please verify again."
 msgstr "Overte sa prosím znova."
 
+msgid "View"
+msgstr "Zobraziť"
+
+msgid "Delete"
+msgstr "Zmazať"
+
+msgid "\"%(target)s\" cannot be protected."
+msgstr "„%(target)s“ sa nedá chrániť."
+
+msgid ""
+"\"%(target)s\" is not an installed app or object type (use app or app.model,"
+" e.g. dcim or users.user)."
+msgstr ""
+"„%(target)s“ nie je nainštalovaná aplikácia ani typ objektu (použite app "
+"alebo app.model, napr. dcim alebo users.user)."
+
+msgid "Enter at least one app or object type."
+msgstr "Zadajte aspoň jednu aplikáciu alebo typ objektu."
+
+msgid "You are an owner of the area \"%(area)s\""
+msgstr "Ste vlastníkom oblasti „%(area)s“"
+
+msgid ""
+"You were appointed an owner of the protected area \"%(area)s\". You decide "
+"who gets access to it: requests arrive here (bell and e-mail) and are "
+"confirmed with your PIN and 2FA."
+msgstr ""
+"Boli ste vymenovaný za vlastníka chránenej oblasti „%(area)s“. Rozhodujete o"
+" tom, kto do nej dostane prístup: žiadosti prídu sem (zvonček a e-mail) a "
+"potvrdzujete ich svojím PINom a 2FA."
+
+msgid "The account is not active."
+msgstr "Účet nie je aktívny."
+
+msgid "The last owner cannot be removed. Appoint another owner first."
+msgstr ""
+"Posledného vlastníka nemožno odobrať. Najprv vymenujte iného vlastníka."
+
+msgid ""
+"The area of a plugin cannot be deleted; switch the plugin integration off."
+msgstr "Oblasť pluginu sa nedá zmazať; vypnite integráciu pluginu."
+
+msgid "Choose at least one right."
+msgstr "Vyberte aspoň jedno právo."
+
+msgid "A profile with this name exists."
+msgstr "Profil s týmto názvom už existuje."
+
+msgid "The profile is in use. Revoke those grants first."
+msgstr "Profil sa používa. Najprv odoberte tieto prístupy."
+
+msgid "The area has no owners yet. Ask the administrator to appoint them."
+msgstr ""
+"Oblasť zatiaľ nemá vlastníkov. Požiadajte administrátora, aby ich vymenoval."
+
+msgid ""
+"%(user)s asks for access to the area \"%(area)s\".\n"
+"\n"
+"Open User PIN > Protected areas to grant or deny it (confirm with your PIN and 2FA)."
+msgstr ""
+"%(user)s žiada o prístup do oblasti „%(area)s“.\n"
+"\n"
+"Otvorte User PIN > Chránené oblasti a žiadosť udeľte alebo zamietnite (potvrďte PINom a 2FA)."
+
+msgid "Access request: %(area)s"
+msgstr "Žiadosť o prístup: %(area)s"
+
+msgid "The request has been dealt with already."
+msgstr "Žiadosť už bola vybavená."
+
+msgid "Access denied: %(area)s"
+msgstr "Prístup zamietnutý: %(area)s"
+
+msgid "Your request for access to \"%(area)s\" was denied."
+msgstr "Vaša žiadosť o prístup do „%(area)s“ bola zamietnutá."
+
+msgid "Access granted: %(area)s"
+msgstr "Prístup udelený: %(area)s"
+
+msgid "You were given access to \"%(area)s\" (%(profile)s) %(until)s."
+msgstr "Dostali ste prístup do „%(area)s“ (%(profile)s) %(until)s."
+
+msgid "without time limit"
+msgstr "bez časového obmedzenia"
+
+msgid "until %(time)s"
+msgstr "do %(time)s"
+
+msgid "Owners already hold every right in their area."
+msgstr "Vlastníci už majú v svojej oblasti všetky práva."
+
+msgid "Choose a profile of this area."
+msgstr "Vyberte profil tejto oblasti."
+
+msgid "Temporary access is 1 to %(max)s hours."
+msgstr "Dočasný prístup je od 1 do %(max)s hodín."
+
+msgid "Protecting"
+msgstr "Chráni"
+
+msgid "Off (the plugin integration is not switched on)"
+msgstr "Vypnuté (integrácia pluginu nie je zapnutá)"
+
+msgid "Off (deactivated by the owners)"
+msgstr "Vypnuté (vlastníci ju deaktivovali)"
+
+msgid "Off (\"Protect areas and objects\" is not switched on in the settings)"
+msgstr "Vypnuté („Chrániť oblasti a objekty“ nie je v nastaveniach zapnuté)"
+
+msgid ""
+"Area \"{name}\" created. Appoint its owners now - until then only the master"
+" has access to it."
+msgstr ""
+"Oblasť „{name}“ bola vytvorená. Teraz vymenujte jej vlastníkov – dovtedy do "
+"nej má prístup len master."
+
+msgid "Saved."
+msgstr "Uložené."
+
+msgid "Area deleted."
+msgstr "Oblasť zmazaná."
+
+msgid "Owner added."
+msgstr "Vlastník pridaný."
+
+msgid "Owner removed."
+msgstr "Vlastník odobraný."
+
+msgid "Profile saved."
+msgstr "Profil uložený."
+
+msgid "Profile deleted."
+msgstr "Profil zmazaný."
+
+msgid "Access granted."
+msgstr "Prístup udelený."
+
+msgid "Access revoked."
+msgstr "Prístup odobraný."
+
+msgid "Request denied."
+msgstr "Žiadosť zamietnutá."
+
+msgid "Choose a profile and the duration."
+msgstr "Vyberte profil a trvanie."
+
+msgid ""
+"The owners of \"{area}\" were asked for access. You will get an e-mail when "
+"they decide."
+msgstr ""
+"Vlastníci oblasti „{area}“ boli požiadaní o prístup. Keď rozhodnú, dostanete"
+" e-mail."
+
+msgid ""
+"The protection cannot be switched off while areas with owners are active. "
+"Only the owners of an area can deactivate it."
+msgstr ""
+"Ochranu nemožno vypnúť, kým sú aktívne oblasti s vlastníkmi. Oblasť môžu "
+"deaktivovať len jej vlastníci."
+
+msgid "Protected apps and object types"
+msgstr "Chránené aplikácie a typy objektov"
+
+msgid ""
+"One per line: an app (e.g. dcim, ipam, netbox_libreoxi) protects everything "
+"in it, app.model (e.g. users.user, dcim.device) one object type."
+msgstr ""
+"Jedno na riadok: aplikácia (napr. dcim, ipam, netbox_libreoxi) chráni všetko"
+" v nej, app.model (napr. users.user, dcim.device) jeden typ objektu."
+
+msgid "Longest temporary access (hours)"
+msgstr "Najdlhší dočasný prístup (hodiny)"
+
+msgid "Profile"
+msgstr "Profil"
+
+msgid "Rights"
+msgstr "Práva"
+
+msgid "1 hour"
+msgstr "1 hodina"
+
+msgid "4 hours"
+msgstr "4 hodiny"
+
+msgid "8 hours"
+msgstr "8 hodín"
+
+msgid "3 days"
+msgstr "3 dni"
+
+msgid "7 days"
+msgstr "7 dní"
+
+msgid "30 days"
+msgstr "30 dní"
+
+msgid "No time limit"
+msgstr "Bez časového obmedzenia"
+
+msgid "For how long"
+msgstr "Na ako dlho"
+
+msgid "Protect areas and objects"
+msgstr "Chrániť oblasti a objekty"
+
+msgid ""
+"The areas defined on the Protected areas page take effect: access to their "
+"objects (pages, lists, editing, REST API, menu, tabs) is decided by PIN "
+"grants given by the area owners, whatever the NetBox role of the user is, "
+"superusers included. Plugins that offer a PIN integration (e.g. LibreOXI) "
+"are protected when their own switch is on, even if this one is off."
+msgstr ""
+"Oblasti definované na stránke Chránené oblasti začnú platiť: o prístupe k "
+"ich objektom (stránky, zoznamy, úpravy, REST API, menu, záložky) rozhodujú "
+"PIN prístupy udelené vlastníkmi oblasti, bez ohľadu na rolu používateľa v "
+"NetBoxe, vrátane superuserov. Pluginy s integráciou PIN (napr. LibreOXI) sú "
+"chránené, keď je zapnutý ich vlastný prepínač, aj keď je tento vypnutý."
+
+msgid "Protected area created"
+msgstr "Chránená oblasť vytvorená"
+
+msgid "Protected area changed"
+msgstr "Chránená oblasť zmenená"
+
+msgid "Protected area deleted"
+msgstr "Chránená oblasť zmazaná"
+
+msgid "Area owner added"
+msgstr "Vlastník oblasti pridaný"
+
+msgid "Area owner removed"
+msgstr "Vlastník oblasti odobraný"
+
+msgid "Access to an area requested"
+msgstr "Žiadosť o prístup do oblasti"
+
+msgid "Access to an area granted"
+msgstr "Prístup do oblasti udelený"
+
+msgid "Access request denied"
+msgstr "Žiadosť o prístup zamietnutá"
+
+msgid "Access to an area revoked"
+msgstr "Prístup do oblasti odobraný"
+
+msgid "Access request cancelled"
+msgstr "Žiadosť o prístup zrušená"
+
+msgid "Access to an area refused"
+msgstr "Prístup do oblasti odmietnutý"
+
+msgid "Plugin areas use the name of the plugin."
+msgstr "Oblasti pluginov používajú názov pluginu."
+
+msgid "protected area"
+msgstr "chránená oblasť"
+
+msgid "protected areas"
+msgstr "chránené oblasti"
+
+msgid "area owner"
+msgstr "vlastník oblasti"
+
+msgid "area owners"
+msgstr "vlastníci oblasti"
+
+msgid "area profile"
+msgstr "profil oblasti"
+
+msgid "area profiles"
+msgstr "profily oblasti"
+
+msgid "area grant"
+msgstr "prístup do oblasti"
+
+msgid "area grants"
+msgstr "prístupy do oblasti"
+
+msgid "Granted"
+msgstr "Udelené"
+
+msgid "area access request"
+msgstr "žiadosť o prístup do oblasti"
+
+msgid "area access requests"
+msgstr "žiadosti o prístup do oblasti"
+
+msgid "My access"
+msgstr "Môj prístup"
+
+msgid "Protected areas"
+msgstr "Chránené oblasti"
+
+msgid ""
+"The protection of your own areas is off (Settings → Protected areas). Areas "
+"of plugins with a PIN integration protect as soon as the plugin's "
+"integration is switched on."
+msgstr ""
+"Ochrana vlastných oblastí je vypnutá (Nastavenia → Chránené oblasti). "
+"Oblasti pluginov s integráciou PIN chránia hneď, ako sa zapne integrácia "
+"pluginu."
+
+msgid "Area"
+msgstr "Oblasť"
+
+msgid "Protects"
+msgstr "Chráni"
+
+msgid "Owners"
+msgstr "Vlastníci"
+
+msgid "Access"
+msgstr "Prístup"
+
+msgid "plugin"
+msgstr "plugin"
+
+msgid "none – only the master has access"
+msgstr "žiadni – prístup má len master"
+
+msgid "Appoint at least two owners"
+msgstr "Vymenujte aspoň dvoch vlastníkov"
+
+msgid "you are an owner"
+msgstr "ste vlastník"
+
+msgid "No areas."
+msgstr "Žiadne oblasti."
+
+msgid ""
+"Access to the objects of an area is decided by the owners with PIN grants – "
+"whatever the NetBox role of the user is, superusers included. Not covered: "
+"GraphQL and lists that mix objects of several types (global search, change "
+"log, dashboard widgets)."
+msgstr ""
+"O prístupe k objektom oblasti rozhodujú vlastníci cez PIN prístupy – bez "
+"ohľadu na rolu používateľa v NetBoxe, vrátane superuserov. Nepokryté: "
+"GraphQL a zoznamy, ktoré miešajú objekty viacerých typov (globálne "
+"vyhľadávanie, zmenový log, widgety na dashboarde)."
+
+msgid "New area"
+msgstr "Nová oblasť"
+
+msgid ""
+"Until owners are appointed only the master has access to a new area. After "
+"that the master cannot change the owners or grant access; the owners decide."
+msgstr ""
+"Kým nie sú vymenovaní vlastníci, do novej oblasti má prístup len master. "
+"Potom master nemôže meniť vlastníkov ani udeľovať prístup; rozhodujú "
+"vlastníci."
+
+msgid ""
+"This area has no owners yet: only the master has access. Appoint the owners "
+"below; from then on they decide who gets access and the master has none "
+"unless they grant it."
+msgstr ""
+"Táto oblasť zatiaľ nemá vlastníkov: prístup má len master. Vymenujte nižšie "
+"vlastníkov; odvtedy rozhodujú oni, kto dostane prístup, a master ho nemá, "
+"kým mu ho neudelia."
+
+msgid "Waiting for a decision"
+msgstr "Čaká na rozhodnutie"
+
+msgid "Asked"
+msgstr "Požiadané"
+
+msgid "Decision"
+msgstr "Rozhodnutie"
+
+msgid "Grant"
+msgstr "Udeliť"
+
+msgid "Deny"
+msgstr "Zamietnuť"
+
+msgid "Who has access"
+msgstr "Kto má prístup"
+
+msgid "Granted by"
+msgstr "Udelil"
+
+msgid "no time limit"
+msgstr "bez časového obmedzenia"
+
+msgid "Revoke"
+msgstr "Odobrať"
+
+msgid "Nobody except the owners."
+msgstr "Nikto okrem vlastníkov."
+
+msgid "Ended:"
+msgstr "Skončené:"
+
+msgid "Grant access"
+msgstr "Udeliť prístup"
+
+msgid "Profiles"
+msgstr "Profily"
+
+msgid "Add profile"
+msgstr "Pridať profil"
+
+msgid "Remove"
+msgstr "Odobrať"
+
+msgid "No owners."
+msgstr "Žiadni vlastníci."
+
+msgid ""
+"Appoint at least two owners, so that a decision can be taken when one is "
+"away."
+msgstr ""
+"Vymenujte aspoň dvoch vlastníkov, aby sa dalo rozhodnúť, keď je jeden preč."
+
+msgid ""
+"Delete this area? Its objects become visible again according to the NetBox "
+"permissions."
+msgstr ""
+"Zmazať túto oblasť? Jej objekty budú opäť viditeľné podľa oprávnení NetBoxu."
+
+msgid "Delete the area"
+msgstr "Zmazať oblasť"
+
+msgid "Access to a protected area"
+msgstr "Prístup do chránenej oblasti"
+
+msgid "This area is protected"
+msgstr "Táto oblasť je chránená"
+
+msgid "Note for the owners (optional)"
+msgstr "Poznámka pre vlastníkov (nepovinné)"
+
+msgid "Request access"
+msgstr "Požiadať o prístup"
+
+msgid "My access to protected areas"
+msgstr "Môj prístup do chránených oblastí"
+
+msgid "End my access"
+msgstr "Ukončiť môj prístup"
+
+msgid "You hold no temporary or granted access."
+msgstr "Nemáte žiadny dočasný ani udelený prístup."
+
+msgid "You are an owner of:"
+msgstr "Ste vlastníkom:"
+
+msgid "My requests"
+msgstr "Moje žiadosti"
+
+msgid "No requests."
+msgstr "Žiadne žiadosti."
+
+msgid "%(n)s access request is waiting for your decision."
+msgid_plural "%(n)s access requests are waiting for your decision."
+msgstr[0] "%(n)s žiadosť o prístup čaká na vaše rozhodnutie."
+msgstr[1] "%(n)s žiadosti o prístup čakajú na vaše rozhodnutie."
+msgstr[2] "%(n)s žiadostí o prístup čaká na vaše rozhodnutie."
+
+msgid ""
+"Access to <strong>%(name)s</strong> is decided by its owners with a PIN "
+"grant. Your NetBox role does not matter here."
+msgstr ""
+"O prístupe do <strong>%(name)s</strong> rozhodujú jej vlastníci cez PIN "
+"prístup. Vaša rola v NetBoxe tu nehrá úlohu."
+
+msgid ""
+"Your request from %(when)s is waiting for the owners. You will get an e-mail"
+" when they decide."
+msgstr ""
+"Vaša žiadosť z %(when)s čaká na vlastníkov. Keď rozhodnú, dostanete e-mail."
+
+msgid ""
+"Areas, their owners and the access grants are managed on the <a "
+"href=\"%(areas_url)s\">Protected areas</a> page."
+msgstr ""
+"Oblasti, ich vlastníci a udelené prístupy sa spravujú na stránke <a "
+"href=\"%(areas_url)s\">Chránené oblasti</a>."
+
 #~ msgid ""
 #~ "There is no other administrator or delegate with PIN and 2FA who could "
 #~ "confirm."

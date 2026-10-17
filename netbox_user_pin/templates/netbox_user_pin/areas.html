@@ -1,0 +1,49 @@
+{% extends 'generic/_base.html' %}
+{% load form_helpers i18n %}
+{% block title %}{% trans "Protected areas" %}{% endblock %}
+{% block content %}
+{% include 'netbox_user_pin/inc/step_up_bar.html' %}
+{% if waiting %}<div class="alert alert-warning"><i class="mdi mdi-key-alert"></i> {% blocktrans count n=waiting %}{{ n }} access request is waiting for your decision.{% plural %}{{ n }} access requests are waiting for your decision.{% endblocktrans %}</div>{% endif %}
+{% if not settings.areas_enabled %}<div class="alert alert-secondary"><div>{% trans "The protection of your own areas is off (Settings → Protected areas). Areas of plugins with a PIN integration protect as soon as the plugin's integration is switched on." %}</div></div>{% endif %}
+<div class="row">
+  <div class="col-12 {% if is_core %}col-xl-8{% endif %}">
+    <div class="card">
+      <h2 class="card-header">{% trans "Protected areas" %}</h2>
+      <table class="table table-hover">
+        <thead><tr><th>{% trans "Area" %}</th><th>{% trans "Protects" %}</th><th>{% trans "Owners" %}</th><th>{% trans "Access" %}</th><th></th></tr></thead>
+        <tbody>
+          {% for row in rows %}
+            <tr>
+              <td><span class="pin-dot {% if row.status == 'ok' %}ok{% else %}warn{% endif %}" title="{{ row.status_label }}"></span><a href="{% url 'plugins:netbox_user_pin:area' pk=row.area.pk %}"><strong>{{ row.area.name }}</strong></a>{% if row.area.plugin %} <span class="badge text-bg-cyan">{% trans "plugin" %}</span>{% endif %}<div class="small text-secondary">{{ row.status_label }}</div></td>
+              <td>{% for t in row.targets %}<code>{{ t }}</code> {% endfor %}</td>
+              <td>{% for u in row.owners %}{{ u.username }}{% if not forloop.last %}, {% endif %}{% empty %}<span class="badge text-bg-orange">{% trans "none – only the master has access" %}</span>{% endfor %}{% if row.owners|length == 1 %} <span class="badge text-bg-orange" title="{% trans 'Appoint at least two owners' %}"><i class="mdi mdi-alert"></i></span>{% endif %}</td>
+              <td>{{ row.grants }}{% if row.pending %} <span class="badge text-bg-red">{{ row.pending }} {% trans "waiting" %}</span>{% endif %}</td>
+              <td class="text-end">{% if row.mine %}<span class="badge text-bg-purple">{% trans "you are an owner" %}</span>{% endif %} <a class="btn btn-sm btn-outline-primary" href="{% url 'plugins:netbox_user_pin:area' pk=row.area.pk %}">{% trans "Open" %}</a></td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="5" class="text-secondary">{% trans "No areas." %}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p class="text-secondary small">{% trans "Access to the objects of an area is decided by the owners with PIN grants – whatever the NetBox role of the user is, superusers included. Not covered: GraphQL and lists that mix objects of several types (global search, change log, dashboard widgets)." %}</p>
+  </div>
+  {% if is_core %}
+  <div class="col-12 col-xl-4">
+    <div class="card">
+      <h2 class="card-header">{% trans "New area" %}</h2>
+      <div class="card-body">
+        <form method="post" class="object-edit" data-step-up="full">{% csrf_token %}<input type="hidden" name="action" value="create">
+          {% render_field form.name %}
+          {% render_field form.description %}
+          {% render_field form.targets %}
+          {% render_field form.max_hours %}
+          <div class="text-end"><button type="submit" class="btn btn-primary">{% trans "Create" %}</button></div>
+        </form>
+        <p class="text-secondary small mt-3 mb-0">{% trans "Until owners are appointed only the master has access to a new area. After that the master cannot change the owners or grant access; the owners decide." %}</p>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,31 @@
+{% extends 'generic/_base.html' %}
+{% load i18n %}
+{% block title %}{% trans "My access" %}{% endblock %}
+{% block content %}
+{% if waiting %}<div class="alert alert-warning"><i class="mdi mdi-key-alert"></i> {% blocktrans count n=waiting %}{{ n }} access request is waiting for your decision.{% plural %}{{ n }} access requests are waiting for your decision.{% endblocktrans %} <a href="{% url 'plugins:netbox_user_pin:areas' %}">{% trans "Open" %}</a></div>{% endif %}
+<div class="card">
+  <h2 class="card-header">{% trans "My access to protected areas" %}</h2>
+  <table class="table table-hover">
+    <thead><tr><th>{% trans "Area" %}</th><th>{% trans "Profile" %}</th><th>{% trans "Until" %}</th><th></th></tr></thead>
+    <tbody>
+      {% for g in grants %}
+      <tr><td>{{ g.area.name }}</td><td>{{ g.profile.name }}</td><td>{% if g.expires %}{{ g.expires|date:"Y-m-d H:i" }}{% else %}{% trans "no time limit" %}{% endif %}</td>
+        <td class="text-end"><form method="post" class="d-inline">{% csrf_token %}<input type="hidden" name="pk" value="{{ g.pk }}"><input type="hidden" name="action" value="end"><button class="btn btn-sm btn-outline-secondary" type="submit">{% trans "End my access" %}</button></form></td></tr>
+      {% empty %}<tr><td colspan="4" class="text-secondary">{% trans "You hold no temporary or granted access." %}</td></tr>{% endfor %}
+    </tbody>
+  </table>
+  {% if owned %}<div class="card-body small text-secondary">{% trans "You are an owner of:" %} {% for a in owned %}<a href="{% url 'plugins:netbox_user_pin:area' pk=a.pk %}">{{ a.name }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}</div>{% endif %}
+</div>
+<div class="card">
+  <h2 class="card-header">{% trans "My requests" %}</h2>
+  <table class="table">
+    <thead><tr><th>{% trans "Area" %}</th><th>{% trans "Asked" %}</th><th>{% trans "Status" %}</th><th></th></tr></thead>
+    <tbody>
+      {% for r in requests %}
+      <tr><td>{{ r.area.name }}</td><td>{{ r.created|date:"Y-m-d H:i" }}</td><td>{{ r.get_status_display }}{% if r.decided_by_name %} ({{ r.decided_by_name }}){% endif %}</td>
+        <td class="text-end">{% if r.status == 'pending' %}<form method="post" class="d-inline">{% csrf_token %}<input type="hidden" name="pk" value="{{ r.pk }}"><input type="hidden" name="action" value="cancel"><button class="btn btn-sm btn-outline-secondary" type="submit">{% trans "Cancel" %}</button></form>{% endif %}</td></tr>
+      {% empty %}<tr><td colspan="4" class="text-secondary">{% trans "No requests." %}</td></tr>{% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

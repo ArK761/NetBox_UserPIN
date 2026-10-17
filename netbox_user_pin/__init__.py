@@ -1,6 +1,6 @@
 from netbox.plugins import PluginConfig
 
-__version__ = '0.11.0'
+__version__ = '0.12.0'
 
 
 class UserPinConfig(PluginConfig):
@@ -12,7 +12,10 @@ class UserPinConfig(PluginConfig):
     base_url = 'user-pin'
     min_version = '4.7.0'
     required_settings = ['encryption_keys']
-    middleware = ['netbox_user_pin.middleware.PluginLanguageMiddleware']
+    middleware = [
+        'netbox_user_pin.middleware.PluginLanguageMiddleware',
+        'netbox_user_pin.area_guard.AreaGuardMiddleware',
+    ]
     default_settings = {
         # {key_id: urlsafe-base64 32 byte key}. Generate with `manage.py userpin_generate_key`.
         'encryption_keys': {},
@@ -32,7 +35,8 @@ class UserPinConfig(PluginConfig):
         from . import crypto
         crypto.validate_configuration()
         self._register_event_types()
-        from . import jobs  # noqa: F401  (registers the hourly system job)
+        from . import areas, jobs  # noqa: F401  (jobs registers the hourly system job)
+        areas.connect_signals()
 
     @staticmethod
     def _register_event_types():
@@ -40,9 +44,12 @@ class UserPinConfig(PluginConfig):
         from netbox.registry import registry
 
         from .approvals import EVENT_TYPE
+        from .areas import EVENT_TYPE as AREA_EVENT_TYPE
         from .roles import EVENT_TYPE as ROLE_EVENT_TYPE
         if EVENT_TYPE not in registry['event_types']:
             EventType(EVENT_TYPE, 'PIN four-eyes approval requested', kind=EVENT_TYPE_KIND_WARNING).register()
+        if AREA_EVENT_TYPE not in registry['event_types']:
+            EventType(AREA_EVENT_TYPE, 'PIN area access requested', kind=EVENT_TYPE_KIND_WARNING).register()
         if ROLE_EVENT_TYPE not in registry['event_types']:
             EventType(ROLE_EVENT_TYPE, 'PIN role / department change', kind=EVENT_TYPE_KIND_WARNING).register()
 

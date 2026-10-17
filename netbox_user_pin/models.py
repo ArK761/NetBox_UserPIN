@@ -6,6 +6,12 @@ from django.utils.translation import gettext_lazy as _
 
 __all__ = (
     'AllowedDomain',
+    'AreaGrant',
+    'AreaOwner',
+    'AreaProfile',
+    'AreaRequest',
+    'AreaRequestStatus',
+    'ProtectedArea',
     'ApprovalAction',
     'ApprovalRequest',
     'ApprovalStatus',
@@ -175,6 +181,14 @@ class PinSettings(models.Model):
                                               default=True)
     four_eyes_settings = models.BooleanField(verbose_name=_('… for settings and mail settings'), default=True)
     four_eyes_access = models.BooleanField(verbose_name=_('… for allowing / denying PIN use'), default=False)
+    areas_enabled = models.BooleanField(
+        verbose_name=_('Protect areas and objects'),
+        default=False,
+        help_text=_('The areas defined on the Protected areas page take effect: access to their objects (pages, lists, '
+                    'editing, REST API, menu, tabs) is decided by PIN grants given by the area owners, whatever the '
+                    'NetBox role of the user is, superusers included. Plugins that offer a PIN integration '
+                    '(e.g. LibreOXI) are protected when their own switch is on, even if this one is off.'),
+    )
     approval_valid_minutes = models.PositiveIntegerField(
         verbose_name=_('Approval request valid (minutes)'),
         default=24 * 60,
@@ -391,6 +405,17 @@ class PinEventAction(models.TextChoices):
     TRANSFER_REQUESTED = 'transfer_requested', _('Move between departments requested')
     TRANSFER_APPROVED = 'transfer_approved', _('Move between departments approved')
     TRANSFER_REJECTED = 'transfer_rejected', _('Move between departments rejected')
+    AREA_CREATED = 'area_created', _('Protected area created')
+    AREA_CHANGED = 'area_changed', _('Protected area changed')
+    AREA_DELETED = 'area_deleted', _('Protected area deleted')
+    AREA_OWNER_ADDED = 'area_owner_added', _('Area owner added')
+    AREA_OWNER_REMOVED = 'area_owner_removed', _('Area owner removed')
+    AREA_REQUESTED = 'area_requested', _('Access to an area requested')
+    AREA_GRANTED = 'area_granted', _('Access to an area granted')
+    AREA_DENIED = 'area_denied', _('Access request denied')
+    AREA_REVOKED = 'area_revoked', _('Access to an area revoked')
+    AREA_CANCELLED = 'area_cancelled', _('Access request cancelled')
+    AREA_BLOCKED = 'area_blocked', _('Access to an area refused')
     ERROR = 'error', _('Error')
 
 
@@ -709,3 +734,119 @@ class AllowedDomain(models.Model):
     @property
     def code_pending(self):
         return bool(self.code and self.code_expires and self.code_expires > timezone.now())
+
+
+#
+# Protected areas
+#
+
+class ProtectedArea(models.Model):
+    """
+    Part of NetBox (or of a plugin) whose objects are shown only to people who hold a PIN grant from the area's
+    owners – whatever their NetBox role is. ``targets`` lists ``app_label`` (the whole app, e.g. ``dcim`` or
+    ``netbox_libreoxi``) or ``app_label.model`` (one object type, e.g. ``users.user``).
+    """
+    key = models.SlugField(max_length=100, unique=True, help_text=_('Plugin areas use the name of the plugin.'))
+    name = models.CharField(verbose_name=_('Name'), max_length=100)
+    description = models.TextField(verbose_name=_('Description'), blank=True)
+    plugin = models.BooleanField(default=False, editable=False, help_text='Registered by a plugin.')
+    targets = models.JSONField(default=list, blank=True)
+    enabled = models.BooleanField(verbose_name=_('Active'), default=True)
+    max_hours = models.PositiveSmallIntegerField(
+        verbose_name=_('Longest temporary access (hours)'), default=24,
+        validators=[MinValueValidator(1), MaxValueValidator(24 * 30)],
+    )
+    created = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = _('protected area')
+        verbose_name_plural = _('protected areas')
+        ordering = ('name',)
+
+    def __str__(self):
+        return self.name
+
+
+class AreaOwner(models.Model):
+    """Decides who gets access to the area (confirming with PIN + 2FA)."""
+    area = models.ForeignKey(ProtectedArea, on_delete=models.CASCADE, related_name='owners')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='area_ownerships')
+    since = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        verbose_name = _('area owner')
+        verbose_name_plural = _('area owners')
+        constraints = [models.UniqueConstraint(fields=('area', 'user'), name='userpin_area_owner_unique')]
+
+    def __str__(self):
+        return f'{self.user} - {self.area}'
+
+
+class AreaProfile(models.Model):
+    """A named set of rights (``view``, ``add``, ``change``, ``delete`` and the rights a plugin defines)."""
+    area = models.ForeignKey(ProtectedArea, on_delete=models.CASCADE, related_name='profiles')
+    name = models.CharField(verbose_name=_('Profile'), max_length=100)
+    rights = models.JSONField(default=list)
+
+    class Meta:
+        verbose_name = _('area profile')
+        verbose_name_plural = _('area profiles')
+        ordering = ('pk',)
+        constraints = [models.UniqueConstraint(fields=('area', 'name'), name='userpin_area_profile_unique')]
+
+    def __str__(self):
+        return f'{self.area}: {self.name}'
+
+
+class AreaGrant(models.Model):
+    """Access of one user to one area with a profile; temporary when ``expires`` is set."""
+    area = models.ForeignKey(ProtectedArea, on_delete=models.CASCADE, related_name='grants')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='area_grants')
+    profile = models.ForeignKey(AreaProfile, on_delete=models.CASCADE, related_name='grants')
+    expires = models.DateTimeField(null=True, blank=True)
+    granted_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+                                   related_name='+')
+    granted_by_name = models.CharField(max_length=150, blank=True)
+    created = models.DateTimeField(default=timezone.now)
+    revoked = models.DateTimeField(null=True, blank=True)
+    revoked_by_name = models.CharField(max_length=150, blank=True)
+
+    class Meta:
+        verbose_name = _('area grant')
+        verbose_name_plural = _('area grants')
+        ordering = ('-created', '-pk')
+
+    def __str__(self):
+        return f'{self.user} - {self.area} ({self.profile.name})'
+
+    @property
+    def is_active(self):
+        return self.revoked is None and (self.expires is None or self.expires > timezone.now())
+
+
+class AreaRequestStatus(models.TextChoices):
+    PENDING = 'pending', _('Waiting')
+    GRANTED = 'granted', _('Granted')
+    DENIED = 'denied', _('Denied')
+    CANCELLED = 'cancelled', _('Cancelled')
+
+
+class AreaRequest(models.Model):
+    """A user asks the owners of an area for access."""
+    area = models.ForeignKey(ProtectedArea, on_delete=models.CASCADE, related_name='requests')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='area_requests')
+    status = models.CharField(max_length=10, choices=AreaRequestStatus.choices, default=AreaRequestStatus.PENDING,
+                              db_index=True)
+    note = models.CharField(max_length=200, blank=True)
+    created = models.DateTimeField(default=timezone.now)
+    decided = models.DateTimeField(null=True, blank=True)
+    decided_by_name = models.CharField(max_length=150, blank=True)
+    grant = models.ForeignKey(AreaGrant, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+
+    class Meta:
+        verbose_name = _('area access request')
+        verbose_name_plural = _('area access requests')
+        ordering = ('-created', '-pk')
+
+    def __str__(self):
+        return f'{self.user} -> {self.area} ({self.status})'
