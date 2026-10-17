@@ -1,7 +1,9 @@
 {% extends 'generic/_base.html' %}
+{% load userpin_tags %}
 {% load form_helpers i18n %}
 {% block title %}{% trans "My roles" %}{% endblock %}
 {% block content %}
+{% pin_build %}
 <p class="text-secondary">{% if department %}{% blocktrans with name=department.name %}You belong to the department <strong>{{ name }}</strong>.{% endblocktrans %}{% else %}{% trans "You do not belong to any department." %}{% endif %}</p>
 {% for row in rows %}{% with d=row.role %}
 <div class="card">

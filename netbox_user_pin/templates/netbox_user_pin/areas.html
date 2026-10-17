@@ -1,7 +1,9 @@
 {% extends 'generic/_base.html' %}
+{% load userpin_tags %}
 {% load form_helpers i18n %}
 {% block title %}{% trans "Protected areas" %}{% endblock %}
 {% block content %}
+{% pin_build %}
 {% include 'netbox_user_pin/inc/step_up_bar.html' %}
 {% if waiting %}<div class="alert alert-warning"><i class="mdi mdi-key-alert"></i> {% blocktrans count n=waiting %}{{ n }} access request is waiting for your decision.{% plural %}{{ n }} access requests are waiting for your decision.{% endblocktrans %}</div>{% endif %}
 {% if not settings.areas_enabled %}<div class="alert alert-secondary"><div>{% trans "The protection of your own areas is off (Settings → Protected areas). Areas of plugins with a PIN integration protect as soon as the plugin's integration is switched on." %}</div></div>{% endif %}

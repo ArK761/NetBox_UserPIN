@@ -1,7 +1,9 @@
 {% extends 'generic/_base.html' %}
+{% load userpin_tags %}
 {% load form_helpers i18n %}
 {% block title %}{% trans "Mail" %}{% endblock %}
 {% block content %}
+{% pin_build %}
 {% if can_edit %}{% include 'netbox_user_pin/inc/step_up_bar.html' %}{% endif %}
 <div class="row">
   <div class="col-12 col-lg-7">

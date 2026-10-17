@@ -1,7 +1,9 @@
 {% extends 'generic/_base.html' %}
+{% load userpin_tags %}
 {% load i18n %}
 {% block title %}{% trans "PIN audit log" %}{% endblock %}
 {% block content %}
+{% pin_build %}
 <form method="get" class="row g-2 mb-3">
   <div class="col-auto"><input type="text" name="user" value="{{ user_filter }}" class="form-control" placeholder="{% trans 'User / actor' %}"></div>
   <div class="col-auto">

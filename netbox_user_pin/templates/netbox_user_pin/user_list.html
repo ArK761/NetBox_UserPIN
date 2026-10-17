@@ -1,7 +1,9 @@
 {% extends 'generic/_base.html' %}
+{% load userpin_tags %}
 {% load i18n %}
 {% block title %}{% trans "User PINs" %}{% endblock %}
 {% block content %}
+{% pin_build %}
 <div class="row row-cards mb-3">
   <div class="col-6 col-md-3 col-xl"><a class="card card-link text-reset" href="?"><div class="card-body"><div class="text-secondary">{% trans "Users" %}</div><div class="h2 mb-0">{{ summary.total }}</div></div></a></div>
   <div class="col-6 col-md-3 col-xl"><a class="card card-link text-reset" href="?status=with_pin"><div class="card-body"><div class="text-secondary">{% trans "PIN active" %}</div><div class="h2 mb-0 text-green">{{ summary.with_pin }}</div></div></a></div>

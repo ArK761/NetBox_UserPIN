@@ -1,7 +1,9 @@
 {% extends 'generic/_base.html' %}
+{% load userpin_tags %}
 {% load i18n %}
 {% block title %}{% trans "My access" %}{% endblock %}
 {% block content %}
+{% pin_build %}
 {% if waiting %}<div class="alert alert-warning"><i class="mdi mdi-key-alert"></i> {% blocktrans count n=waiting %}{{ n }} access request is waiting for your decision.{% plural %}{{ n }} access requests are waiting for your decision.{% endblocktrans %} <a href="{% url 'plugins:netbox_user_pin:areas' %}">{% trans "Open" %}</a></div>{% endif %}
 <div class="card">
   <h2 class="card-header">{% trans "My access to protected areas" %}</h2>

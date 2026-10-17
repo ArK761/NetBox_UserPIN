@@ -1,7 +1,9 @@
 {% extends 'generic/_base.html' %}
+{% load userpin_tags %}
 {% load i18n %}
 {% block title %}{% trans "Four-eyes approvals" %}{% endblock %}
 {% block content %}
+{% pin_build %}
 {% if not settings.four_eyes %}<div class="alert alert-secondary"><div>{% trans "Four-eyes approval is currently off (Settings → Four-eyes approval)." %}</div></div>{% endif %}
 <div class="card">
   <h2 class="card-header">{% trans "Waiting" %}</h2>

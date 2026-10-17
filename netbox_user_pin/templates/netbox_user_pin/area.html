@@ -1,7 +1,9 @@
 {% extends 'generic/_base.html' %}
+{% load userpin_tags %}
 {% load form_helpers i18n %}
 {% block title %}{{ area.name }}{% endblock %}
 {% block content %}
+{% pin_build %}
 {% include 'netbox_user_pin/inc/step_up_bar.html' %}
 <p><a href="{% url 'plugins:netbox_user_pin:areas' %}"><i class="mdi mdi-arrow-left"></i> {% trans "Protected areas" %}</a></p>
 {% if bootstrap %}<div class="alert alert-warning"><i class="mdi mdi-alert"></i> {% trans "This area has no owners yet: only the master has access. Appoint the owners below; from then on they decide who gets access and the master has none unless they grant it." %}</div>{% endif %}

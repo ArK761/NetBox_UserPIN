@@ -375,3 +375,34 @@ class CommandTest(AreaTestCase):
         out = StringIO()
         call_command('userpin_area_owners', area.key, stdout=out)
         self.assertIn('appadmin', out.getvalue())
+
+
+class BuildBadgeTest(AreaTestCase):
+    def test_version_and_commit_badge_on_the_pages(self):
+        from unittest import mock
+
+        from netbox_user_pin import build
+        info = {'version': '9.9.9', 'commit': 'c' * 40, 'short': 'ccccccc'}
+        with mock.patch.object(build, 'plugin_build', return_value=info), \
+                mock.patch('netbox_user_pin.templatetags.userpin_tags.plugin_build', return_value=info):
+            admin_login(self.client, self.owner1)
+            html = self.client.get(reverse('plugins:netbox_user_pin:my_pin')).content.decode()
+        self.assertIn('User PIN v9.9.9 · ccccccc', html)
+
+    def test_commit_is_read_from_pip_metadata(self):
+        from unittest import mock
+
+        from netbox_user_pin import build
+
+        class Dist:
+            version = '1.2.3'
+
+            def read_text(self, name):
+                return '{"vcs_info": {"vcs": "git", "commit_id": "abcdef1234567890"}}'
+
+        build.plugin_build.cache_clear()
+        try:
+            with mock.patch('importlib.metadata.distribution', return_value=Dist()):
+                self.assertEqual(build.plugin_build(), {'version': '1.2.3', 'commit': 'abcdef1234567890', 'short': 'abcdef1'})
+        finally:
+            build.plugin_build.cache_clear()

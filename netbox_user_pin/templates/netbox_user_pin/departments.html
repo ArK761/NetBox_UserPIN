@@ -1,7 +1,9 @@
 {% extends 'generic/_base.html' %}
+{% load userpin_tags %}
 {% load form_helpers i18n %}
 {% block title %}{% trans "Departments" %}{% endblock %}
 {% block content %}
+{% pin_build %}
 {% include 'netbox_user_pin/inc/step_up_bar.html' %}
 {% if transfers %}
 <div class="card border-warning">
