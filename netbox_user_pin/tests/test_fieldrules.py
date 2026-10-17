@@ -39,7 +39,7 @@ class FieldRulesCase(AreaTestCase):
         areas.add_owner(self.area, self.owner2, self.owner1)
         self.edit = self.area.profiles.get(name='Edit')
         self.read = self.area.profiles.get(name='Read')
-        areas.grant_access(self.area, self.appadmin, self.edit, None, self.owner1)
+        self.grant = areas.grant_access(self.area, self.appadmin, self.edit, None, self.owner1)
 
     def rule(self, field, mode, contains='', profile=None, target='tenancy.tenant', actor=None):
         areas.save_field_rules(self.area, profile or self.edit, target, {field: (mode, contains)}, actor or self.owner1)
@@ -198,10 +198,10 @@ class RulesPageTest(FieldRulesCase):
     def test_page_lists_the_fields_and_saves(self):
         admin_login(self.client, self.owner1)
         url = reverse('plugins:netbox_user_pin:area_fields', kwargs={'pk': self.area.pk})
-        html = self.client.get(f'{url}?profile={self.edit.pk}&target=tenancy.tenant').content.decode()
+        html = self.client.get(f'{url}?grant={self.grant.pk}&target=tenancy.tenant').content.decode()
         self.assertIn('mode__cf:secret_note', html)
         self.assertIn('mode__description', html)
-        response = self.client.post(url, {'profile': self.edit.pk, 'target': 'tenancy.tenant',
+        response = self.client.post(url, {'grant': self.grant.pk, 'target': 'tenancy.tenant',
                                           'mode__cf:secret_note': 'hidden', 'mode__cf:hw': 'read',
                                           'contains__cf:hw': 'PRINTER', 'mode__name': 'default'})
         self.assertEqual(response.status_code, 302, response.content[:300])
@@ -209,9 +209,9 @@ class RulesPageTest(FieldRulesCase):
         rule = AreaFieldRule.objects.get(profile=self.edit, field='cf:hw')
         self.assertEqual((rule.mode, rule.contains), ('read', 'PRINTER'))
         # nobody
-        self.client.post(url, {'profile': 'nobody', 'target': 'tenancy.tenant', 'mode__description': 'hidden'})
+        self.client.post(url, {'grant': 'nobody', 'target': 'tenancy.tenant', 'mode__description': 'hidden'})
         self.assertTrue(AreaFieldRule.objects.filter(profile=None, field='description').exists())
-        html = self.client.get(f'{url}?profile=nobody').content.decode()
+        html = self.client.get(f'{url}?grant=nobody').content.decode()
         self.assertIn('mode__description', html)
 
     def test_a_stranger_cannot_open_the_page(self):

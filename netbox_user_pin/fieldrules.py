@@ -58,7 +58,7 @@ def compute_policy(user, area, app_label, model):
     if areas._unrestricted(user, area):
         default = AreaFieldMode.WRITE
     else:
-        grants = [g for g in areas.active_grants(user, area) if 'view' in g.profile.rights]
+        grants = [g for g in areas.active_grants(user, area, target) if 'view' in g.profile.rights]
         if not grants:
             return FieldPolicy(AreaFieldMode.HIDDEN, {}, {})
         by_profile = {}

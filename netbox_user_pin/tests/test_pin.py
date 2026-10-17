@@ -312,7 +312,7 @@ class ViewTest(PinTestCase):
         data = {
             'language': 'en', 'access_mode': 'all', 'pin_length': 8, 'block_weak_pins': 'on', 'blocked_pins': '', 'max_age_days': 180,
             'warn_days': 14, 'unlock_minutes': 10, 'sliding_unlock': 'on', 'scope_mode': 'global',
-            'max_attempts': 5, 'lockout_minutes': 30, 'require_2fa_admin': 'on', 'step_up_minutes': 5,
+            'max_attempts': 5, 'lockout_minutes': 30, 'require_2fa_admin': 'on', 'step_up_minutes': 5, 'twofa_hours': 8,
             'reset_valid_hours': 24, 'approval_valid_minutes': 1440,
         }
         self.client.post(reverse('plugins:netbox_user_pin:settings'), data)
@@ -922,7 +922,7 @@ class FourEyesTest(PinTestCase):
         admin_login(self.client, self.peter, secret=self.secrets[self.peter.pk])
         data = {f: getattr(PinSettings.load(), f) for f in (
             'language', 'access_mode', 'pin_length', 'blocked_pins', 'max_age_days', 'warn_days', 'unlock_minutes', 'scope_mode',
-            'max_attempts', 'lockout_minutes', 'step_up_minutes', 'reset_valid_hours', 'approval_valid_minutes')}
+            'max_attempts', 'lockout_minutes', 'step_up_minutes', 'twofa_hours', 'reset_valid_hours', 'approval_valid_minutes')}
         data.update({'pin_length': 8, 'block_weak_pins': 'on', 'sliding_unlock': 'on', 'require_2fa_admin': 'on',
                      'four_eyes': 'on', 'four_eyes_delegates': 'on', 'four_eyes_settings': 'on'})
         self.client.post(reverse('plugins:netbox_user_pin:settings'), data)

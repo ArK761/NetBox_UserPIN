@@ -808,11 +808,42 @@ def step_up(request, pin, otp=None, level='full'):
             'u': request.user.pk, 'v': user_pin.version, 'until': time.time() + settings.step_up_minutes * 60,
             'fa2': bool(needs_2fa or keep_2fa or not settings.require_2fa_admin),
         }
+        if needs_2fa:
+            stamp_2fa(request)
         log_event(PinEventAction.STEP_UP_OK, user=request.user, request=request,
                   detail='PIN + 2FA' if needs_2fa else 'PIN')
     elif result.status in (VerifyStatus.WRONG, VerifyStatus.WRONG_2FA):
         log_event(PinEventAction.STEP_UP_FAILED, user=request.user, request=request)
     return result
+
+
+TWOFA_SESSION_KEY = 'userpin_2fa_confirmed'
+
+
+def stamp_2fa(request):
+    """Remember that this session confirmed a 2FA code just now (see PinSettings.twofa_hours)."""
+    user_pin = _get_pin(request.user)
+    request.session[TWOFA_SESSION_KEY] = {'u': request.user.pk, 'v': user_pin.version if user_pin else 0,
+                                          'at': time.time()}
+
+
+def confirm_2fa(request, code):
+    """Check a 2FA (or backup) code; on success the session counts as 2FA-confirmed for twofa_hours."""
+    result = verify_second_factor(request.user, code, request=request, scope='2fa-confirm')
+    if result:
+        stamp_2fa(request)
+    return result
+
+
+def has_recent_2fa(request):
+    user = _user_or_none(getattr(request, 'user', None))
+    data = request.session.get(TWOFA_SESSION_KEY) if user else None
+    if not data or data.get('u') != user.pk:
+        return False
+    if data.get('at', 0) + get_settings().twofa_hours * 3600 <= time.time():
+        return False
+    user_pin = _get_pin(user)
+    return bool(user_pin and user_pin.version == data.get('v') and not user_pin.suspended)
 
 
 def has_step_up(request, level='full'):

@@ -1,0 +1,13 @@
+{% extends 'generic/_base.html' %}
+{% load i18n %}
+{% block title %}{% trans "Confirm 2FA" %}{% endblock %}
+{% block content %}
+<div class="row"><div class="col-12 col-md-8 col-lg-4">
+  <p class="text-secondary">{% blocktrans %}Enter a 2FA code (or a backup code). It is asked again only after {{ hours }} hours; your PIN is not needed for it.{% endblocktrans %}</p>
+  <form method="post" class="object-edit">{% csrf_token %}<input type="hidden" name="next" value="{{ next }}">
+    {% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors }}</div>{% endif %}
+    <div class="mb-3"><label class="form-label">{% trans "2FA code" %}</label>{{ form.otp }}{% for e in form.otp.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}</div>
+    <button type="submit" class="btn btn-primary">{% trans "Confirm" %}</button>
+  </form>
+</div></div>
+{% endblock %}

@@ -25,6 +25,7 @@ Use from a plugin::
 """
 import logging
 import time
+import uuid
 from datetime import timedelta
 
 from django.apps import apps
@@ -218,13 +219,14 @@ def is_owner(user, area):
                 and AreaOwner.objects.filter(area=area, user=user).exists())
 
 
-def active_grants(user, area):
+def active_grants(user, area, target=None):
+    """Live grants of the user; with ``target`` ('dcim.device') only those valid for that object type."""
     now = timezone.now()
     return [g for g in AreaGrant.objects.filter(area=area, user=user, revoked__isnull=True).select_related('profile')
-            if g.expires is None or g.expires > now]
+            if (g.expires is None or g.expires > now) and (not target or not g.target or g.target == target)]
 
 
-def rights_of(user, area):
+def rights_of(user, area, target=None):
     """Rights the user holds in the area now (owners: all of them)."""
     if not getattr(user, 'is_authenticated', False) or not user.is_active:
         return set()
@@ -233,26 +235,27 @@ def rights_of(user, area):
     if not AreaOwner.objects.filter(area=area).exists() and user.is_superuser:
         return set(rights_available(area))  # bootstrap: no owners yet, the master keeps access
     rights = set()
-    for grant in active_grants(user, area):
+    for grant in active_grants(user, area, target):
         rights.update(grant.profile.rights)
     return rights
 
 
-def can(user, area, right='view'):
+def can(user, area, right='view', target=None):
     """May the user use ``right`` in the area? Areas that do not protect (inactive / unknown key) allow."""
     area = get_area(area)
     if area is None or area not in active_areas():
         return True
-    return right in _memo_rights(user, area)
+    return right in _memo_rights(user, area, target)
 
 
-def _memo_rights(user, area):
+def _memo_rights(user, area, target=None):
     memo = user.__dict__.setdefault('_userpin_rights', {}) if hasattr(user, '__dict__') else {}
     stamp = int(time.monotonic() // CACHE_SECONDS)
-    entry = memo.get(area.pk)
+    key = (area.pk, target or '')
+    entry = memo.get(key)
     if entry is None or entry[0] != stamp:
-        entry = (stamp, rights_of(user, area))
-        memo[area.pk] = entry
+        entry = (stamp, rights_of(user, area, target))
+        memo[key] = entry
     return entry[1]
 
 
@@ -268,12 +271,13 @@ def row_filter(user, area, app_label, model, action='view'):
     ``None``: no access. ``Q()``: every row. Otherwise a ``Q`` with the rows the user's profiles show.
     NetBox permissions and their constraints are not consulted inside a protected area.
     """
-    if not getattr(user, 'is_authenticated', False) or action not in _memo_rights(user, area):
+    target = f'{app_label}.{model}'
+    if not getattr(user, 'is_authenticated', False) or action not in _memo_rights(user, area, target):
         return None
     if _unrestricted(user, area):
         return Q()
     combined = None
-    for grant in active_grants(user, area):
+    for grant in active_grants(user, area, target):
         if action not in grant.profile.rights:
             continue
         lookups = (grant.profile.filters or {}).get(f'{app_label}.{model}')
@@ -348,7 +352,7 @@ def check_perm(user, perm):
     area = area_for(app_label, model or None, package=app_label)
     if area is None:
         return None
-    rights = _memo_rights(user, area)
+    rights = _memo_rights(user, area, f'{app_label}.{model}' if model else None)
     if not rights:
         return True, area
     # a permission named after a right of the area (e.g. app.config_model) asks for exactly that right
@@ -577,7 +581,7 @@ def request_access(area, user, note='', request=None, scope=''):
     return req
 
 
-def decide_request(req, actor, approve, profile=None, hours=None, request=None):
+def decide_request(req, actor, approve, profile=None, hours=None, request=None, rights=None, target=''):
     area = req.area
     if req.status != AreaRequestStatus.PENDING:
         raise ValidationError(_('The request has been dealt with already.'))
@@ -594,13 +598,16 @@ def decide_request(req, actor, approve, profile=None, hours=None, request=None):
                                _('Your request for access to "%(area)s" was denied.') % {'area': area.name},
                                request=request)
         return None
-    grant = grant_access(area, req.user, profile, hours, actor, request=request, notify=False)
+    if rights:
+        grant = grant_custom(area, req.user, target, rights, hours, actor, request=request, notify=False)
+    else:
+        grant = grant_access(area, req.user, profile, hours, actor, request=request, notify=False)
     req.status, req.grant = AreaRequestStatus.GRANTED, grant
     req.decided, req.decided_by_name = timezone.now(), actor.username
     req.save()
     service.send_user_mail(req.user, _('Access granted: %(area)s') % {'area': area.name}, _(
         'You were given access to "%(area)s" (%(profile)s) %(until)s.') % {
-        'area': area.name, 'profile': grant.profile.name, 'until': _until_text(grant)}, request=request)
+        'area': area.name, 'profile': _profile_label(grant.profile), 'until': _until_text(grant)}, request=request)
     return grant
 
 
@@ -610,7 +617,52 @@ def _until_text(grant):
     return _('until %(time)s') % {'time': timezone.localtime(grant.expires).strftime('%Y-%m-%d %H:%M')}
 
 
-def grant_access(area, user, profile, hours, actor, request=None, notify=True):
+def _profile_label(profile):
+    return ', '.join(str(right_label(profile.area, r)) for r in profile.rights) if profile.private else profile.name
+
+
+def grant_custom(area, user, target, rights, hours, actor, filters=None, request=None, notify=True):
+    """
+    Give ``user`` exactly ``rights`` on one object type (``target`` 'dcim.device'; '' = the whole area), optionally
+    only the rows of ``filters``. The rights live in a private profile that belongs to this entry alone.
+    """
+    if not is_owner(actor, area):
+        raise PermissionDenied
+    known = set(rights_available(area))
+    rights = [r for r in rights if r in known]
+    if not rights:
+        raise ValidationError(_('Choose at least one right.'))
+    if target and target not in area_models(area):
+        raise ValidationError(_('"%(target)s" is not protected by this area.') % {'target': target})
+    profile = AreaProfile.objects.create(area=area, name=f'{user.username} · {target or "*"} · {uuid.uuid4().hex[:6]}',
+                                         rights=rights, filters=filters or {}, private=True)
+    try:
+        return grant_access(area, user, profile, hours, actor, request=request, notify=notify, target=target)
+    except Exception:
+        profile.delete()
+        raise
+
+
+def update_grant(grant, rights, actor, filters=None, request=None):
+    """Change the rights / rows of an access entry (its private profile)."""
+    area = grant.area
+    if not is_owner(actor, area):
+        raise PermissionDenied
+    known = set(rights_available(area))
+    rights = [r for r in rights if r in known]
+    if not rights:
+        raise ValidationError(_('Choose at least one right.'))
+    profile = grant.profile
+    if not profile.private:
+        raise ValidationError(_('Revoke this access and grant it again.'))
+    profile.rights, profile.filters = rights, filters or {}
+    profile.save()
+    _log(PinEventAction.AREA_CHANGED, area, actor, user=grant.user, request=request,
+         detail=f'{grant.target or "*"}: {", ".join(rights)}' + (f' | rows: {format_filters(filters)}' if filters else ''))
+    clear_cache()
+
+
+def grant_access(area, user, profile, hours, actor, request=None, notify=True, target=''):
     """Give ``user`` access. ``hours=None`` is permanent; otherwise 1..area.max_hours. Only owners grant."""
     if not is_owner(actor, area):
         raise PermissionDenied
@@ -625,13 +677,13 @@ def grant_access(area, user, profile, hours, actor, request=None, notify=True):
             raise ValidationError(_('Temporary access is 1 to %(max)s hours.') % {'max': area.max_hours})
         expires = timezone.now() + timedelta(hours=int(hours))
     grant = AreaGrant.objects.create(area=area, user=user, profile=profile, expires=expires, granted_by=actor,
-                                     granted_by_name=actor.username)
+                                     granted_by_name=actor.username, target=target or '')
     _log(PinEventAction.AREA_GRANTED, area, actor, user=user, request=request,
-         detail=f'{profile.name} ({", ".join(profile.rights)}) {_until_text(grant)}')
+         detail=f'{target or "*"} ({", ".join(profile.rights)}) {_until_text(grant)}')
     if notify:
         service.send_user_mail(user, _('Access granted: %(area)s') % {'area': area.name}, _(
             'You were given access to "%(area)s" (%(profile)s) %(until)s.') % {
-            'area': area.name, 'profile': profile.name, 'until': _until_text(grant)}, request=request)
+            'area': area.name, 'profile': _profile_label(profile), 'until': _until_text(grant)}, request=request)
     clear_cache()
     return grant
 

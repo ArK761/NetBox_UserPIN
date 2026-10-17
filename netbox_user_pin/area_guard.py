@@ -148,7 +148,8 @@ class AreaGuardMiddleware:
                 return None
             return denied_response(request, None)
         right = areas.right_for_request(request, cls, view_kwargs)
-        if areas.can(user, area, right):
+        target = f'{app_label}.{model_name}' if model_name else None
+        if areas.can(user, area, right, target):
             # whoever holds access unlocks the PIN to enter (not before the owners exist, and the REST API has no
             # unlock step)
             if not api and areas.owners(area):

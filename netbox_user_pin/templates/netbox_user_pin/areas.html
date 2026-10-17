@@ -4,7 +4,6 @@
 {% block title %}{% trans "Protected areas" %}{% endblock %}
 {% block content %}
 {% pin_build %}
-{% include 'netbox_user_pin/inc/step_up_bar.html' %}
 {% if waiting %}<div class="alert alert-warning"><i class="mdi mdi-key-alert"></i> {% blocktrans count n=waiting %}{{ n }} access request is waiting for your decision.{% plural %}{{ n }} access requests are waiting for your decision.{% endblocktrans %}</div>{% endif %}
 {% if not settings.areas_enabled %}<div class="alert alert-secondary"><div>{% trans "The protection of your own areas is off (Settings → Protected areas). Areas of plugins with a PIN integration protect as soon as the plugin's integration is switched on." %}</div></div>{% endif %}
 <div class="card {% if deny_on %}border-danger{% endif %}">
@@ -16,15 +15,15 @@
     <ul class="list-group list-group-flush mb-3">
       {% for u in keepers %}
       <li class="list-group-item d-flex justify-content-between align-items-center">{{ u.username }}
-        {% if is_keeper and keepers|length > 1 %}<form method="post" class="d-inline" data-step-up="full">{% csrf_token %}<input type="hidden" name="pk" value="{{ u.pk }}"><input type="hidden" name="action" value="keeper-remove"><button class="btn btn-sm btn-outline-danger" type="submit">{% trans "Remove" %}</button></form>{% endif %}</li>
+        {% if is_keeper and keepers|length > 1 %}<form method="post" class="d-inline">{% csrf_token %}<input type="hidden" name="pk" value="{{ u.pk }}"><input type="hidden" name="action" value="keeper-remove"><button class="btn btn-sm btn-outline-danger" type="submit">{% trans "Remove" %}</button></form>{% endif %}</li>
       {% empty %}<li class="list-group-item text-secondary">{% trans "No keeper yet." %}</li>{% endfor %}
     </ul>
     {% if can_keepers %}
-    <form method="post" class="d-flex gap-2 align-items-start mb-3" data-step-up="full">{% csrf_token %}<input type="hidden" name="action" value="keeper-add"><div class="flex-grow-1">{{ keeper_form.user }}</div><button class="btn btn-primary" type="submit">{% trans "Appoint keeper" %}</button></form>
+    <form method="post" class="d-flex gap-2 align-items-start mb-3">{% csrf_token %}<input type="hidden" name="action" value="keeper-add"><div class="flex-grow-1">{{ keeper_form.user }}</div><button class="btn btn-primary" type="submit">{% trans "Appoint keeper" %}</button></form>
     <p class="small text-secondary">{% trans "A keeper needs a PIN and 2FA, cannot turn 2FA off and cannot leave alone: another keeper has to take over." %}</p>
     {% endif %}
     {% if is_keeper %}
-    <form method="post" data-step-up="full">{% csrf_token %}
+    <form method="post">{% csrf_token %}
       {% if deny_on %}<button class="btn btn-outline-secondary" name="action" value="deny-off" type="submit">{% trans "Switch off" %}</button>
       {% else %}<button class="btn btn-danger" name="action" value="deny-on" type="submit">{% trans "Switch on: deny everything not allowed" %}</button>{% endif %}
     </form>
@@ -61,7 +60,7 @@
     <div class="card">
       <h2 class="card-header">{% trans "New area" %}</h2>
       <div class="card-body">
-        <form method="post" class="object-edit" data-step-up="full">{% csrf_token %}<input type="hidden" name="action" value="create">
+        <form method="post" class="object-edit">{% csrf_token %}<input type="hidden" name="action" value="create">
           {% render_field form.name %}
           {% render_field form.description %}
           {% render_field form.target %}

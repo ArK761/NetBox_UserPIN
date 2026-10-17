@@ -13,7 +13,7 @@ from .forms import (
     AreaDecideForm, AreaForm, AreaGrantForm, AreaOwnerForm, AreaProfileForm, AreaRequestForm, AreaTargetForm,
     KeeperForm,
 )
-from .mixins import PinRequiredMixin, step_up_gate
+from .mixins import PinRequiredMixin, area_gate
 from .models import (
     AreaFieldRule, AreaGrant, AreaProfile, AreaRequest, AreaRequestStatus, PinEventAction, ProtectedArea,
 )
@@ -23,8 +23,13 @@ __all__ = ('AreaFieldsView', 'AreaListView', 'AreaRequestView', 'AreaView', 'MyA
 
 
 class AreaViewMixin(LoginRequiredMixin, PinRequiredMixin):
-    """Logged in, allowed to use a PIN and unlocked."""
+    """Logged in, allowed to use a PIN and unlocked; 2FA (if the user has it) is asked once in a while only."""
     pin_scope = ADMIN_SCOPE
+
+    def dispatch(self, request, *args, **kwargs):
+        if request.user.is_authenticated and (response := area_gate(request)) is not None:
+            return response
+        return super().dispatch(request, *args, **kwargs)
 
 
 def _target_label(target):
@@ -38,6 +43,17 @@ def _target_label(target):
         return f'{config.verbose_name} › {str(apps.get_model(app_label, model)._meta.verbose_name).capitalize()}'
     except LookupError:
         return target
+
+
+def _grant_rows(area, grant):
+    """What an access entry allows, for the table."""
+    profile = grant.profile
+    return {
+        'target': _target_label(grant.target) if grant.target else _('Everything in this area'),
+        'rights': [areas.right_label(area, r) for r in profile.rights],
+        'rows': areas.format_filters(profile.filters).split(': ', 1)[-1] if profile.filters else '',
+        'name': '' if profile.private else profile.name,
+    }
 
 
 def _status(area):
@@ -80,8 +96,6 @@ class AreaListView(AreaViewMixin, View):
         return self._render(request)
 
     def post(self, request):
-        if (response := step_up_gate(request, 'full')) is not None:
-            return response
         action = request.POST.get('action')
         from django.contrib.auth import get_user_model
         try:
@@ -135,16 +149,15 @@ class AreaView(AreaViewMixin, View):
             'area': area, 'status': code, 'status_label': label, 'targets': areas.targets_of(area),
             'owners': list(areas.owners(area)), 'is_owner': mine, 'can_manage': areas.can_manage(request.user, area),
             'bootstrap': not area.owners.exists(),
-            'profiles': [(p, [areas.right_label(area, r) for r in p.rights], areas.format_filters(p.filters))
-                         for p in area.profiles.all()],
-            'active_grants': [g for g in grants if g.is_active], 'old_grants': [g for g in grants if not g.is_active][:15],
+            'active_grants': [(g, _grant_rows(area, g)) for g in grants if g.is_active],
+            'old_grants': [g for g in grants if not g.is_active][:15],
             'pending': [(r, AreaDecideForm(area=area)) for r in pending],
             'area_form': forms.get('area_form') or AreaForm(plugin=area.plugin, initial={
                 'name': area.name, 'description': area.description, 'max_hours': area.max_hours,
                 'enabled': area.enabled}),
             'target_form': AreaTargetForm(exclude=areas.targets_of(area)),
             'target_labels': [(t, _target_label(t)) for t in areas.targets_of(area)],
-            'owner_form': AreaOwnerForm(), 'profile_form': forms.get('profile_form') or AreaProfileForm(area=area),
+            'owner_form': AreaOwnerForm(),
             'grant_form': forms.get('grant_form') or AreaGrantForm(area=area),
             'rights': [(r, areas.right_label(area, r)) for r in areas.rights_available(area)],
             'settings': service.get_settings(), **_step_up_context(request),
@@ -155,8 +168,6 @@ class AreaView(AreaViewMixin, View):
 
     def post(self, request, pk):
         area = self._area(request, pk)
-        if (response := step_up_gate(request, 'full')) is not None:
-            return response
         action = request.POST.get('action')
         from django.contrib.auth import get_user_model
         User = get_user_model()
@@ -209,9 +220,18 @@ class AreaView(AreaViewMixin, View):
                 if not form.is_valid():
                     return self._render(request, area, grant_form=form)
                 data = form.cleaned_data
-                areas.grant_access(area, data['user'], data['profile'], data['hours'] or None, request.user,
-                                   request=request)
+                areas.grant_custom(area, data['user'], data['target'], data['rights'], data['hours'] or None,
+                                   request.user, filters=data['filters'], request=request)
                 messages.success(request, _('Access granted.'))
+            elif action == 'grant-edit':
+                grant = get_object_or_404(AreaGrant, pk=request.POST.get('pk'), area=area)
+                form = AreaDecideForm(request.POST, area=area)
+                if not form.is_valid():
+                    messages.error(request, _('The rights or the rows are not valid.'))
+                else:
+                    areas.update_grant(grant, form.cleaned_data['rights'], request.user,
+                                       filters=form.cleaned_data['filters'], request=request)
+                    messages.success(request, _('Saved.'))
             elif action == 'revoke':
                 areas.revoke_grant(get_object_or_404(AreaGrant, pk=request.POST.get('pk'), area=area),
                                    request.user, request=request)
@@ -224,10 +244,11 @@ class AreaView(AreaViewMixin, View):
                 else:
                     form = AreaDecideForm(request.POST, area=area)
                     if not form.is_valid():
-                        messages.error(request, _('Choose a profile and the duration.'))
+                        messages.error(request, _('Choose the rights and the duration.'))
                     else:
-                        areas.decide_request(req, request.user, True, form.cleaned_data['profile'],
-                                             form.cleaned_data['hours'] or None, request=request)
+                        data = form.cleaned_data
+                        areas.decide_request(req, request.user, True, hours=data['hours'] or None, request=request,
+                                             rights=data['rights'], target=data['target'])
                         messages.success(request, _('Access granted.'))
             else:
                 raise PermissionDenied
@@ -247,13 +268,20 @@ class AreaFieldsView(AreaViewMixin, View):
         return area
 
     def _choice(self, request, area):
-        """(profile or None, 'nobody' flag, target)."""
-        raw = request.POST.get('profile') or request.GET.get('profile') or ''
+        """(profile of the chosen access entry or None, 'nobody' flag, target)."""
+        raw = request.POST.get('grant') or request.GET.get('grant') or ''
         nobody = raw == 'nobody'
-        profile = None if nobody else (area.profiles.filter(pk=raw).first() if raw.isdigit() else area.profiles.first())
+        grant = None if nobody else (self._grants(area).filter(pk=raw).first() if raw.isdigit() else None)
+        profile = grant.profile if grant else None
         targets = areas.area_models(area)
+        if grant is not None and grant.target in targets and not (request.POST.get('target') or request.GET.get('target')):
+            return profile, nobody, grant.target
         target = request.POST.get('target') or request.GET.get('target') or (targets[0] if targets else '')
         return profile, nobody, (target if target in targets else (targets[0] if targets else ''))
+
+    @staticmethod
+    def _grants(area):
+        return area.grants.filter(revoked__isnull=True).select_related('user', 'profile')
 
     def _render(self, request, area):
         profile, nobody, target = self._choice(request, area)
@@ -267,7 +295,8 @@ class AreaFieldsView(AreaViewMixin, View):
                              'contains': rule.contains if rule else ''})
         return render(request, self.template_name, {
             'area': area, 'profile': profile, 'nobody': nobody, 'target': target, 'rows': rows,
-            'profiles': area.profiles.all(), 'targets': [(t, _target_label(t)) for t in areas.area_models(area)],
+            'grant_choices': [(g.pk, f'{g.user.username} · {g.target or "*"}') for g in self._grants(area) if g.is_active],
+            'grant_pk': (request.POST.get('grant') or request.GET.get('grant') or ''), 'targets': [(t, _target_label(t)) for t in areas.area_models(area)],
             'can_manage': areas.can_manage(request.user, area),
             'settings': service.get_settings(), **_step_up_context(request),
         })
@@ -277,8 +306,6 @@ class AreaFieldsView(AreaViewMixin, View):
 
     def post(self, request, pk):
         area = self._area(request, pk)
-        if (response := step_up_gate(request, 'full')) is not None:
-            return response
         profile, nobody, target = self._choice(request, area)
         try:
             app_label, _dot, model = target.partition('.')
@@ -290,7 +317,7 @@ class AreaFieldsView(AreaViewMixin, View):
         except ValidationError as exc:
             _errors(request, exc)
         return redirect(f"{reverse('plugins:netbox_user_pin:area_fields', kwargs={'pk': area.pk})}"
-                        f"?profile={'nobody' if nobody else (profile.pk if profile else '')}&target={target}")
+                        f"?grant={request.POST.get('grant', '')}&target={target}")
 
 
 class AreaRequestView(LoginRequiredMixin, View):

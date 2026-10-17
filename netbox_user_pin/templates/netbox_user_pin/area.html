@@ -4,7 +4,6 @@
 {% block title %}{{ area.name }}{% endblock %}
 {% block content %}
 {% pin_build %}
-{% include 'netbox_user_pin/inc/step_up_bar.html' %}
 <p><a href="{% url 'plugins:netbox_user_pin:areas' %}"><i class="mdi mdi-arrow-left"></i> {% trans "Protected areas" %}</a></p>
 {% if bootstrap %}<div class="alert alert-warning"><i class="mdi mdi-alert"></i> {% trans "This area has no owners yet: only the master has access. Appoint the owners below; from then on they decide who gets access and the master has none unless they grant it." %}</div>{% endif %}
 <div class="row">
@@ -20,8 +19,10 @@
             <td>{{ req.user.username }}{% if req.note %}<div class="small"><strong>{% trans "Why:" %}</strong> {{ req.note }}</div>{% endif %}{% if req.scope %}<div class="small"><strong>{% trans "What exactly:" %}</strong> {{ req.scope }}</div>{% endif %}</td>
             <td>{{ req.created|date:"Y-m-d H:i" }}</td>
             <td>{% if is_owner and req.user_id != request.user.pk %}
-              <form method="post" class="d-flex flex-wrap gap-2 align-items-center" data-step-up="full">{% csrf_token %}<input type="hidden" name="pk" value="{{ req.pk }}">
-                {{ form.profile }} {{ form.hours }}
+              <form method="post" class="d-flex flex-wrap gap-2 align-items-center">{% csrf_token %}<input type="hidden" name="pk" value="{{ req.pk }}">
+                {{ form.target }}
+                <span class="d-flex flex-wrap gap-2">{% for cb in form.rights %}<label class="small">{{ cb.tag }} {{ cb.choice_label }}</label>{% endfor %}</span>
+                {{ form.hours }}
                 <button class="btn btn-sm btn-success" name="action" value="approve" type="submit"><i class="mdi mdi-check"></i> {% trans "Grant" %}</button>
                 <button class="btn btn-sm btn-outline-danger" name="action" value="deny" type="submit">{% trans "Deny" %}</button>
               </form>{% else %}<span class="text-secondary">—</span>{% endif %}</td>
@@ -36,71 +37,43 @@
       <h2 class="card-header">{% trans "Who has access" %}</h2>
       <div class="card-body pb-0"><input type="search" class="form-control form-control-sm pin-filter" data-target="#pin-grants"></div>
       <table class="table table-hover pin-sortable" id="pin-grants">
-        <thead><tr><th data-sort="text">{% trans "User" %}</th><th data-sort="text">{% trans "Profile" %}</th><th data-sort="text">{% trans "Until" %}</th><th data-sort="text">{% trans "Granted by" %}</th><th></th></tr></thead>
+        <thead><tr><th data-sort="text">{% trans "User" %}</th><th data-sort="text">{% trans "Object type" %}</th><th>{% trans "May" %}</th><th data-sort="text">{% trans "Until" %}</th><th></th></tr></thead>
         <tbody>
-          {% for g in active_grants %}
-          <tr><td>{{ g.user.username }}</td><td>{{ g.profile.name }}</td><td>{% if g.expires %}{{ g.expires|date:"Y-m-d H:i" }}{% else %}{% trans "no time limit" %}{% endif %}</td><td>{{ g.granted_by_name }}</td>
-            <td class="text-end">{% if is_owner %}<form method="post" class="d-inline" data-step-up="full">{% csrf_token %}<input type="hidden" name="pk" value="{{ g.pk }}"><input type="hidden" name="action" value="revoke"><button class="btn btn-sm btn-outline-danger" type="submit">{% trans "Revoke" %}</button></form>{% endif %}</td></tr>
+          {% for g, info in active_grants %}
+          <tr><td>{{ g.user.username }}</td><td>{{ info.target }}{% if info.rows %}<div class="small"><code>{{ info.rows }}</code></div>{% endif %}</td><td>{% if info.name %}<em>{{ info.name }}:</em> {% endif %}{{ info.rights|join:", " }}</td><td>{% if g.expires %}{{ g.expires|date:"Y-m-d H:i" }}{% else %}{% trans "no time limit" %}{% endif %}</td>
+            <td class="text-end text-nowrap">{% if is_owner %}
+              <a class="btn btn-sm btn-outline-info" href="{% url 'plugins:netbox_user_pin:area_fields' pk=area.pk %}?grant={{ g.pk }}">{% trans "Fields" %}</a>
+              <form method="post" class="d-inline">{% csrf_token %}<input type="hidden" name="pk" value="{{ g.pk }}"><input type="hidden" name="action" value="revoke"><button class="btn btn-sm btn-outline-danger" type="submit">{% trans "Revoke" %}</button></form>{% endif %}</td></tr>
           {% empty %}<tr><td colspan="5" class="text-secondary">{% trans "Nobody except the owners." %}</td></tr>{% endfor %}
         </tbody>
       </table>
-      {% if old_grants %}<div class="card-body small text-secondary">{% trans "Ended:" %} {% for g in old_grants %}{{ g.user.username }} ({{ g.profile.name }}){% if not forloop.last %}, {% endif %}{% endfor %}</div>{% endif %}
+      {% if old_grants %}<div class="card-body small text-secondary">{% trans "Ended:" %} {% for g in old_grants %}{{ g.user.username }}{% if not forloop.last %}, {% endif %}{% endfor %}</div>{% endif %}
     </div>
 
     {% if is_owner %}
     <div class="card">
       <h2 class="card-header">{% trans "Grant access" %}</h2>
       <div class="card-body">
-        <form method="post" class="d-flex flex-wrap gap-2 align-items-end" data-step-up="full">{% csrf_token %}<input type="hidden" name="action" value="grant">
-          <div>{{ grant_form.user.label_tag }}<br>{{ grant_form.user }}</div>
-          <div>{{ grant_form.profile.label_tag }}<br>{{ grant_form.profile }}</div>
-          <div>{{ grant_form.hours.label_tag }}<br>{{ grant_form.hours }}</div>
+        {% if grant_form.errors %}<div class="alert alert-danger"><ul class="mb-0">{% for field in grant_form %}{% for e in field.errors %}<li>{{ field.label }}: {{ e }}</li>{% endfor %}{% endfor %}{% for e in grant_form.non_field_errors %}<li>{{ e }}</li>{% endfor %}</ul></div>{% endif %}
+        <form method="post">{% csrf_token %}<input type="hidden" name="action" value="grant">
+          <div class="row g-2 mb-2">
+            <div class="col-md-6">{{ grant_form.user.label_tag }}<br>{{ grant_form.user }}</div>
+            <div class="col-md-6">{{ grant_form.target.label_tag }}<br>{{ grant_form.target }}</div>
+          </div>
+          <div class="mb-2">{{ grant_form.rights.label_tag }}<br>
+            {% for cb in grant_form.rights %}<label class="me-3">{{ cb.tag }} {{ cb.choice_label }}</label>{% endfor %}
+            <div class="form-text">{% trans "E.g. only “View” and “Change”. Which fields are seen or written is set under “Fields” after saving." %}</div></div>
+          <div class="row g-2 mb-2">
+            <div class="col-md-8">{{ grant_form.rows.label_tag }}<br>{{ grant_form.rows }}<div class="form-text">{{ grant_form.rows.help_text }}</div></div>
+            <div class="col-md-4">{{ grant_form.hours.label_tag }}<br>{{ grant_form.hours }}</div>
+          </div>
           <button class="btn btn-primary" type="submit">{% trans "Grant" %}</button>
         </form>
       </div>
     </div>
     {% endif %}
 
-    <div class="card">
-      <h2 class="card-header d-flex justify-content-between align-items-center">{% trans "Profiles" %}
-        <a class="btn btn-sm btn-outline-warning" href="{% url 'plugins:netbox_user_pin:area_fields' pk=area.pk %}?profile=nobody"><i class="mdi mdi-eye-off"></i> {% trans "Fields nobody sees" %}</a></h2>
-      <table class="table">
-        <thead><tr><th>{% trans "Profile" %}</th><th>{% trans "Rights" %}</th><th>{% trans "Rows shown" %}</th><th></th></tr></thead>
-        <tbody>
-          {% for p, labels, rows in profiles %}
-          <tr><td>{{ p.name }}</td><td>{{ labels|join:", " }}</td><td>{% if rows %}<code class="small">{{ rows|linebreaksbr }}</code>{% else %}<span class="text-secondary">{% trans "all rows" %}</span>{% endif %}</td>
-            <td class="text-end text-nowrap">{% if can_manage %}
-              <a class="btn btn-sm btn-outline-info" href="{% url 'plugins:netbox_user_pin:area_fields' pk=area.pk %}?profile={{ p.pk }}">{% trans "Fields" %}</a>
-              <button type="button" class="btn btn-sm btn-outline-secondary pin-profile-edit" data-pk="{{ p.pk }}" data-name="{{ p.name }}" data-rights="{{ p.rights|join:',' }}" data-filters="{{ rows }}">{% trans "Edit" %}</button>
-              <form method="post" class="d-inline" data-step-up="full">{% csrf_token %}<input type="hidden" name="pk" value="{{ p.pk }}"><input type="hidden" name="action" value="profile-delete"><button class="btn btn-sm btn-outline-danger" type="submit">{% trans "Delete" %}</button></form>{% endif %}</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
-      {% if can_manage %}
-      <div class="card-body">
-        <form method="post" data-step-up="full" id="pin-profile-form">{% csrf_token %}<input type="hidden" name="action" value="profile-save"><input type="hidden" name="pk" value="">
-          {% if profile_form.errors %}<div class="alert alert-danger" role="alert"><strong>{% trans "The profile was not saved:" %}</strong><ul class="mb-0">{% for field in profile_form %}{% for e in field.errors %}<li>{{ field.label }}: {{ e }}</li>{% endfor %}{% endfor %}{% for e in profile_form.non_field_errors %}<li>{{ e }}</li>{% endfor %}</ul></div>{% endif %}
-          <div class="mb-2">{{ profile_form.name.label_tag }}<br>{{ profile_form.name }}</div>
-          <div class="mb-2">{% for value, label in rights %}<label class="me-3"><input type="checkbox" class="form-check-input" name="rights" value="{{ value }}"> {{ label }}</label>{% endfor %}</div>
-          <div class="mb-2">{{ profile_form.filters.label_tag }}<br>{{ profile_form.filters }}<div class="form-text">{{ profile_form.filters.help_text }}</div>{% for e in profile_form.filters.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}</div>
-          <button class="btn btn-outline-primary" type="submit">{% trans "Save profile" %}</button>
-        </form>
-        <script>
-          document.querySelectorAll('.pin-profile-edit').forEach(function (button) {
-            button.addEventListener('click', function () {
-              var form = document.getElementById('pin-profile-form');
-              form.elements['pk'].value = button.dataset.pk;
-              form.elements['name'].value = button.dataset.name;
-              var rights = button.dataset.rights.split(',');
-              form.querySelectorAll('input[name=rights]').forEach(function (box) { box.checked = rights.indexOf(box.value) >= 0; });
-              form.elements['filters'].value = button.dataset.filters;
-              form.scrollIntoView({behavior: 'smooth'});
-            });
-          });
-        </script>
-      </div>
-      {% endif %}
-    </div>
+    {% if can_manage %}<p><a class="btn btn-outline-warning" href="{% url 'plugins:netbox_user_pin:area_fields' pk=area.pk %}?grant=nobody"><i class="mdi mdi-eye-off"></i> {% trans "Fields nobody sees" %}</a></p>{% endif %}
   </div>
 
   <div class="col-12 col-xl-4">
@@ -110,7 +83,7 @@
         <p class="small text-secondary">{{ status_label }}</p>
         <p>{% for t in targets %}<code>{{ t }}</code> {% endfor %}</p>
         {% if can_manage %}
-        <form method="post" class="object-edit" data-step-up="full">{% csrf_token %}<input type="hidden" name="action" value="update">
+        <form method="post" class="object-edit">{% csrf_token %}<input type="hidden" name="action" value="update">
           {% render_field area_form.name %}
           {% render_field area_form.description %}
           {% if not area.plugin %}{% render_field area_form.enabled %}{% endif %}
@@ -125,11 +98,11 @@
       <ul class="list-group list-group-flush">
         {% for t, label in target_labels %}
         <li class="list-group-item d-flex justify-content-between align-items-center"><span>{{ label }} <code class="small text-secondary">{{ t }}</code></span>
-          {% if can_manage and not area.plugin and target_labels|length > 1 %}<form method="post" class="d-inline" data-step-up="full">{% csrf_token %}<input type="hidden" name="target" value="{{ t }}"><input type="hidden" name="action" value="target-remove"><button class="btn btn-sm btn-outline-danger" type="submit">{% trans "Remove" %}</button></form>{% endif %}</li>
+          {% if can_manage and not area.plugin and target_labels|length > 1 %}<form method="post" class="d-inline">{% csrf_token %}<input type="hidden" name="target" value="{{ t }}"><input type="hidden" name="action" value="target-remove"><button class="btn btn-sm btn-outline-danger" type="submit">{% trans "Remove" %}</button></form>{% endif %}</li>
         {% endfor %}
       </ul>
       {% if can_manage and not area.plugin %}
-      <div class="card-body"><form method="post" class="d-flex gap-2" data-step-up="full">{% csrf_token %}<input type="hidden" name="action" value="target-add"><div class="flex-grow-1">{{ target_form.target }}</div><button class="btn btn-primary" type="submit">{% trans "Add" %}</button></form></div>
+      <div class="card-body"><form method="post" class="d-flex gap-2">{% csrf_token %}<input type="hidden" name="action" value="target-add"><div class="flex-grow-1">{{ target_form.target }}</div><button class="btn btn-primary" type="submit">{% trans "Add" %}</button></form></div>
       {% endif %}
     </div>
     <div class="card">
@@ -137,18 +110,18 @@
       <ul class="list-group list-group-flush">
         {% for u in owners %}
         <li class="list-group-item d-flex justify-content-between align-items-center">{{ u.username }}
-          {% if is_owner and owners|length > 1 %}<form method="post" class="d-inline" data-step-up="full">{% csrf_token %}<input type="hidden" name="pk" value="{{ u.pk }}"><input type="hidden" name="action" value="owner-remove"><button class="btn btn-sm btn-outline-danger" type="submit">{% trans "Remove" %}</button></form>{% endif %}</li>
+          {% if is_owner and owners|length > 1 %}<form method="post" class="d-inline">{% csrf_token %}<input type="hidden" name="pk" value="{{ u.pk }}"><input type="hidden" name="action" value="owner-remove"><button class="btn btn-sm btn-outline-danger" type="submit">{% trans "Remove" %}</button></form>{% endif %}</li>
         {% empty %}<li class="list-group-item text-secondary">{% trans "No owners." %}</li>{% endfor %}
       </ul>
       {% if can_manage %}
       <div class="card-body">
-        <form method="post" class="d-flex gap-2" data-step-up="full">{% csrf_token %}<input type="hidden" name="action" value="owner-add">{{ owner_form.user }}<button class="btn btn-primary" type="submit">{% trans "Add" %}</button></form>
+        <form method="post" class="d-flex gap-2">{% csrf_token %}<input type="hidden" name="action" value="owner-add">{{ owner_form.user }}<button class="btn btn-primary" type="submit">{% trans "Add" %}</button></form>
         {% if owners|length == 1 %}<p class="small text-warning mt-2 mb-0">{% trans "Appoint at least two owners, so that a decision can be taken when one is away." %}</p>{% endif %}
       </div>
       {% endif %}
     </div>
     {% if can_manage and not area.plugin %}
-    <form method="post" data-step-up="full" onsubmit="return confirm('{% trans "Delete this area? Its objects become visible again according to the NetBox permissions." %}');">{% csrf_token %}<input type="hidden" name="action" value="delete"><button class="btn btn-outline-danger" type="submit">{% trans "Delete the area" %}</button></form>
+    <form method="post" onsubmit="return confirm('{% trans "Delete this area? Its objects become visible again according to the NetBox permissions." %}');">{% csrf_token %}<input type="hidden" name="action" value="delete"><button class="btn btn-outline-danger" type="submit">{% trans "Delete the area" %}</button></form>
     {% endif %}
   </div>
 </div>

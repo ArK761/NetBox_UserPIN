@@ -18,7 +18,7 @@ from . import approvals, crypto, mail, roles, service
 from .forms import (
     AcceptRoleForm, ApprovalForm, BackupCodesForm, BreakGlassForm, ChangePinForm, DepartmentForm, DomainForm,
     HandOverForm, MailSettingsForm, MemberForm, OtpForm, PinOtpForm, PinSettingsForm, RecoveryForm, ReplaceRoleForm,
-    ResetConfirmForm, ResignForm, RoleInviteForm, SetPinForm, TestMailForm, TransferForm, UnlockForm,
+    ResetConfirmForm, ResignForm, RoleInviteForm, SetPinForm, TestMailForm, TransferForm, TwoFactorForm, UnlockForm,
 )
 from .mixins import PinRequiredMixin, not_allowed_response, step_up_gate
 from .models import (
@@ -256,6 +256,31 @@ class UnlockView(AllowedUserMixin, View):
                 return redirect(reverse('plugins:netbox_user_pin:set_pin'))
             _verify_error(form, result)
         return render(request, self.template_name, self._context(request, form))
+
+
+class TwoFactorConfirmView(AllowedUserMixin, View):
+    """A 2FA code, asked now and then (not the PIN) before the administration of the protected areas."""
+    template_name = 'netbox_user_pin/twofa_confirm.html'
+
+    def _render(self, request, form):
+        return render(request, self.template_name, {
+            'form': form, 'next': request.POST.get('next') or request.GET.get('next', ''),
+            'hours': service.get_settings().twofa_hours,
+        })
+
+    def get(self, request):
+        if not service.has_2fa(request.user):
+            return redirect(f"{reverse('plugins:netbox_user_pin:totp_setup')}?{request.GET.urlencode()}")
+        return self._render(request, TwoFactorForm())
+
+    def post(self, request):
+        form = TwoFactorForm(request.POST)
+        if form.is_valid():
+            result = service.confirm_2fa(request, form.cleaned_data['otp'])
+            if result:
+                return redirect(_next_url(request, 'plugins:netbox_user_pin:areas'))
+            _verify_error(form, result)
+        return self._render(request, form)
 
 
 class LockView(LoginRequiredMixin, View):

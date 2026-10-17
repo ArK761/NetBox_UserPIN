@@ -34,6 +34,7 @@ from . import service
 __all__ = (
     'PinRequiredMixin',
     'StepUpRequiredMixin',
+    'area_gate',
     'not_allowed_response',
     'pin_gate',
     'pin_required',
@@ -131,6 +132,27 @@ def step_up_gate(request, level='full'):
     next_url = request.get_full_path() if request.method == 'GET' else request.META.get('HTTP_REFERER', '')
     query = urlencode({'next': next_url, 'level': level})
     return _redirect(request, f"{reverse('plugins:netbox_user_pin:step_up')}?{query}")
+
+
+def area_gate(request, scope='user-pin-admin'):
+    """
+    Administration of the protected areas: the PIN is unlocked once (it stays unlocked while in use) and a 2FA code
+    is asked again only after PinSettings.twofa_hours. Returns a redirect or None.
+    """
+    if (response := pin_gate(request, scope=scope)) is not None:
+        return response
+    user = getattr(request, 'user', None)
+    if user is None or not user.is_authenticated:
+        return None
+    if not service.has_2fa(user):
+        if service.get_settings().require_2fa_admin:
+            return _redirect(request, f"{reverse('plugins:netbox_user_pin:totp_setup')}?"
+                                      f"{urlencode({'next': request.get_full_path()})}")
+        return None
+    if service.has_recent_2fa(request):
+        return None
+    next_url = request.get_full_path() if request.method == 'GET' else request.META.get('HTTP_REFERER', '')
+    return _redirect(request, f"{reverse('plugins:netbox_user_pin:twofa_confirm')}?{urlencode({'next': next_url})}")
 
 
 class StepUpRequiredMixin:

@@ -1,6 +1,7 @@
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
+from django.db.models import Q
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.test import override_settings
 from django.urls import reverse
@@ -14,7 +15,7 @@ from netbox_user_pin.models import (
 
 from netbox_user_pin import service
 
-from .test_pin import GOOD_PIN, PinTestCase, admin_login, enable_2fa
+from .test_pin import GOOD_PIN, PinTestCase, admin_login, current_code, enable_2fa
 
 User = get_user_model()
 DEVICES = '/dcim/devices/'
@@ -270,7 +271,7 @@ class RequestFlowTest(AreaTestCase):
         owner_client = self.client_class()
         admin_login(owner_client, self.owner1)
         response = owner_client.post(reverse('plugins:netbox_user_pin:area', kwargs={'pk': area.pk}), {
-            'action': 'approve', 'pk': req.pk, 'profile': self.profile(area, 'Read').pk, 'hours': 4})
+            'action': 'approve', 'pk': req.pk, 'rights': ['view'], 'target': 'dcim.device', 'hours': 4})
         self.assertEqual(response.status_code, 302, response.content[:300])
         req.refresh_from_db()
         self.assertEqual(req.status, AreaRequestStatus.GRANTED)
@@ -281,15 +282,81 @@ class RequestFlowTest(AreaTestCase):
         areas.request_access(area, self.appadmin, 'I need the devices')
         req = AreaRequest.objects.get()
         service.set_pin(self.owner1, GOOD_PIN)
-        enable_2fa(self.owner1)
+        secret = enable_2fa(self.owner1)
         self.login(self.owner1)
         self.client.post(reverse('plugins:netbox_user_pin:unlock'), {'pin': GOOD_PIN, 'scope': 'user-pin-admin'})
         response = self.client.post(reverse('plugins:netbox_user_pin:area', kwargs={'pk': area.pk}), {
             'action': 'deny', 'pk': req.pk})
         self.assertEqual(response.status_code, 302)
-        self.assertIn('/confirm/', response['Location'])  # sent to the PIN + 2FA confirmation
+        self.assertIn('/2fa-confirm/', response['Location'])  # the PIN is unlocked; only the 2FA code is asked
         req.refresh_from_db()
         self.assertEqual(req.status, AreaRequestStatus.PENDING)
+        # one valid code opens the window: no further PIN or code for the next changes
+        response = self.client.post(reverse('plugins:netbox_user_pin:twofa_confirm'), {'otp': current_code(secret)})
+        self.assertEqual(response.status_code, 302)
+        response = self.client.post(reverse('plugins:netbox_user_pin:area', kwargs={'pk': area.pk}), {
+            'action': 'deny', 'pk': req.pk})
+        self.assertNotIn('/2fa-confirm/', response['Location'])
+        req.refresh_from_db()
+        self.assertEqual(req.status, AreaRequestStatus.DENIED)
+
+
+class CustomGrantTest(AreaTestCase):
+    def test_access_per_user_and_object_type_with_chosen_rights(self):
+        area = self.make_area(targets=('dcim.device', 'dcim.site'))
+        normal = User.objects.create_user('normal', 'n@example.com')
+        areas.grant_custom(area, normal, 'dcim.device', ['view', 'change'], None, self.owner1)
+        self.assertTrue(areas.can(normal, area, 'change', 'dcim.device'))
+        self.assertFalse(areas.can(normal, area, 'delete', 'dcim.device'))
+        self.assertFalse(areas.can(normal, area, 'view', 'dcim.site'))  # another type of the area: no key
+        self.assertIsNone(areas.row_filter(normal, area, 'dcim', 'site'))
+        self.assertEqual(areas.row_filter(normal, area, 'dcim', 'device'), Q())
+        # nothing on the page names a profile
+        admin_login(self.client, self.owner1)
+        html = self.client.get(reverse('plugins:netbox_user_pin:area', kwargs={'pk': area.pk})).content.decode()
+        self.assertNotIn('Save profile', html)
+
+    def test_rows_and_update(self):
+        area = self.make_area()
+        normal = User.objects.create_user('normal', 'n@example.com')
+        grant = areas.grant_custom(area, normal, 'dcim.device', ['view'], None, self.owner1,
+                                   filters=areas.parse_filters('dcim.device: name__istartswith=PRINTER', area))
+        self.assertNotEqual(areas.row_filter(normal, area, 'dcim', 'device'), Q())
+        areas.update_grant(grant, ['view', 'add'], self.owner1)
+        areas.clear_cache()
+        self.assertEqual(areas.row_filter(normal, area, 'dcim', 'device'), Q())
+        with self.assertRaises(ValidationError):
+            areas.grant_custom(area, normal, 'dcim.device', [], None, self.owner1)
+        with self.assertRaises(PermissionDenied):
+            areas.grant_custom(area, normal, 'dcim.device', ['view'], None, normal)
+
+    def test_grant_form_on_the_page(self):
+        area = self.make_area()
+        normal = User.objects.create_user('normal', 'n@example.com')
+        admin_login(self.client, self.owner1)
+        response = self.client.post(reverse('plugins:netbox_user_pin:area', kwargs={'pk': area.pk}), {
+            'action': 'grant', 'user': normal.pk, 'target': 'dcim.device', 'rights': ['view', 'change'],
+            'rows': 'name__istartswith=PRINTER', 'hours': 0})
+        self.assertEqual(response.status_code, 302, response.content[:300])
+        grant = AreaGrant.objects.get(user=normal)
+        self.assertEqual(grant.target, 'dcim.device')
+        self.assertEqual(grant.profile.filters, {'dcim.device': {'name__istartswith': 'PRINTER'}})
+
+
+class TwoFactorWindowTest(AreaTestCase):
+    def test_window_expires_with_the_setting(self):
+        from datetime import timedelta
+        admin_login(self.client, self.owner1)
+        request = self.client.get(reverse('plugins:netbox_user_pin:areas')).wsgi_request
+        self.assertTrue(service.has_recent_2fa(request))
+        session = self.client.session
+        data = session[service.TWOFA_SESSION_KEY]
+        data['at'] = data['at'] - int(timedelta(hours=9).total_seconds())
+        session[service.TWOFA_SESSION_KEY] = data
+        session.save()
+        response = self.client.get(reverse('plugins:netbox_user_pin:areas'))
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('/2fa-confirm/', response['Location'])
 
     def test_deny_and_cancel(self):
         area = self.make_area()
@@ -525,11 +592,7 @@ class ProfileViewTest(AreaTestCase):
         response = self.client.post(url, {'action': 'profile-delete', 'pk': self.profile(area, 'Full').pk})
         self.assertEqual(response.status_code, 302)
         self.assertFalse(area.profiles.filter(name='Full').exists())
-        # nothing ticked: the page says why it was not saved
-        response = self.client.post(url, {'action': 'profile-save', 'pk': read.pk, 'name': 'Read'})
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'The profile was not saved')
-        self.assertContains(response, 'Choose at least one right.')
+
 
 
 class DefaultDenyTest(AreaTestCase):

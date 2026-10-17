@@ -102,6 +102,10 @@ class OtpForm(forms.Form):
     )
 
 
+class TwoFactorForm(forms.Form):
+    otp = otp_field(autofocus=True)
+
+
 class RecoveryForm(forms.Form):
     email_code = forms.CharField(
         label=_('Code from the e-mail'), max_length=8, min_length=8,
@@ -401,7 +405,7 @@ class PinSettingsForm(_StyledModelForm):
             'unlock_minutes', 'sliding_unlock', 'scope_mode', 'require_2fa_unlock',
             'max_attempts', 'lockout_minutes', 'require_2fa_admin', 'require_2fa_settings', 'step_up_minutes', 'reset_valid_hours',
             'four_eyes', 'four_eyes_delegates', 'four_eyes_settings', 'four_eyes_access', 'approval_valid_minutes',
-            'break_glass', 'areas_enabled',
+            'break_glass', 'areas_enabled', 'twofa_hours',
         )
         widgets = {
             'blocked_pins': forms.Textarea(attrs={'rows': 3, 'class': 'form-control'}),
@@ -542,16 +546,45 @@ ACCESS_HOURS = ((1, _('1 hour')), (4, _('4 hours')), (8, _('8 hours')), (24, _('
 
 
 class _AccessChoice(forms.Form):
-    profile = forms.ModelChoiceField(queryset=None, label=_('Profile'),
-                                     widget=forms.Select(attrs={'class': 'form-select'}))
-    hours = forms.TypedChoiceField(choices=ACCESS_HOURS, coerce=int, initial=4, label=_('For how long'),
+    """What one user may do: the object type, the rights, optionally only some rows, and for how long."""
+    target = forms.ChoiceField(label=_('Object type'), required=False,
+                               widget=forms.Select(attrs={'class': 'form-select pin-searchable'}))
+    rights = forms.MultipleChoiceField(label=_('Rights'), choices=(), widget=forms.CheckboxSelectMultiple,
+                                       error_messages={'required': _('Choose at least one right.')})
+    rows = forms.CharField(
+        label=_('Only the rows where'), required=False,
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'name__istartswith=PRINTER'}),
+        help_text=_('Optional: lookup=value (several with &). Empty = every row of the type.'))
+    hours = forms.TypedChoiceField(choices=ACCESS_HOURS, coerce=int, initial=0, label=_('For how long'),
                                    widget=forms.Select(attrs={'class': 'form-select'}))
 
     def __init__(self, *args, area=None, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['profile'].queryset = area.profiles.all() if area else self.fields['profile'].queryset
-        self.fields['hours'].choices = [(h, label) for h, label in ACCESS_HOURS if h == 0 or not area
-                                        or h <= area.max_hours]
+        self.area = area
+        if area is None:
+            return
+        from . import areas
+        models = set(areas.area_models(area))
+        groups = [(label, [i for i in items if i[0] in models]) for label, items in target_choices()]
+        self.fields['target'].choices = [('', _('— everything in this area —'))] + [g for g in groups if g[1]]
+        self.fields['rights'].choices = [(r, areas.right_label(area, r)) for r in areas.rights_available(area)]
+        self.fields['hours'].choices = [(h, label) for h, label in ACCESS_HOURS if h == 0 or h <= area.max_hours]
+
+    def clean(self):
+        data = super().clean()
+        rows = (data.get('rows') or '').strip()
+        if rows:
+            target = data.get('target')
+            if not target:
+                self.add_error('rows', _('Choose the object type first - the rows belong to it.'))
+            else:
+                from . import areas
+                try:
+                    data['filters'] = areas.parse_filters(f'{target}: {rows}', self.area)
+                except forms.ValidationError as exc:
+                    self.add_error('rows', exc)
+        data.setdefault('filters', {})
+        return data
 
 
 class AreaDecideForm(_AccessChoice):
@@ -565,7 +598,7 @@ class AreaGrantForm(_AccessChoice):
     def __init__(self, *args, area=None, **kwargs):
         super().__init__(*args, area=area, **kwargs)
         self.fields['user'].queryset = get_user_model().objects.filter(is_active=True).order_by('username')
-        self.order_fields(['user', 'profile', 'hours'])
+        self.order_fields(['user', 'target', 'rights', 'rows', 'hours'])
 
 
 class AreaRequestForm(forms.Form):

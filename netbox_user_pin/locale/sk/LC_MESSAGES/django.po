@@ -5151,6 +5151,86 @@ msgstr ""
 msgid "Fields nobody sees"
 msgstr "Polia, ktoré nikto nevidí"
 
+msgid "— everything in this area —"
+msgstr "— všetko v tejto oblasti —"
+
+msgid "Only the rows where"
+msgstr "Len riadky, kde"
+
+msgid ""
+"Optional: lookup=value (several with &). Empty = every row of the type."
+msgstr "Voliteľné: lookup=hodnota (viac cez &). Prázdne = všetky riadky typu."
+
+msgid "Choose the object type first - the rows belong to it."
+msgstr "Najprv vyber typ objektu – riadky patria k nemu."
+
+msgid "Revoke this access and grant it again."
+msgstr "Zruš tento prístup a udeľ ho znova."
+
+msgid "Everything in this area"
+msgstr "Všetko v tejto oblasti"
+
+msgid "May"
+msgstr "Môže"
+
+msgid "— choose a user —"
+msgstr "— vyber používateľa —"
+
+msgid "Choose the rights and the duration."
+msgstr "Vyber práva a trvanie."
+
+msgid "The rights or the rows are not valid."
+msgstr "Práva alebo riadky nie sú platné."
+
+msgid ""
+"E.g. only “View” and “Change”. Which fields are seen or written is set under"
+" “Fields” after saving."
+msgstr ""
+"Napr. len „Zobraziť“ a „Zmeniť“. Ktoré polia vidí alebo zapisuje sa nastaví "
+"cez „Polia“ po uložení."
+
+msgid ""
+"Choose the user (their access entry) and the object type, then set each "
+"field: hidden, read only or read and write. Custom fields linked to other "
+"objects can show only the values that contain a text (must include). "
+"'Nobody' hides a field from everybody in the area, owners included."
+msgstr ""
+"Vyber používateľa (jeho prístup) a typ objektu, potom pri každom poli "
+"nastav: skryté, len čítať alebo čítať a zapisovať. Vlastné polia prepojené "
+"na iné objekty môžu ukázať len hodnoty obsahujúce text (musí obsahovať). "
+"„Nikto“ skryje pole všetkým v oblasti, vrátane vlastníkov."
+
+msgid ""
+"Default: a user who may add or change sees and writes every field, a read-"
+"only user only reads. Applied in forms, tables and the REST API; custom "
+"fields also in the detail page. The fixed fields of an object's detail page "
+"are drawn by NetBox model by model and are not hidden there."
+msgstr ""
+"Predvolené: používateľ, ktorý môže pridávať alebo meniť, vidí a zapisuje "
+"všetky polia, používateľ len na čítanie iba číta. Platí vo formulároch, "
+"tabuľkách a REST API; vlastné polia aj na stránke detailu. Pevné polia "
+"detailu objektu kreslí NetBox model po modeli a tam sa neskrývajú."
+
+msgid "2FA asked again after (hours)"
+msgstr "2FA sa znova pýta po (hodinách)"
+
+msgid ""
+"Administration of the protected areas needs the unlocked PIN and a 2FA code "
+"confirmed within this time; the PIN is not asked again for every change."
+msgstr ""
+"Správa chránených oblastí vyžaduje odomknutý PIN a 2FA kód potvrdený v tomto"
+" čase; PIN sa nepýta pri každej zmene."
+
+msgid "Confirm 2FA"
+msgstr "Potvrdiť 2FA"
+
+msgid ""
+"Enter a 2FA code (or a backup code). It is asked again only after %(hours)s "
+"hours; your PIN is not needed for it."
+msgstr ""
+"Zadaj 2FA kód (alebo záložný kód). Znova sa pýta až po %(hours)s hodinách; "
+"PIN na to netreba."
+
 #~ msgid ""
 #~ "There is no other administrator or delegate with PIN and 2FA who could "
 #~ "confirm."

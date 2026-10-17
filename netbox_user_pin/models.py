@@ -141,6 +141,13 @@ class PinSettings(models.Model):
                     'departments) need only your PIN (you are logged in anyway). Resets, suspension and roles always '
                     'need PIN + 2FA.'),
     )
+    twofa_hours = models.PositiveIntegerField(
+        verbose_name=_('2FA asked again after (hours)'),
+        default=8,
+        validators=[MinValueValidator(1), MaxValueValidator(24 * 7)],
+        help_text=_('Administration of the protected areas needs the unlocked PIN and a 2FA code confirmed within '
+                    'this time; the PIN is not asked again for every change.'),
+    )
     step_up_minutes = models.PositiveIntegerField(
         verbose_name=_('Administrative window (minutes)'),
         default=5,
@@ -802,6 +809,8 @@ class AreaProfile(models.Model):
     # Which rows the profile shows, per object type: {"dcim.device": {"name__istartswith": "PRINTER"}}.
     # No entry for a type = every row of it.
     filters = models.JSONField(default=dict, blank=True)
+    # A private profile belongs to one access entry: its rights, rows and field rules are edited with that entry.
+    private = models.BooleanField(default=False)
 
     class Meta:
         verbose_name = _('area profile')
@@ -818,6 +827,8 @@ class AreaGrant(models.Model):
     area = models.ForeignKey(ProtectedArea, on_delete=models.CASCADE, related_name='grants')
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='area_grants')
     profile = models.ForeignKey(AreaProfile, on_delete=models.CASCADE, related_name='grants')
+    # The object type the access is for ('dcim.device'); empty = every object type of the area.
+    target = models.CharField(max_length=100, blank=True)
     expires = models.DateTimeField(null=True, blank=True)
     granted_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
                                    related_name='+')

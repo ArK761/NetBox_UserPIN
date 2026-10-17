@@ -274,17 +274,17 @@ refused on entering and told who manages the access.
 
 ```
 master / CORE   create an area, appoint the first owners          (then they lose any say over it)
-owners          decide who gets access (PIN + 2FA): profiles, rows, grants, more owners, deactivate / delete
-user            asks for access with a reason (+ what exactly) → owners grant a profile for a time or without limit
+owners          decide who gets access (PIN once, 2FA from time to time): per user and object type the rights, rows and fields; more owners, deactivate / delete
+user            asks for access with a reason (+ what exactly) → owners grant the chosen rights on the chosen object type for a time or without limit
 ```
 
 - **Two ways to switch it on.** *Settings → Protect areas and objects* makes the areas you define on the
   **Protected areas** page protect. Independently of that, a plugin that registers an area (see below) is protected
   as soon as **its own "PIN integration" switch is on**.
-- **Profiles** = rights (`view`, `add`, `change`, `delete` + rights a plugin defines) **and rows**: a profile may
-  show only some rows of an object type, e.g. `dcim.device: name__istartswith=PRINTER` or
-  `tenancy.tenant: cf_type=printer`-style lookups (`custom_field_data__type=PRINTER`). The filter applies to lists,
-  details, the REST API and drop-down lists alike. Default profiles Read / Edit / Full; owners add their own.
+- **Access entries** = one user, one object type (or everything in the area), the rights (`view`, `add`, `change`,
+  `delete` + rights a plugin defines), optionally only the **rows** matching a filter (e.g. `name__istartswith=PRINTER`)
+  and a duration. Chosen directly on the area page; there is nothing to name or reuse. Several entries add up.
+  (Profiles are still what plugins register with `areas.register(... profiles=...)`; they are not shown to owners.)
 - **A grant** is for 1 hour … 30 days (limit per area) or without a time limit. A grantee is allowed to use a PIN
   automatically (unless an administrator denied it) and **unlocks the PIN to enter** the area.
 - **Requests** need a reason (and optionally what exactly is needed); the owners get a bell notification and an
@@ -312,7 +312,7 @@ user            asks for access with a reason (+ what exactly) → owners grant 
 | REST API (session and token) | refused without the right (403 JSON); no PIN unlock step for tokens |
 | Menu items and object tabs | `has_perm` is answered by the PIN grants; a user without any key still sees the door |
 
-**Field rules** (profile → *Fields*, and *Fields nobody sees*): per profile and object type every field is *hidden*,
+**Field rules** (access entry → *Fields*, and *Fields nobody sees*): per profile and object type every field is *hidden*,
 *read only* or *read and write*; a custom field linked to other objects can be limited to the values that **contain
 a text** (e.g. only hardware containing `PRINTER`). A rule without a profile hides a field from everybody in the area,
 owners included. Applied where NetBox shows or takes the data:
@@ -381,3 +381,6 @@ Tests run inside a NetBox checkout with the plugin listed in `PLUGINS`:
 ```bash
 python manage.py test netbox_user_pin
 ```
+
+
+**PIN and 2FA in the administration of areas**: the PIN is unlocked once; a 2FA code is asked only every *2FA asked again after* hours (Settings, default 8) – not for every change.
