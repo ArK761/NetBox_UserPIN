@@ -25,21 +25,21 @@
   <form method="post">{% csrf_token %}
     <input type="hidden" name="grant" value="{{ grant_pk }}"><input type="hidden" name="target" value="{{ target }}">
     <table class="table table-hover pin-sortable" id="pin-fields">
-      <thead><tr><th data-sort="text">{% trans "Field" %}</th><th data-sort="text">{% trans "Kind" %}</th><th>{% trans "Rule" %}</th><th>{% trans "Values must include" %}</th></tr></thead>
+      <thead><tr><th data-sort="text">{% trans "Field" %}</th><th data-sort="text">{% trans "Kind" %}</th><th>{% trans "Rule" %}</th><th>{% trans "Values must include" %} <i class="mdi mdi-help-circle-outline" title="{% trans "Optional, custom fields only: the user sees from this field only the values that contain the text you write." %}"></i></th></tr></thead>
       <tbody>
         {% for row in rows %}
         <tr>
           <td><strong>{{ row.label }}</strong> <code class="small text-secondary">{{ row.key }}</code></td>
           <td>{% if row.kind == 'custom' %}<span class="badge text-bg-cyan">{% trans "custom field" %}</span>{% else %}{% trans "field" %}{% endif %}</td>
           <td class="text-nowrap">
-            <label class="me-2"><input type="radio" name="mode__{{ row.key }}" value="default" {% if row.mode == 'default' %}checked{% endif %}> {% trans "Default" %}</label>
+            <label class="me-2"><input type="radio" name="mode__{{ row.key }}" value="default" {% if row.mode == 'default' %}checked{% endif %}> {% if nobody %}{% trans "Visible" %}{% else %}{% trans "By rights" %}{% endif %}</label>
             <label class="me-2"><input type="radio" name="mode__{{ row.key }}" value="hidden" {% if row.mode == 'hidden' %}checked{% endif %}> {% trans "Hidden" %}</label>
             {% if not nobody %}
             <label class="me-2"><input type="radio" name="mode__{{ row.key }}" value="read" {% if row.mode == 'read' %}checked{% endif %}> {% trans "Read only" %}</label>
             <label><input type="radio" name="mode__{{ row.key }}" value="write" {% if row.mode == 'write' %}checked{% endif %}> {% trans "Read and write" %}</label>
             {% endif %}
           </td>
-          <td>{% if row.kind == 'custom' and not nobody %}<input type="text" class="form-control form-control-sm" name="contains__{{ row.key }}" value="{{ row.contains }}" maxlength="200" placeholder="PRINTER">{% endif %}</td>
+          <td>{% if row.kind == 'custom' and not nobody %}<input type="text" class="form-control form-control-sm" name="contains__{{ row.key }}" value="{{ row.contains }}" maxlength="200" placeholder="{% trans 'optional' %}">{% else %}<span class="text-secondary small">{% if nobody %}—{% else %}{% trans "custom fields only" %}{% endif %}</span>{% endif %}</td>
         </tr>
         {% empty %}<tr><td colspan="4" class="text-secondary">{% trans "No fields." %}</td></tr>{% endfor %}
       </tbody>
@@ -47,6 +47,7 @@
     {% if can_manage and profile or can_manage and nobody %}<div class="card-body text-end"><button type="submit" class="btn btn-primary">{% trans "Save rules" %}</button></div>{% endif %}
   </form>
 </div>
-<p class="text-secondary small">{% trans "Default: a user who may add or change sees and writes every field, a read-only user only reads. Applied in forms, tables and the REST API; custom fields also in the detail page. The fixed fields of an object's detail page are drawn by NetBox model by model and are not hidden there." %}</p>
+<div class="alert alert-info small"><strong>{% trans "Values must include" %}:</strong> {% trans "optional. Fill it in only where you want to limit the values: write a text (e.g. PRINTER) and the user sees from that custom field only the values that contain it. It does not apply to the fixed fields." %}</div>
+<p class="text-secondary small">{% trans "By rights: a user who may add or change sees and writes every field, a read-only user only reads. Applied in forms, tables and the REST API; custom fields also in the detail page. The fixed fields of an object's detail page are drawn by NetBox model by model and are not hidden there." %}</p>
 {% include 'netbox_user_pin/inc/table_tools.html' %}
 {% endblock %}

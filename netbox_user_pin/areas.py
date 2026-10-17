@@ -232,7 +232,7 @@ def rights_of(user, area, target=None):
         return set()
     if is_owner(user, area):
         return set(rights_available(area))
-    if not AreaOwner.objects.filter(area=area).exists() and user.is_superuser:
+    if _bootstrap(user, area):
         return set(rights_available(area))  # bootstrap: no owners yet, the master keeps access
     rights = set()
     for grant in active_grants(user, area, target):
@@ -259,11 +259,14 @@ def _memo_rights(user, area, target=None):
     return entry[1]
 
 
+def _bootstrap(user, area):
+    """A superuser keeps access to an area that has no owners yet."""
+    return bool(user.is_superuser and not AreaOwner.objects.filter(area=area).exists())
+
+
 def _unrestricted(user, area):
     """Owners (and, before owners exist, superusers) see every row."""
-    if is_owner(user, area):
-        return True
-    return user.is_superuser and not AreaOwner.objects.filter(area=area).exists()
+    return is_owner(user, area) or _bootstrap(user, area)
 
 
 def row_filter(user, area, app_label, model, action='view'):
