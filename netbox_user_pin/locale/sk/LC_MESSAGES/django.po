@@ -4903,6 +4903,9 @@ msgstr "Uložiť profil"
 msgid "Access is managed by:"
 msgstr "Prístup spravuje:"
 
+msgid "The profile was not saved:"
+msgstr "Profil sa neuložil:"
+
 #~ msgid ""
 #~ "There is no other administrator or delegate with PIN and 2FA who could "
 #~ "confirm."

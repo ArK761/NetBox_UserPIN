@@ -508,3 +508,23 @@ class RowsAndReasonTest(AreaTestCase):
         service.set_access(denied, PinAccess.DENIED, self.master)
         with self.assertRaises(ValidationError):
             areas.grant_access(self.area, denied, self.profile(self.area), 1, self.owner1)
+
+
+class ProfileViewTest(AreaTestCase):
+    def test_profiles_can_be_edited_and_deleted_on_the_page(self):
+        area = self.make_area(owners=False)  # only the master manages it
+        admin_login(self.client, self.master)
+        url = reverse('plugins:netbox_user_pin:area', kwargs={'pk': area.pk})
+        read = self.profile(area, 'Read')
+        response = self.client.post(url, {'action': 'profile-save', 'pk': read.pk, 'name': 'Read', 'rights': ['view', 'add']})
+        self.assertEqual(response.status_code, 302, response.content[:400])
+        read.refresh_from_db()
+        self.assertEqual(sorted(read.rights), ['add', 'view'])
+        response = self.client.post(url, {'action': 'profile-delete', 'pk': self.profile(area, 'Full').pk})
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(area.profiles.filter(name='Full').exists())
+        # nothing ticked: the page says why it was not saved
+        response = self.client.post(url, {'action': 'profile-save', 'pk': read.pk, 'name': 'Read'})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'The profile was not saved')
+        self.assertContains(response, 'Choose at least one right.')

@@ -490,7 +490,8 @@ class AreaOwnerForm(forms.Form):
 
 class AreaProfileForm(forms.Form):
     name = forms.CharField(label=_('Profile'), max_length=100, widget=forms.TextInput(attrs={'class': 'form-control'}))
-    rights = forms.MultipleChoiceField(label=_('Rights'), choices=(), widget=forms.CheckboxSelectMultiple)
+    rights = forms.MultipleChoiceField(label=_('Rights'), choices=(), widget=forms.CheckboxSelectMultiple,
+                                       error_messages={'required': _('Choose at least one right.')})
     filters = forms.CharField(
         label=_('Rows the profile shows'), required=False,
         widget=forms.Textarea(attrs={'class': 'form-control', 'rows': 3,

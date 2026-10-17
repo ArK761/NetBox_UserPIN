@@ -76,6 +76,7 @@
       {% if can_manage %}
       <div class="card-body">
         <form method="post" data-step-up="full" id="pin-profile-form">{% csrf_token %}<input type="hidden" name="action" value="profile-save"><input type="hidden" name="pk" value="">
+          {% if profile_form.errors %}<div class="alert alert-danger" role="alert"><strong>{% trans "The profile was not saved:" %}</strong><ul class="mb-0">{% for field in profile_form %}{% for e in field.errors %}<li>{{ field.label }}: {{ e }}</li>{% endfor %}{% endfor %}{% for e in profile_form.non_field_errors %}<li>{{ e }}</li>{% endfor %}</ul></div>{% endif %}
           <div class="mb-2">{{ profile_form.name.label_tag }}<br>{{ profile_form.name }}</div>
           <div class="mb-2">{% for value, label in rights %}<label class="me-3"><input type="checkbox" class="form-check-input" name="rights" value="{{ value }}"> {{ label }}</label>{% endfor %}</div>
           <div class="mb-2">{{ profile_form.filters.label_tag }}<br>{{ profile_form.filters }}<div class="form-text">{{ profile_form.filters.help_text }}</div>{% for e in profile_form.filters.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}</div>
