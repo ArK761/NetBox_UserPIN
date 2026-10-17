@@ -396,7 +396,8 @@ def can_see(actor, area):
 
 
 def _log(action, area, actor, user=None, request=None, detail=''):
-    service.log_event(action, user=user, actor=actor, request=request, scope=area.key, detail=detail)
+    service.log_event(action, user=user, actor=actor, request=request, scope=area.key if area else 'default-deny',
+                      detail=detail)
 
 
 def parse_targets(text):
@@ -556,48 +557,140 @@ def _notify(req, users, text, subject):
         service.send_user_mail(user, subject, text)
 
 
-def request_access(area, user, note='', request=None, scope=''):
-    """A user asks the owners for access. One waiting request per user and area."""
+def request_access(area, user, note='', request=None, scope='', target='', rights=None):
+    """A user asks the owners for access. One waiting request per user, area and object type."""
     area = get_area(area)
     if area is None or not user.is_authenticated or not user.is_active:
         raise PermissionDenied
-    existing = AreaRequest.objects.filter(area=area, user=user, status=AreaRequestStatus.PENDING).first()
+    existing = AreaRequest.objects.filter(area=area, user=user, target=target or '',
+                                          status=AreaRequestStatus.PENDING).first()
     if existing:
         return existing
-    if len((note or '').strip()) < 5:
-        raise ValidationError(_('Write why you need the access (at least a few words).'))
     recipients = owners(area)
     if not recipients:
-        raise ValidationError(_('The area has no owners yet. Ask the administrator to appoint them.'))
-    req = AreaRequest.objects.create(area=area, user=user, note=note.strip()[:200], scope=(scope or '').strip()[:200])
+        recipients = keepers()  # no owners yet: the keepers decide
+    return _create_request(area, user, note, request, scope, target, rights, recipients)
+
+
+def request_target_access(user, target, rights, note, request=None, scope=''):
+    """
+    A user whose way is blocked asks for ``rights`` on an object type / app. The owners of the area that protects it
+    decide; when no area protects it yet, the protection keepers do (and approving creates the area).
+    """
+    if not user.is_authenticated or not user.is_active:
+        raise PermissionDenied
+    target = (target or '').strip().lower()
+    app_label, _dot, model = target.partition('.')
+    try:
+        apps.get_app_config(app_label)
+        if model:
+            apps.get_model(app_label, model)
+    except LookupError:
+        raise ValidationError(_('Unknown object type.'))
+    if app_label in NEVER:
+        raise PermissionDenied
+    area = area_for(app_label, model or None, package=app_label)
+    existing = AreaRequest.objects.filter(user=user, target=target, status=AreaRequestStatus.PENDING).first()
+    if existing:
+        return existing
+    recipients = (owners(area) if area else []) or keepers()
+    return _create_request(area, user, note, request, scope, target, rights, recipients)
+
+
+def _create_request(area, user, note, request, scope, target, rights, recipients):
+    if len((note or '').strip()) < 5:
+        raise ValidationError(_('Write why you need the access (at least a few words).'))
+    known = set(rights_available(area)) if area else set(GENERIC_RIGHTS)
+    rights = [r for r in (rights or []) if r in known]
+    if not recipients:
+        raise ValidationError(_('Nobody can decide about it yet. Ask the administrator to appoint the owners or '
+                                'a protection keeper.'))
+    req = AreaRequest.objects.create(area=area, user=user, target=target or '', rights=rights, note=note.strip()[:200],
+                                     scope=(scope or '').strip()[:200])
     _log(PinEventAction.AREA_REQUESTED, area, user, user=user, request=request,
-         detail=f'{req.note}' + (f' | {req.scope}' if req.scope else ''))
-    label = service.user_label(user)
+         detail=f'{target_label(target) or "-"}: {", ".join(rights) or "-"} | {req.note}'
+                + (f' | {req.scope}' if req.scope else ''))
+    link = ''
+    if request is not None:
+        from django.urls import reverse
+        link = request.build_absolute_uri(reverse('plugins:netbox_user_pin:request_decide', kwargs={'pk': req.pk}))
+    what = area.name if area else target_label(req.target)
     _notify(req, recipients, _(
-        '%(user)s asks for access to the area "%(area)s".\n\nWhy: %(reason)s\nWhat exactly: %(scope)s\n\n'
-        'Open User PIN > Protected areas to grant or deny it (confirm with your PIN and 2FA).') % {
-        'user': label, 'area': area.name, 'reason': req.note, 'scope': req.scope or '-'},
-        _('Access request: %(area)s') % {'area': area.name})
+        '%(user)s asks for access: %(what)s\n\nRights: %(rights)s\nWhy: %(reason)s\nWhat exactly: %(scope)s\n\n'
+        'Decide here (confirm with your PIN and 2FA):\n%(link)s') % {
+        'user': service.user_label(user), 'what': what,
+        'rights': ', '.join(str(right_label(area, r)) if area else r for r in rights) or '-',
+        'reason': req.note, 'scope': req.scope or '-', 'link': link or _('User PIN > Protected areas')},
+        _('Access request: %(area)s') % {'area': what})
     return req
 
 
-def decide_request(req, actor, approve, profile=None, hours=None, request=None, rights=None, target=''):
-    area = req.area
+def _may_grant(actor, area):
+    """Owners grant; an area without owners yet is handled by the protection keepers."""
+    return is_owner(actor, area) or (not AreaOwner.objects.filter(area=area).exists() and is_keeper(actor))
+
+
+def target_label(target):
+    """'dcim.device' -> 'DCIM > Device'; an app -> its name."""
+    app_label, _dot, model = (target or '').partition('.')
+    try:
+        config = apps.get_app_config(app_label)
+        if not model:
+            return str(config.verbose_name)
+        return f'{config.verbose_name} > {str(apps.get_model(app_label, model)._meta.verbose_name).capitalize()}'
+    except LookupError:
+        return target or ''
+
+
+def _create_requested_area(req, actor, request):
+    """The first approved request for an object type creates its area (without owners: those are appointed by hand)."""
+    name = target_label(req.target)
+    area = ProtectedArea.objects.create(
+        key=_unique_key(name), name=name, targets=[req.target], max_hours=24,
+        description=_('Created from the access request of %(user)s.') % {'user': req.user.username})
+    for name_, rights in DEFAULT_PROFILES:
+        AreaProfile.objects.create(area=area, name=name_, rights=list(rights))
+    _log(PinEventAction.AREA_CREATED, area, actor, request=request,
+         detail=f'targets: {req.target} (from the request of {req.user.username})')
+    settings = service.get_settings()
+    if not settings.areas_enabled:
+        settings.areas_enabled = True
+        settings.save()
+        _log(PinEventAction.AREA_CHANGED, area, actor, request=request, detail='protection of own areas switched on')
+    clear_cache()
+    return area
+
+
+def decide_request(req, actor, approve, profile=None, hours=None, request=None, rights=None, target=None):
     if req.status != AreaRequestStatus.PENDING:
         raise ValidationError(_('The request has been dealt with already.'))
-    if not is_owner(actor, area):
+    area = req.area
+    if area is None:
+        app_label, _dot, model = req.target.partition('.')
+        area = area_for(app_label, model or None, package=app_label)
+        if area is None and not is_keeper(actor):
+            raise PermissionDenied
+    if area is not None and not _may_grant(actor, area):
         raise PermissionDenied
     if req.user_id == actor.pk:
         raise PermissionDenied  # nobody decides about their own request
+    what = area.name if area else target_label(req.target)
     if not approve:
         req.status = AreaRequestStatus.DENIED
         req.decided, req.decided_by_name = timezone.now(), actor.username
         req.save()
         _log(PinEventAction.AREA_DENIED, area, actor, user=req.user, request=request)
-        service.send_user_mail(req.user, _('Access denied: %(area)s') % {'area': area.name},
-                               _('Your request for access to "%(area)s" was denied.') % {'area': area.name},
+        service.send_user_mail(req.user, _('Access denied: %(area)s') % {'area': what},
+                               _('Your request for access to "%(area)s" was denied.') % {'area': what},
                                request=request)
         return None
+    if area is None:
+        area = _create_requested_area(req, actor, request)
+    req.area = area
+    if target is None:
+        target = req.target if '.' in req.target else ''
+    if rights is None and profile is None:
+        rights = req.rights  # as asked
     if rights:
         grant = grant_custom(area, req.user, target, rights, hours, actor, request=request, notify=False)
     else:
@@ -626,7 +719,7 @@ def grant_custom(area, user, target, rights, hours, actor, filters=None, request
     Give ``user`` exactly ``rights`` on one object type (``target`` 'dcim.device'; '' = the whole area), optionally
     only the rows of ``filters``. The rights live in a private profile that belongs to this entry alone.
     """
-    if not is_owner(actor, area):
+    if not _may_grant(actor, area):
         raise PermissionDenied
     known = set(rights_available(area))
     rights = [r for r in rights if r in known]
@@ -664,7 +757,7 @@ def update_grant(grant, rights, actor, filters=None, request=None):
 
 def grant_access(area, user, profile, hours, actor, request=None, notify=True, target=''):
     """Give ``user`` access. ``hours=None`` is permanent; otherwise 1..area.max_hours. Only owners grant."""
-    if not is_owner(actor, area):
+    if not _may_grant(actor, area):
         raise PermissionDenied
     if user.pk == actor.pk:
         raise ValidationError(_('Owners already hold every right in their area.'))
@@ -711,8 +804,11 @@ def cancel_request(req, actor, request=None):
 
 def pending_requests_for(user):
     """Waiting requests in the areas the user owns."""
-    return AreaRequest.objects.filter(area__owners__user=user, status=AreaRequestStatus.PENDING).exclude(
-        user=user).select_related('area', 'user')
+    query = Q(area__owners__user=user)
+    if is_keeper(user):
+        query |= Q(area__isnull=True) | Q(area__owners__isnull=True)
+    return AreaRequest.objects.filter(query, status=AreaRequestStatus.PENDING).exclude(
+        user=user).distinct().select_related('area', 'user')
 
 
 def reset_owners(area, new_owners, actor_label='server command'):
@@ -874,7 +970,9 @@ def save_field_rules(area, profile, target, rules, actor, request=None):
 def denied_response(request, area, right='view'):
     """The "no access - request it" page (for plugins that check ``can`` themselves)."""
     from .area_guard import denied_response as render_denied
-    return render_denied(request, get_area(area), right)
+    area = get_area(area)
+    targets = targets_of(area) if area else []
+    return render_denied(request, area, right, targets[0] if targets else None)
 
 
 def require(request, area, right='view'):

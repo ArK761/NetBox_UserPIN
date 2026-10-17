@@ -384,3 +384,10 @@ python manage.py test netbox_user_pin
 
 
 **PIN and 2FA in the administration of areas**: the PIN is unlocked once; a 2FA code is asked only every *2FA asked again after* hours (Settings, default 8) – not for every change.
+
+**Request from the "no access" page**: the page names what is blocked (e.g. *Tenancy › Tenant*); the user ticks the rights
+he needs (view / add / change / delete), writes a reason and sends it. An e-mail with a link goes to the owners of the
+area that protects the object type, or - when no area does yet - to the protection keepers. The link opens a page in
+NetBox with who asks for what and why; the decider can change the rights and the duration, then **OK**. If there is no
+area for the object type, OK creates it (without owners - they are appointed by hand) and adds the user with the
+chosen rights; otherwise the user is added to the existing area.

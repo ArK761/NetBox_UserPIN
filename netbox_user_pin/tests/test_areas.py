@@ -709,3 +709,74 @@ class TargetsAndToolsTest(AreaTestCase):
         html = self.client.get(reverse('plugins:netbox_user_pin:area', kwargs={'pk': area.pk})).content.decode()
         self.assertIn('pin-searchable', html)
         self.assertIn('table_tools'.replace('table_tools', 'pin-sortable'), html)
+
+
+class RequestFromDeniedPageTest(AreaTestCase):
+    def setUp(self):
+        super().setUp()
+        self.keeper = User.objects.create_superuser('keeper', 'k@example.com', 'x')
+        service.set_pin(self.keeper, GOOD_PIN)
+        enable_2fa(self.keeper)
+        self.plain = User.objects.create_user('plain', 'p@example.com')
+        areas.add_keeper(self.keeper, self.master)
+        areas.set_default_deny(True, self.keeper)
+        areas.clear_cache()
+
+    def ask(self, rights, note='I need the sites'):
+        self.login(self.plain)
+        return self.client.post(reverse('plugins:netbox_user_pin:request_access'), {
+            'target': 'dcim.site', 'rights': rights, 'note': note, 'next': '/dcim/sites/'})
+
+    def test_page_names_what_is_blocked_and_offers_the_rights(self):
+        self.login(self.plain)
+        response = self.client.get('/dcim/sites/')
+        self.assertEqual(response.status_code, 403)
+        self.assertContains(response, 'name="rights"', status_code=403)
+        self.assertContains(response, 'value="dcim.site"', status_code=403)
+
+    def test_request_goes_to_the_keepers_and_approving_creates_the_area(self):
+        self.assertEqual(self.ask(['view', 'change']).status_code, 302)
+        req = AreaRequest.objects.get(user=self.plain)
+        self.assertIsNone(req.area)
+        self.assertEqual((req.target, sorted(req.rights)), ('dcim.site', ['change', 'view']))
+        self.assertEqual(list(areas.pending_requests_for(self.keeper)), [req])
+        self.assertEqual(areas.pending_requests_for(self.master).count(), 0)
+        # nobody else than a keeper decides
+        outsider = self.client_class()
+        admin_login(outsider, self.master)
+        self.assertEqual(outsider.get(reverse('plugins:netbox_user_pin:request_decide', kwargs={'pk': req.pk})
+                                      ).status_code, 403)
+        keeper_client = self.client_class()
+        admin_login(keeper_client, self.keeper)
+        url = reverse('plugins:netbox_user_pin:request_decide', kwargs={'pk': req.pk})
+        page = keeper_client.get(url)
+        self.assertEqual(page.status_code, 200)
+        self.assertContains(page, 'I need the sites')
+        response = keeper_client.post(url, {'action': 'approve', 'rights': ['view'], 'hours': 0})
+        self.assertEqual(response.status_code, 302, response.content[:300])
+        req.refresh_from_db()
+        self.assertEqual(req.status, AreaRequestStatus.GRANTED)
+        area = ProtectedArea.objects.get(targets=['dcim.site'])
+        self.assertEqual(area.owners.count(), 0)  # the owners are appointed by hand
+        grant = AreaGrant.objects.get(user=self.plain)
+        self.assertEqual((grant.area, grant.target, grant.profile.rights), (area, 'dcim.site', ['view']))
+        self.login(self.plain)
+        self.assertEqual(self.client.get('/dcim/sites/').status_code, 200)
+
+    def test_request_for_an_existing_area_goes_to_its_owners(self):
+        area = self.make_area(targets=('dcim.site',))
+        self.assertEqual(self.ask(['view']).status_code, 302)
+        req = AreaRequest.objects.get(user=self.plain)
+        self.assertEqual(req.area, area)
+        self.assertEqual(areas.pending_requests_for(self.owner1).count(), 1)
+        self.assertEqual(areas.pending_requests_for(self.keeper).count(), 0)
+        grant = areas.decide_request(req, self.owner1, True, hours=None)
+        self.assertEqual((grant.area, grant.target), (area, 'dcim.site'))
+
+    def test_validation(self):
+        self.ask([])  # no right chosen
+        self.ask(['view'], note='x')  # no reason
+        self.assertFalse(AreaRequest.objects.exists())
+        self.ask(['view'])
+        self.ask(['view'])  # asking again keeps one waiting request
+        self.assertEqual(AreaRequest.objects.count(), 1)

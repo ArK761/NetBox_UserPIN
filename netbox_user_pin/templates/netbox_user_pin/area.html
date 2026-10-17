@@ -16,16 +16,11 @@
         <tbody>
           {% for req, form in pending %}
           <tr>
-            <td>{{ req.user.username }}{% if req.note %}<div class="small"><strong>{% trans "Why:" %}</strong> {{ req.note }}</div>{% endif %}{% if req.scope %}<div class="small"><strong>{% trans "What exactly:" %}</strong> {{ req.scope }}</div>{% endif %}</td>
+            <td>{{ req.user.username }}{% if req.note %}<div class="small"><strong>{% trans "Why:" %}</strong> {{ req.note }}</div>{% endif %}{% if req.scope %}<div class="small"><strong>{% trans "What exactly:" %}</strong> {{ req.scope }}</div>{% endif %}{% if req.rights %}<div class="small"><strong>{% trans "Asked for:" %}</strong> {{ req.rights|join:", " }}{% if req.target %} · <code>{{ req.target }}</code>{% endif %}</div>{% endif %}</td>
             <td>{{ req.created|date:"Y-m-d H:i" }}</td>
             <td>{% if is_owner and req.user_id != request.user.pk %}
-              <form method="post" class="d-flex flex-wrap gap-2 align-items-center">{% csrf_token %}<input type="hidden" name="pk" value="{{ req.pk }}">
-                {{ form.target }}
-                <span class="d-flex flex-wrap gap-2">{% for cb in form.rights %}<label class="small">{{ cb.tag }} {{ cb.choice_label }}</label>{% endfor %}</span>
-                {{ form.hours }}
-                <button class="btn btn-sm btn-success" name="action" value="approve" type="submit"><i class="mdi mdi-check"></i> {% trans "Grant" %}</button>
-                <button class="btn btn-sm btn-outline-danger" name="action" value="deny" type="submit">{% trans "Deny" %}</button>
-              </form>{% else %}<span class="text-secondary">—</span>{% endif %}</td>
+              <a class="btn btn-sm btn-success" href="{% url 'plugins:netbox_user_pin:request_decide' pk=req.pk %}"><i class="mdi mdi-check"></i> {% trans "Decide" %}</a>
+              <form method="post" class="d-inline">{% csrf_token %}<input type="hidden" name="pk" value="{{ req.pk }}"><button class="btn btn-sm btn-outline-danger" name="action" value="deny" type="submit">{% trans "Deny" %}</button></form>{% else %}<span class="text-secondary">—</span>{% endif %}</td>
           </tr>
           {% endfor %}
         </tbody>

@@ -1,0 +1,9 @@
+{% load i18n %}
+<form method="post" action="{% url 'plugins:netbox_user_pin:request_access' %}">{% csrf_token %}
+  <input type="hidden" name="next" value="{{ next }}"><input type="hidden" name="target" value="{{ target }}">
+  <div class="mb-3"><strong>{% trans "What do you need?" %}</strong><br>
+    {% for r, label in rights %}<label class="me-3"><input type="checkbox" class="form-check-input" name="rights" value="{{ r }}" {% if r == right %}checked{% endif %}> {{ label }}</label>{% endfor %}</div>
+  <div class="mb-3"><label class="form-label">{% trans "Why do you need the access?" %} *</label><input class="form-control" type="text" name="note" maxlength="200" minlength="5" required></div>
+  <div class="mb-3"><label class="form-label">{% trans "What exactly (section, group, object …)" %}</label><input class="form-control" type="text" name="scope" maxlength="200"></div>
+  <button class="btn btn-primary" type="submit"><i class="mdi mdi-email-fast"></i> {% trans "Request access" %}</button>
+</form>

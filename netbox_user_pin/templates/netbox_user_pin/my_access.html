@@ -24,7 +24,7 @@
     <thead><tr><th>{% trans "Area" %}</th><th>{% trans "Asked" %}</th><th>{% trans "Status" %}</th><th></th></tr></thead>
     <tbody>
       {% for r in requests %}
-      <tr><td>{{ r.area.name }}</td><td>{{ r.created|date:"Y-m-d H:i" }}</td><td>{{ r.get_status_display }}{% if r.decided_by_name %} ({{ r.decided_by_name }}){% endif %}</td>
+      <tr><td>{{ r.area.name|default:r.target }}</td><td>{{ r.created|date:"Y-m-d H:i" }}</td><td>{{ r.get_status_display }}{% if r.decided_by_name %} ({{ r.decided_by_name }}){% endif %}</td>
         <td class="text-end">{% if r.status == 'pending' %}<form method="post" class="d-inline">{% csrf_token %}<input type="hidden" name="pk" value="{{ r.pk }}"><input type="hidden" name="action" value="cancel"><button class="btn btn-sm btn-outline-secondary" type="submit">{% trans "Cancel" %}</button></form>{% endif %}</td></tr>
       {% empty %}<tr><td colspan="4" class="text-secondary">{% trans "No requests." %}</td></tr>{% endfor %}
     </tbody>

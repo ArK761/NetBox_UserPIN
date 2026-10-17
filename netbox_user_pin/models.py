@@ -858,8 +858,11 @@ class AreaRequestStatus(models.TextChoices):
 
 
 class AreaRequest(models.Model):
-    """A user asks the owners of an area for access."""
-    area = models.ForeignKey(ProtectedArea, on_delete=models.CASCADE, related_name='requests')
+    """A user asks the owners of an area for access (no area yet: the protection keepers decide and create it)."""
+    area = models.ForeignKey(ProtectedArea, on_delete=models.CASCADE, related_name='requests', null=True, blank=True)
+    # What the user asks for: an object type ('dcim.device') or an app ('netbox_libreoxi') and the rights.
+    target = models.CharField(max_length=100, blank=True)
+    rights = models.JSONField(default=list, blank=True)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='area_requests')
     status = models.CharField(max_length=10, choices=AreaRequestStatus.choices, default=AreaRequestStatus.PENDING,
                               db_index=True)
@@ -876,7 +879,7 @@ class AreaRequest(models.Model):
         ordering = ('-created', '-pk')
 
     def __str__(self):
-        return f'{self.user} -> {self.area} ({self.status})'
+        return f'{self.user} -> {self.area or self.target} ({self.status})'
 
 
 class PolicyKeeper(models.Model):

@@ -1,0 +1,35 @@
+{% extends 'generic/_base.html' %}
+{% load userpin_tags i18n %}
+{% block title %}{% trans "Access request" %}{% endblock %}
+{% block content %}
+{% pin_build %}
+<div class="row justify-content-center">
+  <div class="col-12 col-lg-8 col-xl-6">
+    <div class="card {% if req.status == 'pending' %}border-warning{% endif %}">
+      <h2 class="card-header"><i class="mdi mdi-key-alert"></i> {% trans "Access request" %}</h2>
+      <table class="table mb-0">
+        <tr><th class="w-25">{% trans "User" %}</th><td>{{ req.user.username }}{% if req.user.email %} <span class="text-secondary">({{ req.user.email }})</span>{% endif %}</td></tr>
+        <tr><th>{% trans "Object type" %}</th><td>{{ target_label|default:"—" }} {% if req.target %}<code class="small text-secondary">{{ req.target }}</code>{% endif %}</td></tr>
+        <tr><th>{% trans "Asked for" %}</th><td>{% for r, label in asked %}<span class="badge text-bg-secondary">{{ label }}</span> {% empty %}—{% endfor %}</td></tr>
+        <tr><th>{% trans "Why" %}</th><td>{{ req.note }}</td></tr>
+        {% if req.scope %}<tr><th>{% trans "What exactly" %}</th><td>{{ req.scope }}</td></tr>{% endif %}
+        <tr><th>{% trans "Asked" %}</th><td>{{ req.created|date:"Y-m-d H:i" }}</td></tr>
+        <tr><th>{% trans "Area" %}</th><td>{% if area %}<a href="{% url 'plugins:netbox_user_pin:area' pk=area.pk %}">{{ area.name }}</a>{% else %}<span class="text-warning">{% trans "none yet - it is created when you grant the access" %}</span>{% endif %}</td></tr>
+      </table>
+      {% if req.status == 'pending' %}
+      <form method="post" class="card-body">{% csrf_token %}
+        <div class="mb-2"><strong>{% trans "Rights to grant" %}</strong><br>
+          {% for r, label in available %}<label class="me-3"><input type="checkbox" class="form-check-input" name="rights" value="{{ r }}" {% if r in chosen %}checked{% endif %}> {{ label }}</label>{% endfor %}</div>
+        <div class="mb-3"><label class="form-label">{% trans "For how long" %}</label>
+          <select name="hours" class="form-select w-auto">{% for h, label in hours %}<option value="{{ h }}" {% if h == 0 %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+        {% if creates_area %}<p class="small text-secondary">{% trans "Granting creates a protected area for this object type, without owners. Appoint its owners afterwards in Protected areas. Until then only the master and this access exist." %}</p>{% endif %}
+        <button class="btn btn-success" name="action" value="approve" type="submit"><i class="mdi mdi-check"></i> OK</button>
+        <button class="btn btn-outline-danger" name="action" value="deny" type="submit">{% trans "Deny" %}</button>
+      </form>
+      {% else %}
+      <div class="card-body"><span class="badge text-bg-secondary">{{ req.get_status_display }}</span> {{ req.decided_by_name }} {{ req.decided|date:"Y-m-d H:i" }}</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

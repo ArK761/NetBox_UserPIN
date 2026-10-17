@@ -9,8 +9,9 @@ from django.utils.translation import gettext as _
 from django.views import View
 
 from . import areas, fieldrules, roles, service
+from .forms import ACCESS_HOURS
 from .forms import (
-    AreaDecideForm, AreaForm, AreaGrantForm, AreaOwnerForm, AreaProfileForm, AreaRequestForm, AreaTargetForm,
+    AccessRequestForm, AreaDecideForm, AreaForm, AreaGrantForm, AreaOwnerForm, AreaProfileForm, AreaRequestForm, AreaTargetForm,
     KeeperForm,
 )
 from .mixins import PinRequiredMixin, area_gate
@@ -19,7 +20,7 @@ from .models import (
 )
 from .views import ADMIN_SCOPE, _errors, _next_url, _step_up_context
 
-__all__ = ('AreaFieldsView', 'AreaListView', 'AreaRequestView', 'AreaView', 'MyAccessView')
+__all__ = ('AccessRequestView', 'RequestDecideView', 'AreaFieldsView', 'AreaListView', 'AreaRequestView', 'AreaView', 'MyAccessView')
 
 
 class AreaViewMixin(LoginRequiredMixin, PinRequiredMixin):
@@ -74,6 +75,7 @@ class AreaListView(AreaViewMixin, View):
         areas.sync_plugin_areas()
         core = roles.is_core(request.user)
         queryset = ProtectedArea.objects.all() if core else ProtectedArea.objects.filter(owners__user=request.user)
+        waiting_list = list(areas.pending_requests_for(request.user))
         rows = []
         for area in queryset.distinct().order_by('name'):
             code, label = _status(area)
@@ -85,7 +87,7 @@ class AreaListView(AreaViewMixin, View):
             })
         return render(request, self.template_name, {
             'rows': rows, 'is_core': core, 'form': form or AreaForm(create=True),
-            'waiting': areas.pending_requests_for(request.user).count(),
+            'waiting': len(waiting_list), 'waiting_list': waiting_list,
             'deny_on': service.get_settings().default_deny, 'keepers': areas.keepers(),
             'is_keeper': areas.is_keeper(request.user), 'can_keepers': areas.can_manage_keepers(request.user),
             'keeper_form': KeeperForm(),
@@ -337,6 +339,87 @@ class AreaRequestView(LoginRequiredMixin, View):
         except ValidationError as exc:
             _errors(request, exc)
         return redirect(_next_url(request, 'plugins:netbox_user_pin:my_access'))
+
+
+class AccessRequestView(LoginRequiredMixin, View):
+    """The form of the "no access" page: ask for chosen rights on the blocked object type."""
+
+    def post(self, request):
+        form = AccessRequestForm(request.POST)
+        if not form.is_valid():
+            messages.error(request, _('Choose the rights and write why you need the access (at least a few words).'))
+            return redirect(_next_url(request, 'plugins:netbox_user_pin:my_access'))
+        data = form.cleaned_data
+        try:
+            if not data['rights']:
+                raise ValidationError(_('Choose at least one right.'))
+            areas.request_target_access(request.user, data['target'], data['rights'], data['note'], request=request,
+                                        scope=data['scope'])
+            messages.success(request, _('The request was sent. You will get an e-mail when it is decided.'))
+        except ValidationError as exc:
+            _errors(request, exc)
+        return redirect(_next_url(request, 'plugins:netbox_user_pin:my_access'))
+
+
+class RequestDecideView(AreaViewMixin, View):
+    """The page the e-mail links to: who asks for what and why; the decider may change the rights, then OK."""
+    template_name = 'netbox_user_pin/request_decide.html'
+
+    def _request(self, request, pk):
+        req = get_object_or_404(AreaRequest.objects.select_related('area', 'user'), pk=pk)
+        area = req.area
+        if area is None:
+            app_label, _dot, model = req.target.partition('.')
+            area = areas.area_for(app_label, model or None, package=app_label)
+        allowed = areas.is_keeper(request.user) if area is None or not area.owners.exists() \
+            else areas.is_owner(request.user, area)
+        if not allowed or req.user_id == request.user.pk:
+            raise PermissionDenied
+        return req, area
+
+    def _render(self, request, req, area, form=None):
+        if form is None:
+            rights = req.rights or ['view']
+            form = AreaDecideForm(area=area, initial={'rights': rights, 'hours': 0}) if area else None
+        available = areas.rights_available(area) if area else list(areas.GENERIC_RIGHTS)
+        return render(request, self.template_name, {
+            'req': req, 'area': area, 'target_label': areas.target_label(req.target), 'form': form,
+            'asked': [(r, areas.right_label(area, r) if area else r.capitalize()) for r in req.rights],
+            'available': [(r, areas.right_label(area, r) if area else r.capitalize()) for r in available],
+            'chosen': req.rights or ['view'],
+            'creates_area': area is None,
+            'hours': [(h, label) for h, label in ACCESS_HOURS if not area or h == 0 or h <= area.max_hours],
+        })
+
+    def get(self, request, pk):
+        req, area = self._request(request, pk)
+        return self._render(request, req, area)
+
+    def post(self, request, pk):
+        req, area = self._request(request, pk)
+        action = request.POST.get('action')
+        try:
+            if action == 'deny':
+                areas.decide_request(req, request.user, False, request=request)
+                messages.success(request, _('Request denied.'))
+            elif action == 'approve':
+                known = set(areas.rights_available(area) if area else areas.GENERIC_RIGHTS)
+                rights = [r for r in request.POST.getlist('rights') if r in known]
+                try:
+                    hours = int(request.POST.get('hours') or 0)
+                except ValueError:
+                    hours = 0
+                areas.decide_request(req, request.user, True, hours=hours or None, request=request, rights=rights)
+                messages.success(request, _('Access granted.'))
+            else:
+                raise PermissionDenied
+        except ValidationError as exc:
+            _errors(request, exc)
+            return redirect('plugins:netbox_user_pin:request_decide', pk=req.pk)
+        req.refresh_from_db()
+        if req.area_id:
+            return redirect('plugins:netbox_user_pin:area', pk=req.area_id)
+        return redirect('plugins:netbox_user_pin:areas')
 
 
 class MyAccessView(LoginRequiredMixin, View):

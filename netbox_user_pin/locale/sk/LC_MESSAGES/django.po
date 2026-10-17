@@ -5231,6 +5231,93 @@ msgstr ""
 "Zadaj 2FA kód (alebo záložný kód). Znova sa pýta až po %(hours)s hodinách; "
 "PIN na to netreba."
 
+msgid "Created from the access request of %(user)s."
+msgstr "Vytvorené zo žiadosti o prístup používateľa %(user)s."
+
+msgid "Unknown object type."
+msgstr "Neznámy typ objektu."
+
+msgid ""
+"Nobody can decide about it yet. Ask the administrator to appoint the owners "
+"or a protection keeper."
+msgstr ""
+"Zatiaľ o tom nemá kto rozhodnúť. Požiadaj administrátora, aby určil "
+"vlastníkov alebo správcu ochrany."
+
+msgid ""
+"%(user)s asks for access: %(what)s\n"
+"\n"
+"Rights: %(rights)s\n"
+"Why: %(reason)s\n"
+"What exactly: %(scope)s\n"
+"\n"
+"Decide here (confirm with your PIN and 2FA):\n"
+"%(link)s"
+msgstr ""
+"%(user)s žiada o prístup: %(what)s\n"
+"\n"
+"Práva: %(rights)s\n"
+"Prečo: %(reason)s\n"
+"Čo presne: %(scope)s\n"
+"\n"
+"Rozhodni tu (potvrď PINom a 2FA):\n"
+"%(link)s"
+
+msgid "User PIN > Protected areas"
+msgstr "User PIN > Chránené oblasti"
+
+msgid ""
+"Choose the rights and write why you need the access (at least a few words)."
+msgstr "Vyber práva a napíš, prečo prístup potrebuješ (aspoň pár slov)."
+
+msgid "The request was sent. You will get an e-mail when it is decided."
+msgstr "Žiadosť bola odoslaná. Keď sa rozhodne, dostaneš e-mail."
+
+msgid "Access request"
+msgstr "Žiadosť o prístup"
+
+msgid "Asked for"
+msgstr "Žiadané"
+
+msgid "Why"
+msgstr "Prečo"
+
+msgid "What exactly"
+msgstr "Čo presne"
+
+msgid "none yet - it is created when you grant the access"
+msgstr "zatiaľ žiadna – vytvorí sa, keď prístup udelíš"
+
+msgid "Rights to grant"
+msgstr "Práva na udelenie"
+
+msgid ""
+"Granting creates a protected area for this object type, without owners. "
+"Appoint its owners afterwards in Protected areas. Until then only the master"
+" and this access exist."
+msgstr ""
+"Udelením sa vytvorí chránená oblasť pre tento typ objektu, bez vlastníkov. "
+"Vlastníkov určíš potom v Chránených oblastiach."
+
+msgid "Decide"
+msgstr "Rozhodnúť"
+
+msgid "Asked for:"
+msgstr "Žiadané:"
+
+msgid "Blocked:"
+msgstr "Zablokované:"
+
+msgid ""
+"Your request from %(when)s is waiting for a decision. You will get an e-mail"
+" when it is decided."
+msgstr ""
+"Tvoja žiadosť z %(when)s čaká na rozhodnutie. Keď sa rozhodne, dostaneš "
+"e-mail."
+
+msgid "What do you need?"
+msgstr "Čo potrebuješ?"
+
 #~ msgid ""
 #~ "There is no other administrator or delegate with PIN and 2FA who could "
 #~ "confirm."

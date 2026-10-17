@@ -601,6 +601,14 @@ class AreaGrantForm(_AccessChoice):
         self.order_fields(['user', 'target', 'rights', 'rows', 'hours'])
 
 
+class AccessRequestForm(forms.Form):
+    """From the "no access" page: what the user wants (object type / app, rights) and why."""
+    target = forms.CharField(max_length=100)
+    rights = forms.MultipleChoiceField(choices=[(r, r) for r in ('view', 'add', 'change', 'delete')], required=False)
+    note = forms.CharField(max_length=200, min_length=5)
+    scope = forms.CharField(max_length=200, required=False)
+
+
 class AreaRequestForm(forms.Form):
     note = forms.CharField(label=_('Why do you need the access?'), max_length=200, min_length=5,
                            widget=forms.TextInput(attrs={'class': 'form-control'}))

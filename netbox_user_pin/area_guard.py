@@ -89,7 +89,17 @@ def _throttled_log(user, area, right, request):
             logger.exception('Cannot log the refused access')
 
 
-def denied_response(request, area, right='view'):
+def _request_context(request, area, right, target):
+    """What the "no access" page needs for the request form: the blocked object type and the rights to choose."""
+    from .area_views import _target_label
+    rights = areas.rights_available(area) if area else list(areas.GENERIC_RIGHTS)
+    return {
+        'target': target or '', 'target_label': _target_label(target) if target else '',
+        'right': right, 'rights': [(r, areas.right_label(area, r) if area else r.capitalize()) for r in rights],
+    }
+
+
+def denied_response(request, area, right='view', target=None):
     """``area=None``: refused by "deny everything not allowed"."""
     user = request.user
     wants_json = request.path_info.startswith('/api/') or 'application/json' in request.headers.get('Accept', '')
@@ -98,19 +108,24 @@ def denied_response(request, area, right='view'):
             return JsonResponse({'detail': 'Denied: nothing allows this and everything else is denied.'}, status=403)
         with translation.override(service.get_settings().language or 'en'):
             response = render(request, 'netbox_user_pin/area_denied.html', {
-                'area': None, 'deny': True, 'keepers': areas.keepers(), 'next': request.get_full_path()}, status=403)
+                'area': None, 'deny': True, 'keepers': areas.keepers(), 'next': request.get_full_path(),
+                **_request_context(request, None, right, target),
+                'pending': AreaRequest.objects.filter(user=user, target=target or '', status=AreaRequestStatus.PENDING
+                                                      ).first() if getattr(user, 'is_authenticated', False) else None,
+            }, status=403)
             response.render() if hasattr(response, 'render') else None
         return response
     if wants_json:
         return JsonResponse({'detail': f'Access to the protected area "{area.name}" requires a PIN grant.'}, status=403)
-    pending = (AreaRequest.objects.filter(area=area, user=user, status=AreaRequestStatus.PENDING).first()
+    pending = (AreaRequest.objects.filter(area=area, user=user, target=target or '',
+                                          status=AreaRequestStatus.PENDING).first()
                if getattr(user, 'is_authenticated', False) else None)
     # the page is shown on an ordinary NetBox URL, so the language of the plugin is switched on by hand
     with translation.override(service.get_settings().language or 'en'):
         response = render(request, 'netbox_user_pin/area_denied.html', {
             'area': area, 'right': right, 'pending': pending, 'owners': areas.owners(area),
-            'has_owners': bool(areas.owners(area)),
-            'next': request.get_full_path(),
+            'has_owners': True,
+            'next': request.get_full_path(), **_request_context(request, area, right, target),
         }, status=403)
         response.render() if hasattr(response, 'render') else None
     return response
@@ -135,6 +150,8 @@ class AreaGuardMiddleware:
         app_label = model._meta.app_label if model else None
         model_name = model._meta.model_name if model else None
         area = areas.area_for(app_label, model_name, package=package)
+        target = f'{app_label}.{model_name}' if model_name else None
+        ask = target or package  # what the "no access" page offers to request
         api = _is_api(request, view_func)
         if area is None and not areas.default_deny_active():
             return None
@@ -146,9 +163,8 @@ class AreaGuardMiddleware:
         if area is None:  # "deny everything not allowed" reaches what no area covers
             if not areas.default_deny_blocks(user, app_label, model_name, package):
                 return None
-            return denied_response(request, None)
+            return denied_response(request, None, right=areas.right_for_request(request, cls, view_kwargs), target=ask)
         right = areas.right_for_request(request, cls, view_kwargs)
-        target = f'{app_label}.{model_name}' if model_name else None
         if areas.can(user, area, right, target):
             # whoever holds access unlocks the PIN to enter (not before the owners exist, and the REST API has no
             # unlock step)
@@ -158,7 +174,7 @@ class AreaGuardMiddleware:
                     return response
             return None
         _throttled_log(user, area, right, request)
-        return denied_response(request, area, right)
+        return denied_response(request, area, right, ask)
 
 
 def install():

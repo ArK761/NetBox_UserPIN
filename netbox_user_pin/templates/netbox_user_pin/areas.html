@@ -4,7 +4,8 @@
 {% block title %}{% trans "Protected areas" %}{% endblock %}
 {% block content %}
 {% pin_build %}
-{% if waiting %}<div class="alert alert-warning"><i class="mdi mdi-key-alert"></i> {% blocktrans count n=waiting %}{{ n }} access request is waiting for your decision.{% plural %}{{ n }} access requests are waiting for your decision.{% endblocktrans %}</div>{% endif %}
+{% if waiting %}<div class="alert alert-warning"><i class="mdi mdi-key-alert"></i> {% blocktrans count n=waiting %}{{ n }} access request is waiting for your decision.{% plural %}{{ n }} access requests are waiting for your decision.{% endblocktrans %}
+  <ul class="mb-0 mt-1">{% for r in waiting_list %}<li><a href="{% url 'plugins:netbox_user_pin:request_decide' pk=r.pk %}">{{ r.user.username }} → {{ r.area.name|default:r.target }}</a>{% if r.rights %} ({{ r.rights|join:", " }}){% endif %}</li>{% endfor %}</ul></div>{% endif %}
 {% if not settings.areas_enabled %}<div class="alert alert-secondary"><div>{% trans "The protection of your own areas is off (Settings → Protected areas). Areas of plugins with a PIN integration protect as soon as the plugin's integration is switched on." %}</div></div>{% endif %}
 <div class="card {% if deny_on %}border-danger{% endif %}">
   <h2 class="card-header"><i class="mdi mdi-shield-off{% if not deny_on %}-outline{% endif %}"></i> {% trans "Deny everything not allowed" %}
