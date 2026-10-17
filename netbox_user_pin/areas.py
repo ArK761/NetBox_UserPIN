@@ -260,8 +260,16 @@ def _memo_rights(user, area, target=None):
 
 
 def _bootstrap(user, area):
-    """A superuser keeps access to an area that has no owners yet."""
-    return bool(user.is_superuser and not AreaOwner.objects.filter(area=area).exists())
+    """
+    Until an area has owners its data is seen by the protection keepers only - so that somebody can set it up and
+    nobody else (superusers included) sees what nobody was given. Without any keeper yet: the superusers.
+    """
+    if not getattr(user, 'is_authenticated', False) or AreaOwner.objects.filter(area=area).exists():
+        return False
+    active_areas()
+    if _cache['keepers']:
+        return is_keeper(user)
+    return bool(user.is_superuser)
 
 
 def _unrestricted(user, area):

@@ -780,3 +780,11 @@ class RequestFromDeniedPageTest(AreaTestCase):
         self.ask(['view'])
         self.ask(['view'])  # asking again keeps one waiting request
         self.assertEqual(AreaRequest.objects.count(), 1)
+
+    def test_ownerless_area_is_seen_by_the_keepers_only(self):
+        area = self.make_area(targets=('dcim.device',), owners=False)
+        self.login(self.master)  # a superuser nobody defined anywhere
+        self.assertEqual(self.client.get(DEVICES).status_code, 403)
+        self.assertFalse(areas.can(self.master, area, 'view', 'dcim.device'))
+        self.login(self.keeper)
+        self.assertEqual(self.client.get(DEVICES).status_code, 200)
