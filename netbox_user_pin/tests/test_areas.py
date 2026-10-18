@@ -862,6 +862,37 @@ class TabsTest(AreaTestCase):
         self.assertEqual(self.client.get(self.main).status_code, 200)
         self.assertEqual(self.client.get(self.interfaces).status_code, 403)  # interfaces are in no area: denied
 
+    def test_generic_tabs_changelog_journal_contacts_are_closed_too(self):
+        area = self.make_area(targets=('dcim.device', 'dcim.interface'))
+        grant = areas.grant_custom(area, self.normal, 'dcim.device', ['view'], None, self.owner1)
+        self.login(self.normal)
+        for name in ('changelog', 'journal', 'contacts', 'image-attachments'):
+            url = f'/dcim/devices/{self.device.pk}/{name}/'
+            self.assertEqual(self.client.get(url).status_code, 403, name)
+        self.assertContains(self.client.get(f'/dcim/devices/{self.device.pk}/changelog/'), 'history.back()',
+                            status_code=403)
+        areas.set_grant_tabs(grant, ['changelog'], self.owner1)
+        areas.clear_cache()
+        self.assertEqual(self.client.get(f'/dcim/devices/{self.device.pk}/changelog/').status_code, 200)
+        self.assertEqual(self.client.get(f'/dcim/devices/{self.device.pk}/journal/').status_code, 403)
+
+    def test_a_hidden_fixed_field_is_gone_from_the_detail_page(self):
+        from dcim.models import Platform
+        platform = Platform.objects.create(name='PLATFORM_X', slug='platform-x')
+        self.device.platform = platform
+        self.device.save()
+        area = self.make_area(targets=('dcim.device',))
+        areas.grant_custom(area, self.normal, 'dcim.device', ['view'], None, self.owner1)
+        self.login(self.normal)
+        self.assertContains(self.client.get(self.main), 'PLATFORM_X')
+        profile = area.profiles.get(name='Read')
+        grant = AreaGrant.objects.get(user=self.normal)
+        areas.save_field_rules(area, grant.profile, 'dcim.device', {'platform': ('hidden', '')}, self.owner1)
+        areas.clear_cache()
+        self.assertNotContains(self.client.get(self.main), 'PLATFORM_X')
+        self.device.refresh_from_db()
+        self.assertEqual(self.device.platform, platform)  # only the page changed, never the data
+
 
 class NoPinYetTest(AreaTestCase):
     def test_a_user_with_access_but_without_a_pin_is_sent_to_create_one(self):

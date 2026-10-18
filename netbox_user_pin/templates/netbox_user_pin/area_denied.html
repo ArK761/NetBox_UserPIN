@@ -1,6 +1,7 @@
 {% extends 'generic/_base.html' %}
 {% load userpin_tags i18n %}
-{% block title %}{% trans "Access to a protected area" %}{% endblock %}
+{% block title %}{% trans "Access to a protected area" %}<div class="text-center mt-3"><a class="btn btn-outline-secondary" href="javascript:history.back()"><i class="mdi mdi-arrow-left"></i> {% trans "Back" %}</a></div>
+{% endblock %}
 {% block content %}
 {% pin_build %}
 <div class="text-center mb-3"><span class="badge text-bg-dark fs-6"><i class="mdi mdi-shield-lock"></i> {% trans "Protected by the User PIN plugin" %}</span></div>
@@ -39,4 +40,5 @@
     {% endif %}
   </div>
 </div>
+<div class="text-center mt-3"><a class="btn btn-outline-secondary" href="javascript:history.back()"><i class="mdi mdi-arrow-left"></i> {% trans "Back" %}</a></div>
 {% endblock %}

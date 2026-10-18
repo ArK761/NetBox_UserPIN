@@ -5428,6 +5428,12 @@ msgstr ""
 "Len používatelia s rolou v PINe nad obyčajným používateľom: CORE, vedúci "
 "alebo delegát oddelenia."
 
+msgid "Add owner"
+msgstr "Pridať vlastníka"
+
+msgid "Back"
+msgstr "Späť"
+
 #~ msgid ""
 #~ "There is no other administrator or delegate with PIN and 2FA who could "
 #~ "confirm."

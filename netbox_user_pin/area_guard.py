@@ -146,6 +146,9 @@ class AreaGuardMiddleware:
             return None
         cls = getattr(view_func, 'view_class', None) or getattr(view_func, 'cls', None)
         model = _model_of(cls) if cls is not None else None
+        if model is None:  # the views of the changelog, journal, contacts ... get the model from the URL
+            candidate = (view_kwargs or {}).get('model')
+            model = candidate if hasattr(candidate, '_meta') else None
         package = (cls.__module__ if cls is not None else getattr(view_func, '__module__', '') or '').split('.')[0]
         if model is None and package not in getattr(django_settings, 'PLUGINS', ()):
             return None  # views without objects (login, logout, own profile ...) are never refused; plugin pages are

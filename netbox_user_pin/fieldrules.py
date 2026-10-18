@@ -224,6 +224,32 @@ def _hook_detail():
     _once(CustomFieldsMixin, 'get_custom_fields', get_custom_fields)
     _once(CustomFieldsMixin, 'get_custom_fields_by_group', get_custom_fields_by_group)
 
+    # The fixed fields of a detail page are drawn by the template of each model: a hidden one is emptied on the
+    # object shown (a read-only page: edit and delete views are no ObjectView and never save such an object).
+    from netbox.views.generic import ObjectView
+
+    def get_object(original):
+        def wrapper(self, **kwargs):
+            instance = original(self, **kwargs)
+            request = getattr(self, 'request', None)
+            if request is None or request.method != 'GET' or instance is None:
+                return instance
+            policy = policy_of_model(type(instance))
+            if policy is None:
+                return instance
+            for field in type(instance)._meta.concrete_fields:
+                if field.primary_key or field.name in SKIP_FIELDS or field.name.startswith('_'):
+                    continue
+                if policy.mode(field.name) == AreaFieldMode.HIDDEN:
+                    try:
+                        setattr(instance, field.name, None)
+                    except Exception:  # a field that cannot be emptied stays as it is
+                        logger.debug('Cannot hide %s on the detail page', field.name)
+            return instance
+        return wrapper
+
+    _once(ObjectView, 'get_object', get_object)
+
 
 def _hook_forms():
     from django import forms
