@@ -1,1 +1,1 @@
-{% if build.version %}<div class="text-end mb-2"><span class="badge text-bg-secondary" title="{{ build.commit }}"><i class="mdi mdi-tag-outline"></i> User PIN v{{ build.version }}{% if build.short %} · {{ build.short }}{% endif %}</span></div>{% endif %}
+{% if build.version %}<div class="text-end mb-2"><span class="badge text-bg-secondary" title="{{ build.commit }}"><i class="mdi mdi-tag-outline"></i> User PIN v{{ build.version }}{% if build.commit %} · {{ build.commit }}{% endif %}</span></div>{% endif %}

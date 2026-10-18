@@ -17,6 +17,7 @@ from django.http import JsonResponse
 from django.shortcuts import redirect, render
 from django.utils.functional import SimpleLazyObject
 from django.utils import translation
+from django.utils.translation import gettext as _
 from django.utils.http import urlencode
 
 from . import areas, service
@@ -99,7 +100,7 @@ def _request_context(request, area, right, target):
     }
 
 
-def denied_response(request, area, right='view', target=None):
+def denied_response(request, area, right='view', target=None, tab_label=None):
     """``area=None``: refused by "deny everything not allowed"."""
     user = request.user
     wants_json = request.path_info.startswith('/api/') or 'application/json' in request.headers.get('Accept', '')
@@ -109,7 +110,7 @@ def denied_response(request, area, right='view', target=None):
         with translation.override(service.get_settings().language or 'en'):
             response = render(request, 'netbox_user_pin/area_denied.html', {
                 'area': None, 'deny': True, 'keepers': areas.keepers(), 'next': request.get_full_path(),
-                **_request_context(request, None, right, target),
+                **_request_context(request, None, right, target), 'tab_label': tab_label,
                 'pending': AreaRequest.objects.filter(user=user, target=target or '', status=AreaRequestStatus.PENDING
                                                       ).first() if getattr(user, 'is_authenticated', False) else None,
             }, status=403)
@@ -126,6 +127,7 @@ def denied_response(request, area, right='view', target=None):
             'area': area, 'right': right, 'pending': pending, 'owners': areas.owners(area),
             'has_owners': True,
             'next': request.get_full_path(), **_request_context(request, area, right, target),
+            'tab_label': tab_label,
         }, status=403)
         response.render() if hasattr(response, 'render') else None
     return response
@@ -149,10 +151,19 @@ class AreaGuardMiddleware:
             return None  # views without objects (login, logout, own profile ...) are never refused; plugin pages are
         app_label = model._meta.app_label if model else None
         model_name = model._meta.model_name if model else None
-        area = areas.area_for(app_label, model_name, package=package)
+        api = _is_api(request, view_func)
         target = f'{app_label}.{model_name}' if model_name else None
         ask = target or package  # what the "no access" page offers to request
-        api = _is_api(request, view_func)
+        # a tab of the detail page: (name, label, is_plugin) - a plugin's tab follows the area of that plugin
+        tab = None if api else areas.tab_info(cls, app_label, model_name)
+        area, rights_target = areas.area_for(app_label, model_name, package=package), target
+        if tab and tab[2]:
+            plugin_area = areas.area_for(None, None, package=package)
+            ask = package
+            if plugin_area is not None:
+                area, rights_target = plugin_area, None
+            elif areas.default_deny_active():
+                area = None  # nothing allows the plugin: refused by "deny everything not allowed"
         if area is None and not areas.default_deny_active():
             return None
         user = _api_user(request, cls) if api and cls is not None else request.user
@@ -160,21 +171,49 @@ class AreaGuardMiddleware:
             if api:
                 return JsonResponse({'detail': 'Authentication required.'}, status=403)
             return redirect(f'{django_settings.LOGIN_URL}?{urlencode({"next": request.get_full_path()})}')
+        right = areas.right_for_request(request, cls, view_kwargs)
         if area is None:  # "deny everything not allowed" reaches what no area covers
             if not areas.default_deny_blocks(user, app_label, model_name, package):
                 return None
-            return denied_response(request, None, right=areas.right_for_request(request, cls, view_kwargs), target=ask)
-        right = areas.right_for_request(request, cls, view_kwargs)
-        if areas.can(user, area, right, target):
+            return denied_response(request, None, right=right, target=ask, tab_label=tab[1] if tab else None)
+        if areas.can(user, area, right, rights_target):
+            if tab and not tab[2] and not areas.tab_allowed(user, area, target, tab[0]):
+                _throttled_log(user, area, right, request)
+                return denied_response(request, area, right, ask, tab_label=tab[1])
+            if (response := _child_denied(request, user, cls)) is not None:
+                return response
             # whoever holds access unlocks the PIN to enter (not before the owners exist, and the REST API has no
             # unlock step)
             if not api and areas.owners(area):
                 from .mixins import pin_gate
+                if service.is_allowed(user) and not service.has_pin(user):
+                    from django.contrib import messages
+                    with translation.override(service.get_settings().language or 'en'):
+                        messages.info(request, _('You have access to "%(area)s". To enter you need a PIN: set it '
+                                                 'here and you will continue.') % {'area': area.name})
                 if (response := pin_gate(request, scope=f'area-{area.key}')) is not None:
                     return response
             return None
         _throttled_log(user, area, right, request)
-        return denied_response(request, area, right, ask)
+        return denied_response(request, area, right, ask, tab_label=tab[1] if tab else None)
+
+
+def _child_denied(request, user, cls):
+    """A page that lists objects of another type (a device's interfaces) also needs the right on that type."""
+    child = getattr(cls, 'child_model', None) if cls is not None else None
+    meta = getattr(child, '_meta', None)
+    if meta is None:
+        return None
+    child_target = f'{meta.app_label}.{meta.model_name}'
+    child_area = areas.area_for(meta.app_label, meta.model_name, package=meta.app_label)
+    if child_area is not None:
+        if areas.can(user, child_area, 'view', child_target):
+            return None
+        _throttled_log(user, child_area, 'view', request)
+        return denied_response(request, child_area, 'view', child_target)
+    if areas.default_deny_blocks(user, meta.app_label, meta.model_name, meta.app_label):
+        return denied_response(request, None, right='view', target=child_target)
+    return None
 
 
 def install():

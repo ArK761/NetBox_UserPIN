@@ -277,6 +277,77 @@ def _unrestricted(user, area):
     return is_owner(user, area) or _bootstrap(user, area)
 
 
+#
+# Tabs of the detail pages
+#
+
+def _tab_configs(app_label, model_name):
+    from django.utils.module_loading import import_string
+    from netbox.registry import registry
+    result = []
+    for config in registry['views'].get(app_label, {}).get(model_name, []):
+        view = import_string(config['view']) if isinstance(config['view'], str) else config['view']
+        result.append((config, view))
+    return result
+
+
+def tab_info(view_class, app_label, model_name):
+    """
+    (name, label, is_plugin) when ``view_class`` is a tab of the detail page of ``app_label.model_name``, else None.
+    The main page of the object is no tab.
+    """
+    from django.conf import settings
+    if view_class is None or not app_label or not model_name:
+        return None
+    for config, view in _tab_configs(app_label, model_name):
+        tab = getattr(view, 'tab', None)
+        if view is view_class and tab is not None and config['name'] and config.get('detail', True):
+            package = view.__module__.split('.')[0]
+            return config['name'], str(tab.label), package in getattr(settings, 'PLUGINS', ())
+    return None
+
+
+def tabs_of(target):
+    """[{name, label, plugin}] of the tabs the detail page of an object type ('dcim.device') has."""
+    app_label, _dot, model_name = (target or '').partition('.')
+    result, seen = [], set()
+    for config, view in _tab_configs(app_label, model_name):
+        tab = getattr(view, 'tab', None)
+        if tab is None or not config['name'] or config['name'] in seen or not config.get('detail', True):
+            continue
+        seen.add(config['name'])
+        from django.conf import settings
+        result.append({'name': config['name'], 'label': str(tab.label),
+                       'plugin': view.__module__.split('.')[0] in getattr(settings, 'PLUGINS', ())})
+    return sorted(result, key=lambda t: t['label'].lower())
+
+
+def tab_allowed(user, area, target, tab_name):
+    """May the user open this (system) tab? Owners always; others as their grants for the object type allow."""
+    if _unrestricted(user, area):
+        return True
+    for grant in active_grants(user, area, target):
+        if 'view' in grant.profile.rights and (grant.profile.tabs is None or tab_name in grant.profile.tabs):
+            return True
+    return False
+
+
+def set_grant_tabs(grant, tabs, actor, request=None):
+    """Choose the system tabs an access entry may open."""
+    area = grant.area
+    if not _may_grant(actor, area):
+        raise PermissionDenied
+    profile = grant.profile
+    if not profile.private:
+        raise ValidationError(_('Revoke this access and grant it again.'))
+    known = {t['name'] for t in tabs_of(grant.target) if not t['plugin']}
+    profile.tabs = sorted(t for t in tabs if t in known)
+    profile.save()
+    _log(PinEventAction.AREA_CHANGED, area, actor, user=grant.user, request=request,
+         detail=f'tabs {grant.target or "*"}: {", ".join(profile.tabs) or "main page only"}')
+    clear_cache()
+
+
 def row_filter(user, area, app_label, model, action='view'):
     """
     ``None``: no access. ``Q()``: every row. Otherwise a ``Q`` with the rows the user's profiles show.
@@ -445,6 +516,7 @@ def create_area(name, targets, owners_, actor, description='', max_hours=24, req
         AreaProfile.objects.create(area=area, name=name_, rights=list(rights))
     _log(PinEventAction.AREA_CREATED, area, actor, request=request, detail=f'targets: {", ".join(targets)}')
     for user in owners_:
+        _check_owner_role(user)
         _ensure_pin_allowed(user, actor, request)
         _add_owner(area, user, actor, request)
     clear_cache()
@@ -458,6 +530,13 @@ def _unique_key(name):
     while ProtectedArea.objects.filter(key=key).exists():
         key, n = f'{base}-{n}', n + 1
     return key
+
+
+def _check_owner_role(user):
+    """The one who may shut a superuser out must stand above a plain user in the PIN: CORE, head or delegate."""
+    if not roles.is_manager(user):
+        raise ValidationError(_('%(user)s cannot own an area: an owner must hold a PIN role above a plain user '
+                                '(CORE, department head or delegate).') % {'user': user.username})
 
 
 def _add_owner(area, user, actor, request):
@@ -476,6 +555,7 @@ def add_owner(area, user, actor, request=None):
         raise PermissionDenied
     if not user.is_active:
         raise ValidationError(_('The account is not active.'))
+    _check_owner_role(user)
     _ensure_pin_allowed(user, actor, request)
     owner = _add_owner(area, user, actor, request)
     clear_cache()
@@ -739,7 +819,8 @@ def grant_custom(area, user, target, rights, hours, actor, filters=None, request
     if target and target not in area_models(area):
         raise ValidationError(_('"%(target)s" is not protected by this area.') % {'target': target})
     profile = AreaProfile.objects.create(area=area, name=f'{user.username} · {target or "*"} · {uuid.uuid4().hex[:6]}',
-                                         rights=rights, filters=filters or {}, private=True)
+                                         rights=rights, filters=filters or {}, private=True,
+                                         tabs=[] if target else None)
     try:
         return grant_access(area, user, profile, hours, actor, request=request, notify=notify, target=target)
     except Exception:

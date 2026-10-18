@@ -295,7 +295,12 @@ class AreaFieldsView(AreaViewMixin, View):
                 rule = rules.get(key)
                 rows.append({'key': key, 'label': label, 'kind': kind, 'mode': rule.mode if rule else 'default',
                              'contains': rule.contains if rule else ''})
+        tab_rows = []
+        if profile is not None and profile.private and target:
+            tab_rows = [dict(t, allowed=profile.tabs is None or t['name'] in profile.tabs)
+                        for t in areas.tabs_of(target)]
         return render(request, self.template_name, {
+            'tab_rows': tab_rows,
             'area': area, 'profile': profile, 'nobody': nobody, 'target': target, 'rows': rows,
             'grant_choices': [(g.pk, f'{g.user.username} · {g.target or "*"}') for g in self._grants(area) if g.is_active],
             'grant_pk': (request.POST.get('grant') or request.GET.get('grant') or ''), 'targets': [(t, _target_label(t)) for t in areas.area_models(area)],
@@ -309,6 +314,18 @@ class AreaFieldsView(AreaViewMixin, View):
     def post(self, request, pk):
         area = self._area(request, pk)
         profile, nobody, target = self._choice(request, area)
+        if request.POST.get('action') == 'tabs':
+            try:
+                grant = self._grants(area).filter(pk=request.POST.get('grant') or 0).first()
+                if grant is None:
+                    raise PermissionDenied
+                areas.set_grant_tabs(grant, [k[5:] for k in request.POST if k.startswith('tab__')], request.user,
+                                     request=request)
+                messages.success(request, _('Saved.'))
+            except ValidationError as exc:
+                _errors(request, exc)
+            return redirect(f"{reverse('plugins:netbox_user_pin:area_fields', kwargs={'pk': area.pk})}"
+                            f"?grant={request.POST.get('grant', '')}&target={target}")
         try:
             app_label, _dot, model = target.partition('.')
             rules = {key: (request.POST.get(f'mode__{key}', 'default'), request.POST.get(f'contains__{key}', ''))

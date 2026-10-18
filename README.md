@@ -391,3 +391,20 @@ area that protects the object type, or - when no area does yet - to the protecti
 NetBox with who asks for what and why; the decider can change the rights and the duration, then **OK**. If there is no
 area for the object type, OK creates it (without owners - they are appointed by hand) and adds the user with the
 chosen rights; otherwise the user is added to the existing area.
+
+**Tabs of the detail page** (Interfaces, Config Context, Changelog, plugin tabs …): the tab stays in the tab bar (the
+door is visible), what it opens is decided like this:
+
+* a **system tab** of NetBox opens only if it is ticked for that user in *Fields → Tabs of the detail page*; a new access
+  entry allows the main page only. An owner opens every tab;
+* a tab that lists **other objects** (a device's interfaces) also needs the right on their type; under "deny everything
+  not allowed" that type has to be in an area;
+* the tab of a **plugin** follows the protected area of that plugin (add the plugin's app as an area); under "deny
+  everything not allowed" a plugin that no area covers is refused.
+
+**Who may own an area**: only an account with a PIN role above a plain user - CORE (superusers, CORE deputies), a
+department head or a delegate. Nobody else can be appointed (the owner is the one who decides about superusers).
+Until an area has owners, only the protection keepers (without any keeper: the superusers) see its data.
+
+**Entering an area without a PIN**: a user who was granted access but has no PIN is sent to create one (no 2FA needed)
+with a note saying why, and then continues to the page he wanted.

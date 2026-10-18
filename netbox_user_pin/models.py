@@ -811,6 +811,8 @@ class AreaProfile(models.Model):
     filters = models.JSONField(default=dict, blank=True)
     # A private profile belongs to one access entry: its rights, rows and field rules are edited with that entry.
     private = models.BooleanField(default=False)
+    # The tabs of an object's detail page the profile may open (names like 'interfaces'); None = every tab.
+    tabs = models.JSONField(null=True, blank=True, default=None)
 
     class Meta:
         verbose_name = _('area profile')

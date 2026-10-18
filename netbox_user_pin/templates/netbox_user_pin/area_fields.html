@@ -48,6 +48,21 @@
   </form>
 </div>
 <div class="alert alert-info small"><strong>{% trans "Values must include" %}:</strong> {% trans "optional. Fill it in only where you want to limit the values: write a text (e.g. PRINTER) and the user sees from that custom field only the values that contain it. It does not apply to the fixed fields." %}</div>
+{% if tab_rows %}
+<div class="card">
+  <h2 class="card-header">{% trans "Tabs of the detail page" %}</h2>
+  <form method="post">{% csrf_token %}<input type="hidden" name="action" value="tabs"><input type="hidden" name="grant" value="{{ grant_pk }}"><input type="hidden" name="target" value="{{ target }}">
+    <div class="card-body">
+      <p class="text-secondary small">{% trans "The tabs of this object (Interfaces, Config Context, Changelog …) the user may open. The main page is always allowed. A tab that lists other objects also needs the right on their type. Tabs of plugins are governed by the area of that plugin." %}</p>
+      {% for t in tab_rows %}
+        {% if t.plugin %}<div class="text-secondary"><i class="mdi mdi-puzzle-outline"></i> {{ t.label }} <span class="small">({% trans "plugin" %})</span></div>
+        {% else %}<label class="d-block"><input type="checkbox" class="form-check-input" name="tab__{{ t.name }}" {% if t.allowed %}checked{% endif %}> {{ t.label }}</label>{% endif %}
+      {% endfor %}
+    </div>
+    {% if can_manage %}<div class="card-body text-end pt-0"><button type="submit" class="btn btn-primary">{% trans "Save tabs" %}</button></div>{% endif %}
+  </form>
+</div>
+{% endif %}
 <p class="text-secondary small">{% trans "By rights: a user who may add or change sees and writes every field, a read-only user only reads. Applied in forms, tables and the REST API; custom fields also in the detail page. The fixed fields of an object's detail page are drawn by NetBox model by model and are not hidden there." %}</p>
 {% include 'netbox_user_pin/inc/table_tools.html' %}
 {% endblock %}

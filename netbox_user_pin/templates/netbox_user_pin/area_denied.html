@@ -11,7 +11,7 @@
       <h2 class="card-header"><i class="mdi mdi-shield-off"></i> {% trans "Access denied" %}</h2>
       <div class="card-body">
         <p>{% trans "Everything that is not explicitly allowed is denied. No protected area gives you access to this." %}</p>
-        {% if target_label %}<p>{% trans "Blocked:" %} <strong>{{ target_label }}</strong></p>{% endif %}
+        {% if target_label %}<p>{% trans "Blocked:" %} <strong>{{ target_label }}</strong>{% if tab_label %} › {% trans "tab" %} <strong>{{ tab_label }}</strong>{% endif %}</p>{% endif %}
         {% if keepers %}<p class="text-secondary">{% trans "Protection keepers:" %} <strong>{% for u in keepers %}{{ u.username }}{% if not forloop.last %}, {% endif %}{% endfor %}</strong></p>{% endif %}
         {% if pending %}
           <div class="alert alert-info mb-0"><i class="mdi mdi-clock-outline"></i> {% blocktrans with when=pending.created|date:"Y-m-d H:i" %}Your request from {{ when }} is waiting for a decision. You will get an e-mail when it is decided.{% endblocktrans %}</div>
@@ -24,6 +24,7 @@
     <div class="card border-warning">
       <h2 class="card-header"><i class="mdi mdi-shield-lock"></i> {% trans "This area is protected" %}</h2>
       <div class="card-body">
+        {% if tab_label %}<p>{% trans "Blocked tab:" %} <strong>{{ tab_label }}</strong></p>{% endif %}
         <p>{% blocktrans with name=area.name %}Access to <strong>{{ name }}</strong> is decided by its owners with a PIN grant. Your NetBox role does not matter here.{% endblocktrans %}</p>
         {% if owners %}<p class="text-secondary">{% trans "Access is managed by:" %} <strong>{% for u in owners %}{{ u.username }}{% if not forloop.last %}, {% endif %}{% endfor %}</strong></p>{% endif %}
         {% if pending %}

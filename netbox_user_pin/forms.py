@@ -510,11 +510,14 @@ class KeeperForm(forms.Form):
 
 class AreaOwnerForm(forms.Form):
     user = UserChoiceField(queryset=get_user_model().objects.none(), label=_('User'), with_email=True,
-                           widget=forms.Select(attrs=SEARCHABLE))
+                           widget=forms.Select(attrs=SEARCHABLE),
+                           help_text=_('Only users with a PIN role above a plain user: CORE, department head or '
+                                       'delegate.'))
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['user'].queryset = get_user_model().objects.filter(is_active=True).order_by('username')
+        from . import roles
+        self.fields['user'].queryset = roles.manager_users()
 
 
 class AreaProfileForm(forms.Form):

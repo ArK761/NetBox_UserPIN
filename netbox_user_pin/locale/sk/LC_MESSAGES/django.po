@@ -5381,6 +5381,53 @@ msgstr ""
 "PRINTER) a používateľ uvidí z toho vlastného poľa iba hodnoty, ktoré ho "
 "obsahujú. Na pevné polia sa to nevzťahuje."
 
+msgid "Tab"
+msgstr "Záložka"
+
+msgid "tab"
+msgstr "záložka"
+
+msgid "Blocked tab:"
+msgstr "Zablokovaná záložka:"
+
+msgid "Tabs of the detail page"
+msgstr "Záložky detailu"
+
+msgid ""
+"The tabs of this object (Interfaces, Config Context, Changelog …) the user "
+"may open. The main page is always allowed. A tab that lists other objects "
+"also needs the right on their type. Tabs of plugins are governed by the area"
+" of that plugin."
+msgstr ""
+"Záložky tohto objektu (Interfaces, Config Context, Changelog …), ktoré môže "
+"používateľ otvoriť. Hlavná stránka je vždy povolená. Záložka, ktorá ukazuje "
+"iné objekty, vyžaduje aj právo na ich typ. Záložky pluginov riadi oblasť "
+"toho pluginu."
+
+msgid "Save tabs"
+msgstr "Uložiť záložky"
+
+msgid ""
+"You have access to \"%(area)s\". To enter you need a PIN: set it here and "
+"you will continue."
+msgstr ""
+"Máš prístup do „%(area)s“. Na vstup potrebuješ PIN: nastav si ho tu a budeš "
+"pokračovať."
+
+msgid ""
+"%(user)s cannot own an area: an owner must hold a PIN role above a plain "
+"user (CORE, department head or delegate)."
+msgstr ""
+"%(user)s nemôže vlastniť oblasť: vlastník musí mať v PINe rolu nad obyčajným"
+" používateľom (CORE, vedúci alebo delegát oddelenia)."
+
+msgid ""
+"Only users with a PIN role above a plain user: CORE, department head or "
+"delegate."
+msgstr ""
+"Len používatelia s rolou v PINe nad obyčajným používateľom: CORE, vedúci "
+"alebo delegát oddelenia."
+
 #~ msgid ""
 #~ "There is no other administrator or delegate with PIN and 2FA who could "
 #~ "confirm."

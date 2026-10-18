@@ -30,6 +30,13 @@ class AreaTestCase(PinTestCase):
         self.master = User.objects.create_superuser('master', 'm@example.com', 'x')
         self.owner1 = User.objects.create_user('owner1', 'o1@example.com')
         self.owner2 = User.objects.create_user('owner2', 'o2@example.com')
+        # owners hold a PIN role above a plain user: a head and a delegate of a department
+        from netbox_user_pin.models import Department, PinDelegate, RoleKind, RoleStatus
+        department = Department.objects.create(name='Network')
+        PinDelegate.objects.create(user=self.owner1, role=RoleKind.HEAD, department=department,
+                                   status=RoleStatus.ACTIVE)
+        PinDelegate.objects.create(user=self.owner2, role=RoleKind.DELEGATE, department=department,
+                                   status=RoleStatus.ACTIVE)
         self.appadmin = User.objects.create_superuser('appadmin', 'a@example.com', 'x')  # superuser, not a network man
         settings = PinSettings.load()
         settings.areas_enabled = True
@@ -490,7 +497,7 @@ class BuildBadgeTest(AreaTestCase):
                 mock.patch('netbox_user_pin.templatetags.userpin_tags.plugin_build', return_value=info):
             admin_login(self.client, self.owner1)
             html = self.client.get(reverse('plugins:netbox_user_pin:my_pin')).content.decode()
-        self.assertIn('User PIN v9.9.9 · ccccccc', html)
+        self.assertIn('User PIN v9.9.9 · ' + 'c' * 40, html)
 
     def test_commit_is_read_from_pip_metadata(self):
         from unittest import mock
@@ -788,3 +795,99 @@ class RequestFromDeniedPageTest(AreaTestCase):
         self.assertFalse(areas.can(self.master, area, 'view', 'dcim.device'))
         self.login(self.keeper)
         self.assertEqual(self.client.get(DEVICES).status_code, 200)
+
+
+class TabsTest(AreaTestCase):
+    def setUp(self):
+        super().setUp()
+        from dcim.models import Device, DeviceRole, DeviceType, Manufacturer, Site
+        site = Site.objects.create(name='S1', slug='s1')
+        maker = Manufacturer.objects.create(name='M1', slug='m1')
+        dtype = DeviceType.objects.create(manufacturer=maker, model='T1', slug='t1')
+        role = DeviceRole.objects.create(name='R1', slug='r1', color='ff0000')
+        self.device = Device.objects.create(name='AGG_01', site=site, device_type=dtype, role=role)
+        self.main = f'/dcim/devices/{self.device.pk}/'
+        self.interfaces = f'/dcim/devices/{self.device.pk}/interfaces/'
+        self.normal = User.objects.create_user('normal', 'n@example.com')
+
+    def test_the_tabs_of_a_device_are_listed(self):
+        names = {t['name']: t for t in areas.tabs_of('dcim.device')}
+        self.assertIn('interfaces', names)
+        self.assertIn('changelog', names)
+        self.assertFalse(names['interfaces']['plugin'])
+
+    def test_a_system_tab_must_be_allowed_and_its_objects_too(self):
+        area = self.make_area(targets=('dcim.device', 'dcim.interface'))
+        grant = areas.grant_custom(area, self.normal, 'dcim.device', ['view'], None, self.owner1)
+        self.assertEqual(grant.profile.tabs, [])
+        self.login(self.normal)
+        self.assertEqual(self.client.get(self.main).status_code, 200)
+        self.assertEqual(self.client.get(self.interfaces).status_code, 403)  # the tab is not allowed
+        areas.set_grant_tabs(grant, ['interfaces', 'nonsense'], self.owner1)
+        grant.profile.refresh_from_db()
+        self.assertEqual(grant.profile.tabs, ['interfaces'])
+        areas.clear_cache()
+        self.assertEqual(self.client.get(self.interfaces).status_code, 403)  # allowed, but no right on interfaces
+        areas.grant_custom(area, self.normal, 'dcim.interface', ['view'], None, self.owner1)
+        areas.clear_cache()
+        self.assertEqual(self.client.get(self.interfaces).status_code, 200)
+
+    def test_owners_and_the_page_that_saves_tabs(self):
+        area = self.make_area(targets=('dcim.device', 'dcim.interface'))
+        grant = areas.grant_custom(area, self.normal, 'dcim.device', ['view'], None, self.owner1)
+        admin_login(self.client, self.owner1)
+        self.assertEqual(self.client.get(self.interfaces).status_code, 200)  # an owner opens every tab
+        url = reverse('plugins:netbox_user_pin:area_fields', kwargs={'pk': area.pk})
+        html = self.client.get(f'{url}?grant={grant.pk}&target=dcim.device').content.decode()
+        self.assertIn('name="tab__interfaces"', html)
+        response = self.client.post(url, {'action': 'tabs', 'grant': grant.pk, 'target': 'dcim.device',
+                                          'tab__changelog': 'on'})
+        self.assertEqual(response.status_code, 302, response.content[:300])
+        grant.profile.refresh_from_db()
+        self.assertEqual(grant.profile.tabs, ['changelog'])
+        with self.assertRaises(PermissionDenied):
+            areas.set_grant_tabs(grant, [], self.normal)
+
+    def test_default_deny_blocks_the_listed_objects_of_a_tab(self):
+        keeper = User.objects.create_superuser('keeper', 'k@example.com', 'x')
+        service.set_pin(keeper, GOOD_PIN)
+        enable_2fa(keeper)
+        areas.add_keeper(keeper, self.master)
+        areas.set_default_deny(True, keeper)
+        area = self.make_area(targets=('dcim.device',))
+        grant = areas.grant_custom(area, self.normal, 'dcim.device', ['view'], None, self.owner1)
+        areas.set_grant_tabs(grant, ['interfaces'], self.owner1)
+        areas.clear_cache()
+        self.login(self.normal)
+        self.assertEqual(self.client.get(self.main).status_code, 200)
+        self.assertEqual(self.client.get(self.interfaces).status_code, 403)  # interfaces are in no area: denied
+
+
+class NoPinYetTest(AreaTestCase):
+    def test_a_user_with_access_but_without_a_pin_is_sent_to_create_one(self):
+        area = self.make_area()
+        normal = User.objects.create_user('normal', 'n@example.com')
+        areas.grant_custom(area, normal, 'dcim.device', ['view'], None, self.owner1)
+        self.assertFalse(service.has_pin(normal))
+        self.client.force_login(normal)
+        response = self.client.get(DEVICES)
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse('plugins:netbox_user_pin:set_pin'), response['Location'])
+        self.assertIn('next=', response['Location'])
+        followed = self.client.get(response['Location'])
+        self.assertContains(followed, 'you need a PIN')
+
+
+class OwnerRoleTest(AreaTestCase):
+    def test_only_a_pin_role_above_a_plain_user_may_own_an_area(self):
+        area = self.make_area(owners=False)
+        plain = User.objects.create_user('plain', 'p@example.com')
+        with self.assertRaises(ValidationError):
+            areas.add_owner(area, plain, self.master)
+        areas.add_owner(area, self.owner1, self.master)  # a department head
+        areas.add_owner(area, self.master, self.owner1)  # CORE (superuser)
+        from netbox_user_pin import roles
+        names = set(roles.manager_users().values_list('username', flat=True))
+        self.assertIn('owner1', names)
+        self.assertIn('owner2', names)
+        self.assertNotIn('plain', names)
