@@ -83,7 +83,7 @@
     </div>
     {% endif %}
 
-    {% if can_manage %}<p><a class="btn btn-outline-warning" href="{% url 'plugins:netbox_user_pin:area_fields' pk=area.pk %}?grant=nobody"><i class="mdi mdi-eye-off"></i> {% trans "Fields nobody sees" %}</a></p>{% endif %}
+    {% if can_manage %}<p><a class="btn btn-outline-warning" href="{% url 'plugins:netbox_user_pin:area_fields' pk=area.pk %}?grant=nobody"><i class="mdi mdi-eye-off"></i> {% trans "Fields hidden from everybody" %}</a></p>{% endif %}
   </div>
 
   <div class="col-12 col-xl-4">

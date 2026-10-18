@@ -13,7 +13,7 @@
         <select name="grant" class="form-select" onchange="this.form.submit()">
           <option value="" {% if not nobody and not profile %}selected{% endif %}>{% trans "— choose a user —" %}</option>
           {% for pk, label in grant_choices %}<option value="{{ pk }}" {% if pk|stringformat:"s" == grant_pk %}selected{% endif %}>{{ label }}</option>{% endfor %}
-          <option value="nobody" {% if nobody %}selected{% endif %}>{% trans "Nobody sees it" %}</option>
+          <option value="nobody" {% if nobody %}selected{% endif %}>{% trans "Hidden from everybody in the area" %}</option>
         </select></div>
       <div><label class="form-label">{% trans "Object type" %}</label>
         <select name="target" class="form-select" onchange="this.form.submit()">
@@ -24,6 +24,16 @@
   </div>
   <form method="post">{% csrf_token %}
     <input type="hidden" name="grant" value="{{ grant_pk }}"><input type="hidden" name="target" value="{{ target }}">
+    <div class="card-body border-top d-flex flex-wrap gap-2 align-items-center">
+      <strong>{% trans "Set all shown fields:" %}</strong>
+      <button type="button" class="btn btn-sm btn-outline-secondary pin-bulk" data-mode="default">{% if nobody %}{% trans "Visible" %}{% else %}{% trans "By rights" %}{% endif %}</button>
+      <button type="button" class="btn btn-sm btn-outline-secondary pin-bulk" data-mode="hidden">{% trans "Hidden" %}</button>
+      {% if not nobody %}
+      <button type="button" class="btn btn-sm btn-outline-secondary pin-bulk" data-mode="read">{% trans "Read only" %}</button>
+      <button type="button" class="btn btn-sm btn-outline-secondary pin-bulk" data-mode="write">{% trans "Read and write" %}</button>
+      {% endif %}
+      <span class="text-secondary small">{% trans "Applies to the fields left by the search; then save." %}</span>
+    </div>
     <table class="table table-hover pin-sortable" id="pin-fields">
       <thead><tr><th data-sort="text">{% trans "Field" %}</th><th data-sort="text">{% trans "Kind" %}</th><th>{% trans "Rule" %}</th><th>{% trans "Values must include" %} <i class="mdi mdi-help-circle-outline" title="{% trans "Optional, custom fields only: the user sees from this field only the values that contain the text you write." %}"></i></th></tr></thead>
       <tbody>
@@ -64,5 +74,16 @@
 </div>
 {% endif %}
 <p class="text-secondary small">{% trans "By rights: a user who may add or change sees and writes every field, a read-only user only reads. Applied in forms, tables and the REST API; custom fields also in the detail page. The fixed fields of an object's detail page are drawn by NetBox model by model and are not hidden there." %}</p>
+<script>
+  document.querySelectorAll('.pin-bulk').forEach(function (button) {
+    button.addEventListener('click', function () {
+      document.querySelectorAll('#pin-fields tbody tr').forEach(function (row) {
+        if (row.style.display === 'none') { return; }
+        var radio = row.querySelector('input[type=radio][value=' + button.dataset.mode + ']');
+        if (radio) { radio.checked = true; }
+      });
+    });
+  });
+</script>
 {% include 'netbox_user_pin/inc/table_tools.html' %}
 {% endblock %}

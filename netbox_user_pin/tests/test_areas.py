@@ -840,6 +840,7 @@ class TabsTest(AreaTestCase):
         url = reverse('plugins:netbox_user_pin:area_fields', kwargs={'pk': area.pk})
         html = self.client.get(f'{url}?grant={grant.pk}&target=dcim.device').content.decode()
         self.assertIn('name="tab__interfaces"', html)
+        self.assertIn('pin-bulk', html)  # set all shown fields at once
         response = self.client.post(url, {'action': 'tabs', 'grant': grant.pk, 'target': 'dcim.device',
                                           'tab__changelog': 'on'})
         self.assertEqual(response.status_code, 302, response.content[:300])
@@ -922,3 +923,28 @@ class OwnerRoleTest(AreaTestCase):
         self.assertIn('owner1', names)
         self.assertIn('owner2', names)
         self.assertNotIn('plain', names)
+
+
+class TreeTest(AreaTestCase):
+    def test_the_tree_lists_object_types_and_protecting_one_needs_no_name(self):
+        admin_login(self.client, self.master)
+        url = reverse('plugins:netbox_user_pin:areas')
+        html = self.client.get(url).content.decode()
+        self.assertIn('value="dcim.device"', html)
+        self.assertNotIn('name="name"', html)  # no area is named by hand any more
+        response = self.client.post(url, {'action': 'protect', 'target': 'dcim.device'})
+        self.assertEqual(response.status_code, 302, response.content[:300])
+        area = ProtectedArea.objects.get(targets=['dcim.device'])
+        self.assertIn('Device', area.name)
+        self.assertEqual(area.owners.count(), 0)
+        self.client.post(url, {'action': 'protect', 'target': 'dcim.device'})  # again: the same area
+        self.assertEqual(ProtectedArea.objects.filter(targets=['dcim.device']).count(), 1)
+        html = self.client.get(url).content.decode()
+        self.assertIn('no owner yet', html)
+
+    def test_only_core_protects(self):
+        self.login(self.owner1)
+        response = self.client.post(reverse('plugins:netbox_user_pin:areas'), {'action': 'protect',
+                                                                            'target': 'dcim.site'})
+        self.assertNotEqual(response.status_code, 200)
+        self.assertFalse(ProtectedArea.objects.exists())

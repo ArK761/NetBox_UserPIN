@@ -31,48 +31,53 @@
     {% endif %}
   </div>
 </div>
-<div class="row">
-  <div class="col-12 {% if is_core %}col-xl-8{% endif %}">
-    <div class="card">
-      <h2 class="card-header">{% trans "Protected areas" %}</h2>
-      <div class="card-body pb-0"><input type="search" class="form-control form-control-sm pin-filter" data-target="#pin-areas"></div>
-      <table class="table table-hover pin-sortable" id="pin-areas">
-        <thead><tr><th data-sort="num">#</th><th data-sort="text">{% trans "Area" %}</th><th>{% trans "Protects" %}</th><th data-sort="text">{% trans "Owners" %}</th><th data-sort="num">{% trans "Access" %}</th><th></th></tr></thead>
+<div class="card">
+  <h2 class="card-header">{% trans "What is protected" %}</h2>
+  <div class="card-body">
+    <p class="text-secondary small mb-2">{% trans "Open an app (DCIM, IPAM …), find the object type and protect it. Then you decide who may see and change it, down to tabs and fields. Protecting a type needs no name." %}</p>
+    <input type="search" class="form-control form-control-sm mb-3" id="pin-tree-search" placeholder="{% trans 'Search…' %}">
+    {% for app in tree %}
+    <details class="mb-2 pin-tree-app" {% if app.protected %}open{% endif %}>
+      <summary class="py-1"><strong>{{ app.name }}</strong> <code class="small text-secondary">{{ app.label }}</code>
+        {% if app.protected %}<span class="badge text-bg-green ms-1">{{ app.protected }} {% trans "protected" %}</span>{% endif %}
+        {% if is_core and not app.app_area %}<form method="post" class="d-inline ms-2">{% csrf_token %}<input type="hidden" name="action" value="protect"><input type="hidden" name="target" value="{{ app.label }}"><button class="btn btn-sm btn-outline-secondary py-0" type="submit">{% trans "Protect all of it" %}</button></form>{% endif %}</summary>
+      <table class="table table-sm table-hover ms-3 mb-2">
         <tbody>
-          {% for row in rows %}
-            <tr>
-              <td class="text-secondary">{{ row.area.pk }}</td>
-              <td><span class="pin-dot {% if row.status == 'ok' %}ok{% else %}warn{% endif %}" title="{{ row.status_label }}"></span><a href="{% url 'plugins:netbox_user_pin:area' pk=row.area.pk %}"><strong>{{ row.area.name }}</strong></a>{% if row.area.plugin %} <span class="badge text-bg-cyan">{% trans "plugin" %}</span>{% endif %}<div class="small text-secondary">{{ row.status_label }}</div></td>
-              <td>{% for t in row.targets %}<code>{{ t }}</code> {% endfor %}</td>
-              <td>{% for u in row.owners %}{{ u.username }}{% if not forloop.last %}, {% endif %}{% empty %}<span class="badge text-bg-orange">{% trans "none – only the master has access" %}</span>{% endfor %}{% if row.owners|length == 1 %} <span class="badge text-bg-orange" title="{% trans 'Appoint at least two owners' %}"><i class="mdi mdi-alert"></i></span>{% endif %}</td>
-              <td>{{ row.grants }}{% if row.pending %} <span class="badge text-bg-red">{{ row.pending }} {% trans "waiting" %}</span>{% endif %}</td>
-              <td class="text-end">{% if row.mine %}<span class="badge text-bg-purple">{% trans "you are an owner" %}</span>{% endif %} <a class="btn btn-sm btn-outline-primary" href="{% url 'plugins:netbox_user_pin:area' pk=row.area.pk %}">{% trans "Open" %}</a></td>
-            </tr>
-          {% empty %}
-            <tr><td colspan="6" class="text-secondary">{% trans "No areas." %}</td></tr>
+          {% for row in app.rows %}
+          <tr class="pin-tree-row">
+            <td class="w-25">{{ row.label }} <code class="small text-secondary">{{ row.target }}</code></td>
+            {% if row.area %}
+            <td><span class="badge text-bg-green">{% trans "protected" %}</span></td>
+            <td>{% for name in row.owners %}{{ name }}{% if not forloop.last %}, {% endif %}{% empty %}<span class="badge text-bg-orange">{% trans "no owner yet" %}</span>{% endfor %}</td>
+            <td>{{ row.users }} {% trans "with access" %}</td>
+            <td class="text-end"><a class="btn btn-sm btn-outline-primary" href="{% url 'plugins:netbox_user_pin:area' pk=row.area.pk %}">{% trans "Open" %}</a></td>
+            {% else %}
+            <td colspan="3" class="text-secondary">{% trans "not protected" %}</td>
+            <td class="text-end">{% if is_core %}<form method="post" class="d-inline">{% csrf_token %}<input type="hidden" name="action" value="protect"><input type="hidden" name="target" value="{{ row.target }}"><button class="btn btn-sm btn-outline-success" type="submit">{% trans "Protect" %}</button></form>{% endif %}</td>
+            {% endif %}
+          </tr>
           {% endfor %}
         </tbody>
       </table>
-    </div>
-    <p class="text-secondary small">{% trans "Access to the objects of an area is decided by the owners with PIN grants – whatever the NetBox role of the user is, superusers included. Not covered: GraphQL and lists that mix objects of several types (global search, change log, dashboard widgets)." %}</p>
+    </details>
+    {% endfor %}
   </div>
-  {% if is_core %}
-  <div class="col-12 col-xl-4">
-    <div class="card">
-      <h2 class="card-header">{% trans "New area" %}</h2>
-      <div class="card-body">
-        <form method="post" class="object-edit">{% csrf_token %}<input type="hidden" name="action" value="create">
-          {% render_field form.name %}
-          {% render_field form.description %}
-          {% render_field form.target %}
-          {% render_field form.max_hours %}
-          <div class="text-end"><button type="submit" class="btn btn-primary">{% trans "Create" %}</button></div>
-        </form>
-        <p class="text-secondary small mt-3 mb-0">{% trans "Until owners are appointed only the master has access to a new area. After that the master cannot change the owners or grant access; the owners decide." %}</p>
-      </div>
-    </div>
-  </div>
-  {% endif %}
 </div>
+<p class="text-secondary small">{% trans "Access to the objects of a protected type is decided by the owners with PIN grants – whatever the NetBox role of the user is, superusers included. Not covered: GraphQL and lists that mix objects of several types (global search, change log, dashboard widgets)." %}</p>
+<script>
+  document.getElementById('pin-tree-search').addEventListener('input', function () {
+    var q = this.value.toLowerCase();
+    document.querySelectorAll('.pin-tree-app').forEach(function (app) {
+      var any = false;
+      app.querySelectorAll('.pin-tree-row').forEach(function (row) {
+        var show = !q || row.textContent.toLowerCase().indexOf(q) >= 0 || app.querySelector('summary').textContent.toLowerCase().indexOf(q) >= 0;
+        row.style.display = show ? '' : 'none';
+        any = any || show;
+      });
+      app.style.display = any ? '' : 'none';
+      if (q && any) { app.open = true; }
+    });
+  });
+</script>
 {% include 'netbox_user_pin/inc/table_tools.html' %}
 {% endblock %}

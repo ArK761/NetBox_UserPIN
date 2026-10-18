@@ -57,6 +57,38 @@ def _grant_rows(area, grant):
     }
 
 
+def _tree(user):
+    """[{label, apps...}]: every app with its object types; a type shows the area that protects it (if any)."""
+    from django.apps import apps
+    mapping, app_map = {}, {}
+    grants, owners = {}, {}
+    for area in ProtectedArea.objects.all():
+        grants[area.pk] = sum(1 for g in area.grants.all() if g.is_active)
+        owners[area.pk] = [o.username for o in areas.owners(area)]
+        for target in areas.targets_of(area):
+            (mapping if '.' in target else app_map)[target] = area
+    tree = []
+    for config in sorted(apps.get_app_configs(), key=lambda c: str(c.verbose_name).lower()):
+        if config.label in areas.NEVER:
+            continue
+        models = [m for m in config.get_models() if not m._meta.auto_created and not m._meta.proxy]
+        if not models:
+            continue
+        rows, protected = [], 0
+        for model in sorted(models, key=lambda m: str(m._meta.verbose_name).lower()):
+            target = f'{config.label}.{model._meta.model_name}'
+            area = mapping.get(target) or app_map.get(config.label)
+            protected += 1 if area else 0
+            rows.append({
+                'target': target, 'label': str(model._meta.verbose_name).capitalize(), 'area': area,
+                'owners': owners.get(area.pk, []) if area else [], 'users': grants.get(area.pk, 0) if area else 0,
+                'mine': bool(area and areas.is_owner(user, area)),
+            })
+        tree.append({'label': config.label, 'name': str(config.verbose_name), 'rows': rows, 'protected': protected,
+                     'app_area': app_map.get(config.label)})
+    return tree
+
+
 def _status(area):
     """(code, label) of what the area does now."""
     if area in areas.active_areas():
@@ -86,7 +118,7 @@ class AreaListView(AreaViewMixin, View):
                 'mine': areas.is_owner(request.user, area), 'targets': areas.targets_of(area),
             })
         return render(request, self.template_name, {
-            'rows': rows, 'is_core': core, 'form': form or AreaForm(create=True),
+            'rows': rows, 'is_core': core, 'form': form or AreaForm(create=True), 'tree': _tree(request.user),
             'waiting': len(waiting_list), 'waiting_list': waiting_list,
             'deny_on': service.get_settings().default_deny, 'keepers': areas.keepers(),
             'is_keeper': areas.is_keeper(request.user), 'can_keepers': areas.can_manage_keepers(request.user),
@@ -112,6 +144,25 @@ class AreaListView(AreaViewMixin, View):
                                          data['description'], data['max_hours'], request=request)
                 messages.success(request, _('Area "{name}" created. Appoint its owners now - until then only the '
                                             'master has access to it.').format(name=area.name))
+                return redirect('plugins:netbox_user_pin:area', pk=area.pk)
+            if action == 'protect':
+                if not roles.is_core(request.user):
+                    raise PermissionDenied
+                target = request.POST.get('target', '')
+                app_label, _dot, model = target.partition('.')
+                from django.apps import apps as django_apps
+                try:
+                    django_apps.get_app_config(app_label)
+                    if model:
+                        django_apps.get_model(app_label, model)
+                except LookupError:
+                    raise ValidationError(_('Unknown object type.'))
+                area = areas.area_for(app_label, model or None, package=app_label)
+                if area is None:
+                    area = areas.create_area(areas.target_label(target), [target], [], request.user,
+                                             request=request)
+                    messages.success(request, _('"{name}" is protected now. Appoint its owners; until then only the '
+                                                'protection keepers see it.').format(name=area.name))
                 return redirect('plugins:netbox_user_pin:area', pk=area.pk)
             if action == 'keeper-add':
                 form = KeeperForm(request.POST)

@@ -5434,6 +5434,66 @@ msgstr "Pridať vlastníka"
 msgid "Back"
 msgstr "Späť"
 
+msgid "Hidden from everybody in the area"
+msgstr "Skryté pre všetkých v oblasti"
+
+msgid "Fields hidden from everybody"
+msgstr "Polia skryté pre všetkých"
+
+msgid "Set all shown fields:"
+msgstr "Nastaviť všetky zobrazené polia:"
+
+msgid "Applies to the fields left by the search; then save."
+msgstr "Platí pre polia, ktoré ostali po vyhľadávaní; potom ulož."
+
+msgid "What is protected"
+msgstr "Čo je chránené"
+
+msgid ""
+"Open an app (DCIM, IPAM …), find the object type and protect it. Then you "
+"decide who may see and change it, down to tabs and fields. Protecting a type"
+" needs no name."
+msgstr ""
+"Otvor aplikáciu (DCIM, IPAM …), nájdi typ objektu a chráň ho. Potom "
+"rozhoduješ, kto ho smie vidieť a meniť, až po záložky a polia. Názov "
+"netreba."
+
+msgid "Protect all of it"
+msgstr "Chrániť celú aplikáciu"
+
+msgid "protected"
+msgstr "chránené"
+
+msgid "no owner yet"
+msgstr "zatiaľ bez vlastníka"
+
+msgid "with access"
+msgstr "s prístupom"
+
+msgid "not protected"
+msgstr "nechránené"
+
+msgid "Protect"
+msgstr "Chrániť"
+
+msgid ""
+"Access to the objects of a protected type is decided by the owners with PIN "
+"grants – whatever the NetBox role of the user is, superusers included. Not "
+"covered: GraphQL and lists that mix objects of several types (global search,"
+" change log, dashboard widgets)."
+msgstr ""
+"O prístupe k objektom chráneného typu rozhodujú vlastníci cez PIN prístupy –"
+" bez ohľadu na rolu používateľa v NetBoxe, vrátane superuserov. Nepokryté: "
+"GraphQL a zoznamy, ktoré miešajú objekty viacerých typov (globálne "
+"vyhľadávanie, zmenový log, widgety na dashboarde)."
+
+msgid ""
+"\"{name}\" is protected now. Appoint its owners; until then only the "
+"protection keepers see it."
+msgstr ""
+"„{name}“ je teraz chránené. Určte vlastníkov; dovtedy to vidia len "
+"správcovia ochrany."
+
 #~ msgid ""
 #~ "There is no other administrator or delegate with PIN and 2FA who could "
 #~ "confirm."
