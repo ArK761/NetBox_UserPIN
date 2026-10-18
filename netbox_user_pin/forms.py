@@ -612,6 +612,36 @@ class AccessRequestForm(forms.Form):
     scope = forms.CharField(max_length=200, required=False)
 
 
+class GroupForm(forms.Form):
+    """A group: the rights of one object type; the users put into it get exactly these."""
+    target = forms.ChoiceField(label=_('Object type'), widget=forms.Select(attrs={'class': 'form-select pin-searchable'}))
+    name = forms.CharField(label=_('Name of the group'), max_length=100,
+                           widget=forms.TextInput(attrs={'class': 'form-control'}))
+    rights = forms.MultipleChoiceField(label=_('Rights'), choices=(), widget=forms.CheckboxSelectMultiple,
+                                       error_messages={'required': _('Choose at least one right.')},
+                                       help_text=_('Whoever may add, change or delete may read as well.'))
+
+    def __init__(self, *args, area=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.area = area
+        if area is None:
+            return
+        from . import areas
+        models = set(areas.area_models(area))
+        groups = [(label, [i for i in items if i[0] in models]) for label, items in target_choices()]
+        self.fields['target'].choices = [('', _('— choose the object type —'))] + [g for g in groups if g[1]]
+        self.fields['rights'].choices = [(r, areas.right_label(area, r)) for r in areas.rights_available(area)]
+
+
+class GroupMemberForm(forms.Form):
+    user = UserChoiceField(queryset=get_user_model().objects.none(), label=_('User'), with_email=True,
+                           widget=forms.Select(attrs=SEARCHABLE))
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['user'].queryset = get_user_model().objects.filter(is_active=True).order_by('username')
+
+
 class AreaRequestForm(forms.Form):
     note = forms.CharField(label=_('Why do you need the access?'), max_length=200, min_length=5,
                            widget=forms.TextInput(attrs={'class': 'form-control'}))

@@ -8,11 +8,10 @@
   <ul class="mb-0 mt-1">{% for r in waiting_list %}<li><a href="{% url 'plugins:netbox_user_pin:request_decide' pk=r.pk %}">{{ r.user.username }} → {{ r.area.name|default:r.target }}</a>{% if r.rights %} ({{ r.rights|join:", " }}){% endif %}</li>{% endfor %}</ul></div>{% endif %}
 {% if not settings.areas_enabled %}<div class="alert alert-secondary"><div>{% trans "The protection of your own areas is off (Settings → Protected areas). Areas of plugins with a PIN integration protect as soon as the plugin's integration is switched on." %}</div></div>{% endif %}
 <div class="card {% if deny_on %}border-danger{% endif %}">
-  <h2 class="card-header"><i class="mdi mdi-shield-off{% if not deny_on %}-outline{% endif %}"></i> {% trans "Deny everything not allowed" %}
-    <span class="badge text-bg-{% if deny_on %}red{% else %}secondary{% endif %} ms-2">{% if deny_on %}{% trans "ON" %}{% else %}{% trans "off" %}{% endif %}</span></h2>
+  <h2 class="card-header"><i class="mdi mdi-shield-lock"></i> {% trans "Protection keepers" %}
+    <span class="badge text-bg-{% if deny_on %}red{% else %}secondary{% endif %} ms-2">{% if deny_on %}{% trans "everything not allowed is denied" %}{% else %}{% trans "protection not active yet" %}{% endif %}</span></h2>
   <div class="card-body">
-    <p class="text-secondary">{% trans "When it is on, whatever no protected area allows is denied to everybody except the protection keepers (they are exempt, so nobody locks himself out). Login and the own profile stay open. It can only be switched on when a keeper with PIN + 2FA exists; the keepers switch it on and off and hand the duty over." %}</p>
-    <h6>{% trans "Protection keepers" %}</h6>
+    <p class="text-secondary">{% trans "As soon as the first keeper is appointed, everything that no group or access allows is denied to everybody except the keepers (they are exempt, so nobody locks himself out). Login and the own profile stay open." %}</p>
     <ul class="list-group list-group-flush mb-3">
       {% for u in keepers %}
       <li class="list-group-item d-flex justify-content-between align-items-center">{{ u.username }}
@@ -20,47 +19,45 @@
       {% empty %}<li class="list-group-item text-secondary">{% trans "No keeper yet." %}</li>{% endfor %}
     </ul>
     {% if can_keepers %}
-    <form method="post" class="d-flex gap-2 align-items-start mb-3">{% csrf_token %}<input type="hidden" name="action" value="keeper-add"><div class="flex-grow-1">{{ keeper_form.user }}</div><button class="btn btn-primary" type="submit">{% trans "Appoint keeper" %}</button></form>
-    <p class="small text-secondary">{% trans "A keeper needs a PIN and 2FA, cannot turn 2FA off and cannot leave alone: another keeper has to take over." %}</p>
-    {% endif %}
-    {% if is_keeper %}
-    <form method="post">{% csrf_token %}
-      {% if deny_on %}<button class="btn btn-outline-secondary" name="action" value="deny-off" type="submit">{% trans "Switch off" %}</button>
-      {% else %}<button class="btn btn-danger" name="action" value="deny-on" type="submit">{% trans "Switch on: deny everything not allowed" %}</button>{% endif %}
+    <form method="post" class="d-flex flex-column gap-2 mb-2">{% csrf_token %}<input type="hidden" name="action" value="keeper-add">
+      <div>{{ keeper_form.user }}</div>
+      <div><button class="btn btn-primary" type="submit">{% if keepers %}{% trans "Appoint another keeper" %}{% else %}{% trans "Appoint the first keeper (switches the protection on)" %}{% endif %}</button></div>
     </form>
+    <p class="small text-secondary mb-0">{% trans "A keeper needs a PIN and 2FA, cannot turn 2FA off and cannot leave alone: another keeper has to take over." %}</p>
     {% endif %}
   </div>
 </div>
 <div class="card">
-  <h2 class="card-header">{% trans "What is protected" %}</h2>
+  <h2 class="card-header">{% trans "What is set up" %}</h2>
   <div class="card-body">
-    <p class="text-secondary small mb-2">{% trans "Open an app (DCIM, IPAM …), find the object type and protect it. Then you decide who may see and change it, down to tabs and fields. Protecting a type needs no name." %}</p>
-    <input type="search" class="form-control form-control-sm mb-3" id="pin-tree-search" placeholder="{% trans 'Search…' %}">
+    <input type="search" class="form-control form-control-sm mb-3" id="pin-tree-search" placeholder="{% trans 'Search a user, a group or an object type…' %}">
     {% for app in tree %}
-    <details class="mb-2 pin-tree-app" {% if app.protected %}open{% endif %}>
-      <summary class="py-1"><strong>{{ app.name }}</strong> <code class="small text-secondary">{{ app.label }}</code>
-        {% if app.protected %}<span class="badge text-bg-green ms-1">{{ app.protected }} {% trans "protected" %}</span>{% endif %}
-        {% if is_core and not app.app_area %}<form method="post" class="d-inline ms-2">{% csrf_token %}<input type="hidden" name="action" value="protect"><input type="hidden" name="target" value="{{ app.label }}"><button class="btn btn-sm btn-outline-secondary py-0" type="submit">{% trans "Protect all of it" %}</button></form>{% endif %}</summary>
+    <details class="mb-2 pin-tree-app" open>
+      <summary class="py-1"><strong>{{ app.name }}</strong> <code class="small text-secondary">{{ app.label }}</code></summary>
       <table class="table table-sm table-hover ms-3 mb-2">
         <tbody>
           {% for row in app.rows %}
           <tr class="pin-tree-row">
             <td class="w-25">{{ row.label }} <code class="small text-secondary">{{ row.target }}</code></td>
-            {% if row.area %}
-            <td><span class="badge text-bg-green">{% trans "protected" %}</span></td>
+            <td>{% for g in row.groups %}<div><strong>{{ g.name }}</strong>: {% for u in g.members %}{{ u }}{% if not forloop.last %}, {% endif %}{% empty %}<span class="text-secondary">{% trans "no members" %}</span>{% endfor %}</div>{% empty %}<span class="text-secondary">{% trans "no groups yet" %}</span>{% endfor %}
+              {% if row.individual %}<div class="small text-secondary">{% trans "individually:" %} {{ row.individual|join:", " }}</div>{% endif %}</td>
             <td>{% for name in row.owners %}{{ name }}{% if not forloop.last %}, {% endif %}{% empty %}<span class="badge text-bg-orange">{% trans "no owner yet" %}</span>{% endfor %}</td>
-            <td>{{ row.users }} {% trans "with access" %}</td>
             <td class="text-end"><a class="btn btn-sm btn-outline-primary" href="{% url 'plugins:netbox_user_pin:area' pk=row.area.pk %}">{% trans "Open" %}</a></td>
-            {% else %}
-            <td colspan="3" class="text-secondary">{% trans "not protected" %}</td>
-            <td class="text-end">{% if is_core %}<form method="post" class="d-inline">{% csrf_token %}<input type="hidden" name="action" value="protect"><input type="hidden" name="target" value="{{ row.target }}"><button class="btn btn-sm btn-outline-success" type="submit">{% trans "Protect" %}</button></form>{% endif %}</td>
-            {% endif %}
           </tr>
           {% endfor %}
         </tbody>
       </table>
     </details>
-    {% endfor %}
+    {% empty %}<p class="text-secondary">{% trans "Nothing is set up yet. Add an object type below." %}</p>{% endfor %}
+    {% if is_core %}
+    <hr>
+    <form method="post" class="d-flex flex-column gap-2" style="max-width: 36rem">{% csrf_token %}<input type="hidden" name="action" value="protect">
+      <label class="form-label mb-0"><strong>{% trans "Add an app or an object type" %}</strong></label>
+      <div>{{ add_form.target }}</div>
+      <div><button class="btn btn-primary" type="submit"><i class="mdi mdi-plus"></i> {% trans "Add" %}</button>
+        <span class="text-secondary small ms-2">{% trans "Adding only prepares the structure: nobody gets access until you create a group and put users into it." %}</span></div>
+    </form>
+    {% endif %}
   </div>
 </div>
 <p class="text-secondary small">{% trans "Access to the objects of a protected type is decided by the owners with PIN grants – whatever the NetBox role of the user is, superusers included. Not covered: GraphQL and lists that mix objects of several types (global search, change log, dashboard widgets)." %}</p>

@@ -11,7 +11,7 @@ from django.views import View
 from . import areas, fieldrules, roles, service
 from .forms import ACCESS_HOURS
 from .forms import (
-    AccessRequestForm, AreaDecideForm, AreaForm, AreaGrantForm, AreaOwnerForm, AreaProfileForm, AreaRequestForm, AreaTargetForm,
+    AccessRequestForm, GroupForm, GroupMemberForm, AreaDecideForm, AreaForm, AreaGrantForm, AreaOwnerForm, AreaProfileForm, AreaRequestForm, AreaTargetForm,
     KeeperForm,
 )
 from .mixins import PinRequiredMixin, area_gate
@@ -58,34 +58,43 @@ def _grant_rows(area, grant):
 
 
 def _tree(user):
-    """[{label, apps...}]: every app with its object types; a type shows the area that protects it (if any)."""
+    """[{name, label, rows}]: the apps and object types that are protected, with their groups and members."""
     from django.apps import apps
     mapping, app_map = {}, {}
-    grants, owners = {}, {}
+    info = {}
     for area in ProtectedArea.objects.all():
-        grants[area.pk] = sum(1 for g in area.grants.all() if g.is_active)
-        owners[area.pk] = [o.username for o in areas.owners(area)]
+        groups = []
+        for group in areas.groups_of(area):
+            groups.append({'name': group.name, 'target': group.target,
+                           'members': [g.user.username for g in areas.group_members(group)]})
+        info[area.pk] = {
+            'owners': [o.username for o in areas.owners(area)],
+            'users': sum(1 for g in area.grants.all() if g.is_active),
+            'groups': groups,
+            'individual': [g.user.username for g in area.grants.all() if g.is_active and g.profile.private],
+        }
         for target in areas.targets_of(area):
             (mapping if '.' in target else app_map)[target] = area
     tree = []
     for config in sorted(apps.get_app_configs(), key=lambda c: str(c.verbose_name).lower()):
         if config.label in areas.NEVER:
             continue
-        models = [m for m in config.get_models() if not m._meta.auto_created and not m._meta.proxy]
-        if not models:
-            continue
-        rows, protected = [], 0
-        for model in sorted(models, key=lambda m: str(m._meta.verbose_name).lower()):
+        rows = []
+        for model in sorted((m for m in config.get_models() if not m._meta.auto_created and not m._meta.proxy),
+                            key=lambda m: str(m._meta.verbose_name).lower()):
             target = f'{config.label}.{model._meta.model_name}'
             area = mapping.get(target) or app_map.get(config.label)
-            protected += 1 if area else 0
+            if area is None:
+                continue
+            data = info[area.pk]
             rows.append({
                 'target': target, 'label': str(model._meta.verbose_name).capitalize(), 'area': area,
-                'owners': owners.get(area.pk, []) if area else [], 'users': grants.get(area.pk, 0) if area else 0,
-                'mine': bool(area and areas.is_owner(user, area)),
+                'owners': data['owners'], 'users': data['users'],
+                'groups': [g for g in data['groups'] if g['target'] == target],
+                'individual': data['individual'],
             })
-        tree.append({'label': config.label, 'name': str(config.verbose_name), 'rows': rows, 'protected': protected,
-                     'app_area': app_map.get(config.label)})
+        if rows:
+            tree.append({'label': config.label, 'name': str(config.verbose_name), 'rows': rows})
     return tree
 
 
@@ -119,6 +128,7 @@ class AreaListView(AreaViewMixin, View):
             })
         return render(request, self.template_name, {
             'rows': rows, 'is_core': core, 'form': form or AreaForm(create=True), 'tree': _tree(request.user),
+            'add_form': AreaTargetForm(exclude=[t for a in ProtectedArea.objects.all() for t in areas.targets_of(a)]),
             'waiting': len(waiting_list), 'waiting_list': waiting_list,
             'deny_on': service.get_settings().default_deny, 'keepers': areas.keepers(),
             'is_keeper': areas.is_keeper(request.user), 'can_keepers': areas.can_manage_keepers(request.user),
@@ -149,6 +159,8 @@ class AreaListView(AreaViewMixin, View):
                 if not roles.is_core(request.user):
                     raise PermissionDenied
                 target = request.POST.get('target', '')
+                if not target:
+                    raise ValidationError(_('Choose an app or an object type.'))
                 app_label, _dot, model = target.partition('.')
                 from django.apps import apps as django_apps
                 try:
@@ -210,11 +222,21 @@ class AreaView(AreaViewMixin, View):
                 'enabled': area.enabled}),
             'target_form': AreaTargetForm(exclude=areas.targets_of(area)),
             'target_labels': [(t, _target_label(t)) for t in areas.targets_of(area)],
-            'owner_form': AreaOwnerForm(),
+            'owner_form': AreaOwnerForm(), 'group_blocks': self._group_blocks(area),
+            'group_form': forms.get('group_form') or GroupForm(area=area), 'member_form': GroupMemberForm(),
             'grant_form': forms.get('grant_form') or AreaGrantForm(area=area),
             'rights': [(r, areas.right_label(area, r)) for r in areas.rights_available(area)],
             'settings': service.get_settings(), **_step_up_context(request),
         })
+
+    @staticmethod
+    def _group_blocks(area):
+        blocks = {}
+        for group in areas.groups_of(area):
+            blocks.setdefault(group.target, []).append({
+                'group': group, 'rights': [areas.right_label(area, r) for r in group.rights],
+                'rights_set': set(group.rights), 'members': areas.group_members(group)})
+        return [{'target': t, 'label': _target_label(t), 'groups': gs} for t, gs in sorted(blocks.items())]
 
     def get(self, request, pk):
         return self._render(request, self._area(request, pk))
@@ -268,6 +290,30 @@ class AreaView(AreaViewMixin, View):
                 areas.delete_profile(get_object_or_404(AreaProfile, pk=request.POST.get('pk'), area=area),
                                      request.user, request=request)
                 messages.success(request, _('Profile deleted.'))
+            elif action == 'group-create':
+                form = GroupForm(request.POST, area=area)
+                if not form.is_valid():
+                    return self._render(request, area, group_form=form)
+                areas.create_group(area, form.cleaned_data['target'], form.cleaned_data['name'],
+                                   form.cleaned_data['rights'], request.user, request=request)
+                messages.success(request, _('Group created.'))
+            elif action == 'group-update':
+                group = get_object_or_404(AreaProfile, pk=request.POST.get('pk'), area=area, private=False)
+                areas.update_group(group, request.user, name=request.POST.get('name', group.name),
+                                   rights=request.POST.getlist('rights'), request=request)
+                messages.success(request, _('Saved.'))
+            elif action == 'group-delete':
+                areas.delete_group(get_object_or_404(AreaProfile, pk=request.POST.get('pk'), area=area,
+                                                     private=False), request.user, request=request)
+                messages.success(request, _('Group deleted.'))
+            elif action == 'member-add':
+                group = get_object_or_404(AreaProfile, pk=request.POST.get('pk'), area=area, private=False)
+                form = GroupMemberForm(request.POST)
+                if form.is_valid():
+                    areas.add_member(group, form.cleaned_data['user'], None, request.user, request=request)
+                    messages.success(request, _('Added to the group.'))
+                else:
+                    messages.error(request, _('Choose a user.'))
             elif action == 'grant':
                 form = AreaGrantForm(request.POST, area=area)
                 if not form.is_valid():
@@ -324,9 +370,13 @@ class AreaFieldsView(AreaViewMixin, View):
         """(profile of the chosen access entry or None, 'nobody' flag, target)."""
         raw = request.POST.get('grant') or request.GET.get('grant') or ''
         nobody = raw == 'nobody'
+        targets = areas.area_models(area)
+        if raw.startswith('g') and raw[1:].isdigit():  # a group
+            group = areas.groups_of(area).filter(pk=raw[1:]).first()
+            if group is not None:
+                return group, False, (group.target if group.target in targets else (targets[0] if targets else ''))
         grant = None if nobody else (self._grants(area).filter(pk=raw).first() if raw.isdigit() else None)
         profile = grant.profile if grant else None
-        targets = areas.area_models(area)
         if grant is not None and grant.target in targets and not (request.POST.get('target') or request.GET.get('target')):
             return profile, nobody, grant.target
         target = request.POST.get('target') or request.GET.get('target') or (targets[0] if targets else '')
@@ -339,7 +389,7 @@ class AreaFieldsView(AreaViewMixin, View):
     def _render(self, request, area):
         profile, nobody, target = self._choice(request, area)
         rows = []
-        if target:
+        if target and (profile is not None or nobody):
             app_label, _dot, model = target.partition('.')
             rules = {r.field: r for r in AreaFieldRule.objects.filter(area=area, profile=profile, target=target)}
             for key, label, kind in fieldrules.fields_of(app_label, model):
@@ -347,13 +397,16 @@ class AreaFieldsView(AreaViewMixin, View):
                 rows.append({'key': key, 'label': label, 'kind': kind, 'mode': rule.mode if rule else 'default',
                              'contains': rule.contains if rule else ''})
         tab_rows = []
-        if profile is not None and profile.private and target:
+        if profile is not None and (profile.private or profile.target) and target:
             tab_rows = [dict(t, allowed=profile.tabs is None or t['name'] in profile.tabs)
                         for t in areas.tabs_of(target)]
         return render(request, self.template_name, {
             'tab_rows': tab_rows,
             'area': area, 'profile': profile, 'nobody': nobody, 'target': target, 'rows': rows,
-            'grant_choices': [(g.pk, f'{g.user.username} · {g.target or "*"}') for g in self._grants(area) if g.is_active],
+            'grant_choices': [(f'g{p.pk}', f'{_("Group")}: {p.name} · {_target_label(p.target)}')
+                              for p in areas.groups_of(area)] +
+                             [(str(g.pk), f'{g.user.username} · {g.target or "*"}') for g in self._grants(area)
+                              if g.is_active and g.profile.private],
             'grant_pk': (request.POST.get('grant') or request.GET.get('grant') or ''), 'targets': [(t, _target_label(t)) for t in areas.area_models(area)],
             'can_manage': areas.can_manage(request.user, area),
             'settings': service.get_settings(), **_step_up_context(request),
@@ -367,11 +420,14 @@ class AreaFieldsView(AreaViewMixin, View):
         profile, nobody, target = self._choice(request, area)
         if request.POST.get('action') == 'tabs':
             try:
-                grant = self._grants(area).filter(pk=request.POST.get('grant') or 0).first()
-                if grant is None:
-                    raise PermissionDenied
-                areas.set_grant_tabs(grant, [k[5:] for k in request.POST if k.startswith('tab__')], request.user,
-                                     request=request)
+                chosen = [k[5:] for k in request.POST if k.startswith('tab__')]
+                if profile is not None and profile.target and not profile.private:
+                    areas.set_group_tabs(profile, chosen, request.user, request=request)
+                else:
+                    grant = self._grants(area).filter(pk=request.POST.get('grant') or 0).first()
+                    if grant is None:
+                        raise PermissionDenied
+                    areas.set_grant_tabs(grant, chosen, request.user, request=request)
                 messages.success(request, _('Saved.'))
             except ValidationError as exc:
                 _errors(request, exc)
@@ -452,6 +508,8 @@ class RequestDecideView(AreaViewMixin, View):
         available = areas.rights_available(area) if area else list(areas.GENERIC_RIGHTS)
         return render(request, self.template_name, {
             'req': req, 'area': area, 'target_label': areas.target_label(req.target), 'form': form,
+            'by_group': '.' in req.target,
+            'groups': list(areas.groups_of(area, req.target)) if area and '.' in req.target else [],
             'asked': [(r, areas.right_label(area, r) if area else r.capitalize()) for r in req.rights],
             'available': [(r, areas.right_label(area, r) if area else r.capitalize()) for r in available],
             'chosen': req.rights or ['view'],
@@ -477,7 +535,16 @@ class RequestDecideView(AreaViewMixin, View):
                     hours = int(request.POST.get('hours') or 0)
                 except ValueError:
                     hours = 0
-                areas.decide_request(req, request.user, True, hours=hours or None, request=request, rights=rights)
+                group, group_name, group_rights = None, '', None
+                if '.' in req.target:  # a type: the user goes into a group (an existing one, or a new one)
+                    gid = request.POST.get('group', '')
+                    if gid.isdigit() and area is not None:
+                        group = get_object_or_404(AreaProfile, pk=gid, area=area, private=False, target=req.target)
+                    else:
+                        group_name, group_rights = request.POST.get('group_name', ''), rights
+                areas.decide_request(req, request.user, True, hours=hours or None, request=request,
+                                     rights=None if '.' in req.target else rights, group=group,
+                                     group_name=group_name, group_rights=group_rights)
                 messages.success(request, _('Access granted.'))
             else:
                 raise PermissionDenied

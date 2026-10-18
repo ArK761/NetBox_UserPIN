@@ -10,7 +10,7 @@ from django.utils import timezone
 from netbox_user_pin import area_guard, areas
 from netbox_user_pin.forms import PinSettingsForm
 from netbox_user_pin.models import (
-    AreaGrant, AreaRequest, AreaRequestStatus, PinEvent, PinEventAction, PinSettings, ProtectedArea,
+    AreaGrant, AreaProfile, AreaRequest, AreaRequestStatus, PinEvent, PinEventAction, PinSettings, ProtectedArea,
 )
 
 from netbox_user_pin import service
@@ -623,7 +623,7 @@ class DefaultDenyTest(AreaTestCase):
             areas.set_default_deny(True, self.master)  # no keeper yet
         self.add_keeper()
         with self.assertRaises(PermissionDenied):
-            areas.set_default_deny(True, self.master)  # the master is no keeper
+            areas.set_default_deny(False, self.master)  # the master is no keeper
         with self.assertRaises(PermissionDenied):
             areas.add_keeper(self.plain, self.master)
         areas.set_default_deny(True, self.keeper)
@@ -948,3 +948,90 @@ class TreeTest(AreaTestCase):
                                                                             'target': 'dcim.site'})
         self.assertNotEqual(response.status_code, 200)
         self.assertFalse(ProtectedArea.objects.exists())
+
+
+class GroupsTest(AreaTestCase):
+    def setUp(self):
+        super().setUp()
+        self.area = self.make_area(targets=('dcim.device',))
+        self.user = User.objects.create_user('usera', 'a@example.com')
+
+    def test_writing_brings_reading_a_user_is_in_one_group_and_leaving_the_last_means_no_access(self):
+        reading = areas.create_group(self.area, 'dcim.device', 'Reading', ['view'], self.owner1)
+        writing = areas.create_group(self.area, 'dcim.device', 'Writing', ['change'], self.owner1)
+        self.assertEqual(writing.rights, ['view', 'change'])  # who writes reads
+        areas.add_member(reading, self.user, None, self.owner1)
+        self.assertTrue(areas.can(self.user, self.area, 'view', 'dcim.device'))
+        self.assertFalse(areas.can(self.user, self.area, 'change', 'dcim.device'))
+        areas.add_member(writing, self.user, None, self.owner1)
+        areas.clear_cache()
+        self.user = User.objects.get(pk=self.user.pk)  # a fresh object: a request would have one
+        self.assertTrue(areas.can(self.user, self.area, 'change', 'dcim.device'))
+        self.assertEqual(areas.group_members(reading), [])  # moved: no need to stay in the reading group
+        self.assertEqual([g.user for g in areas.group_members(writing)], [self.user])
+        areas.revoke_grant(areas.group_members(writing)[0], self.owner1)  # out of the writing group
+        areas.clear_cache()
+        self.user = User.objects.get(pk=self.user.pk)
+        self.assertFalse(areas.can(self.user, self.area, 'view', 'dcim.device'))  # not recorded anywhere: no access
+
+    def test_group_rules(self):
+        with self.assertRaises(ValidationError):
+            areas.create_group(self.area, 'dcim.device', '', ['view'], self.owner1)
+        with self.assertRaises(ValidationError):
+            areas.create_group(self.area, 'dcim.device', 'X', [], self.owner1)
+        with self.assertRaises(ValidationError):
+            areas.create_group(self.area, 'dcim.site', 'X', ['view'], self.owner1)  # not protected by the area
+        with self.assertRaises(PermissionDenied):
+            areas.create_group(self.area, 'dcim.device', 'X', ['view'], self.user)
+        group = areas.create_group(self.area, 'dcim.device', 'Reading', ['view'], self.owner1)
+        with self.assertRaises(ValidationError):
+            areas.create_group(self.area, 'dcim.device', 'Reading', ['view'], self.owner1)
+        areas.add_member(group, self.user, None, self.owner1)
+        with self.assertRaises(ValidationError):
+            areas.delete_group(group, self.owner1)  # it has members
+        areas.update_group(group, self.owner1, rights=['change'])
+        group.refresh_from_db()
+        self.assertEqual(group.rights, ['view', 'change'])
+
+    def test_the_page_creates_a_group_and_adds_users(self):
+        admin_login(self.client, self.owner1)
+        url = reverse('plugins:netbox_user_pin:area', kwargs={'pk': self.area.pk})
+        response = self.client.post(url, {'action': 'group-create', 'target': 'dcim.device', 'name': 'Technici',
+                                          'rights': ['view', 'change']})
+        self.assertEqual(response.status_code, 302, response.content[:300])
+        group = AreaProfile.objects.get(name='Technici')
+        self.assertEqual((group.target, group.private), ('dcim.device', False))
+        response = self.client.post(url, {'action': 'member-add', 'pk': group.pk, 'user': self.user.pk})
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual([g.user for g in areas.group_members(group)], [self.user])
+        html = self.client.get(url).content.decode()
+        self.assertIn('Technici', html)
+        self.assertIn('usera', html)
+
+    def test_approving_a_request_puts_the_user_into_a_group_or_creates_it(self):
+        req = areas.request_target_access(self.user, 'dcim.device', ['view'], 'I need the devices')
+        admin_login(self.client, self.owner1)
+        url = reverse('plugins:netbox_user_pin:request_decide', kwargs={'pk': req.pk})
+        self.assertContains(self.client.get(url), 'A new group')
+        response = self.client.post(url, {'action': 'approve', 'group': '', 'group_name': 'Cteni', 'rights': ['view'],
+                                          'hours': 0})
+        self.assertEqual(response.status_code, 302, response.content[:300])
+        group = AreaProfile.objects.get(name='Cteni')
+        self.assertEqual([g.user for g in areas.group_members(group)], [self.user])
+        # the second user goes into the existing group
+        other = User.objects.create_user('userb', 'b@example.com')
+        req2 = areas.request_target_access(other, 'dcim.device', ['view'], 'I need the devices too')
+        url2 = reverse('plugins:netbox_user_pin:request_decide', kwargs={'pk': req2.pk})
+        self.assertContains(self.client.get(url2), 'Cteni')
+        self.client.post(url2, {'action': 'approve', 'group': group.pk, 'hours': 0})
+        self.assertEqual({g.user for g in areas.group_members(group)}, {self.user, other})
+
+
+class FirstKeeperTest(AreaTestCase):
+    def test_the_first_keeper_switches_the_global_protection_on(self):
+        keeper = User.objects.create_superuser('keeper', 'k@example.com', 'x')
+        service.set_pin(keeper, GOOD_PIN)
+        enable_2fa(keeper)
+        self.assertFalse(PinSettings.load().default_deny)
+        areas.add_keeper(keeper, self.master)
+        self.assertTrue(PinSettings.load().default_deny)

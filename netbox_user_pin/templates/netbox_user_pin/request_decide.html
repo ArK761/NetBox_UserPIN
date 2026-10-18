@@ -18,11 +18,22 @@
       </table>
       {% if req.status == 'pending' %}
       <form method="post" class="card-body">{% csrf_token %}
+        {% if by_group %}
+        <div class="mb-2"><strong>{% trans "Put the user into a group" %}</strong>
+          {% for g in groups %}<div><label><input type="radio" name="group" value="{{ g.pk }}" class="form-check-input" {% if forloop.first %}checked{% endif %}> {{ g.name }} <span class="text-secondary small">({{ g.rights|join:", " }})</span></label></div>{% endfor %}
+          <div><label><input type="radio" name="group" value="" class="form-check-input" {% if not groups %}checked{% endif %}> {% trans "A new group" %}</label></div>
+          <div class="ms-4 mt-1">
+            <input type="text" class="form-control form-control-sm w-auto mb-1" name="group_name" maxlength="100" placeholder="{% trans 'Name of the new group (empty: Reading / Writing)' %}">
+            <div>{% for r, label in available %}<label class="me-3"><input type="checkbox" class="form-check-input" name="rights" value="{{ r }}" {% if r in chosen %}checked{% endif %}> {{ label }}</label>{% endfor %}</div>
+          </div>
+        </div>
+        {% else %}
         <div class="mb-2"><strong>{% trans "Rights to grant" %}</strong><br>
           {% for r, label in available %}<label class="me-3"><input type="checkbox" class="form-check-input" name="rights" value="{{ r }}" {% if r in chosen %}checked{% endif %}> {{ label }}</label>{% endfor %}</div>
+        {% endif %}
         <div class="mb-3"><label class="form-label">{% trans "For how long" %}</label>
           <select name="hours" class="form-select w-auto">{% for h, label in hours %}<option value="{{ h }}" {% if h == 0 %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
-        {% if creates_area %}<p class="small text-secondary">{% trans "Granting creates a protected area for this object type, without owners. Appoint its owners afterwards in Protected areas. Until then only the master and this access exist." %}</p>{% endif %}
+        {% if creates_area %}<p class="small text-secondary">{% trans "Granting protects this object type, if it is not protected yet, and creates the group. Appoint the owners afterwards. Until then only the protection keepers and the members of the group see it." %}</p>{% endif %}
         <button class="btn btn-success" name="action" value="approve" type="submit"><i class="mdi mdi-check"></i> OK</button>
         <button class="btn btn-outline-danger" name="action" value="deny" type="submit">{% trans "Deny" %}</button>
       </form>

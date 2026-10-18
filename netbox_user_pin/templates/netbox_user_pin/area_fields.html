@@ -11,7 +11,7 @@
     <form method="get" class="d-flex flex-wrap gap-3 align-items-end">
       <div><label class="form-label">{% trans "Rules for" %}</label>
         <select name="grant" class="form-select" onchange="this.form.submit()">
-          <option value="" {% if not nobody and not profile %}selected{% endif %}>{% trans "— choose a user —" %}</option>
+          <option value="" {% if not nobody and not profile %}selected{% endif %}>{% trans "— choose a group or a user —" %}</option>
           {% for pk, label in grant_choices %}<option value="{{ pk }}" {% if pk|stringformat:"s" == grant_pk %}selected{% endif %}>{{ label }}</option>{% endfor %}
           <option value="nobody" {% if nobody %}selected{% endif %}>{% trans "Hidden from everybody in the area" %}</option>
         </select></div>
@@ -22,6 +22,7 @@
       <div class="flex-grow-1"><input type="search" class="form-control pin-filter" data-target="#pin-fields" placeholder="{% trans 'Search…' %}"></div>
     </form>
   </div>
+  {% if not profile and not nobody %}<div class="card-body border-top text-secondary"><i class="mdi mdi-arrow-up"></i> {% trans "Choose a group or a user above. The fields appear after you choose." %}</div>{% else %}
   <form method="post">{% csrf_token %}
     <input type="hidden" name="grant" value="{{ grant_pk }}"><input type="hidden" name="target" value="{{ target }}">
     <div class="card-body border-top d-flex flex-wrap gap-2 align-items-center">
@@ -56,6 +57,7 @@
     </table>
     {% if can_manage and profile or can_manage and nobody %}<div class="card-body text-end"><button type="submit" class="btn btn-primary">{% trans "Save rules" %}</button></div>{% endif %}
   </form>
+  {% endif %}
 </div>
 <div class="alert alert-info small"><strong>{% trans "Values must include" %}:</strong> {% trans "optional. Fill it in only where you want to limit the values: write a text (e.g. PRINTER) and the user sees from that custom field only the values that contain it. It does not apply to the fixed fields." %}</div>
 {% if tab_rows %}

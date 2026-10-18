@@ -813,6 +813,8 @@ class AreaProfile(models.Model):
     private = models.BooleanField(default=False)
     # The tabs of an object's detail page the profile may open (names like 'interfaces'); None = every tab.
     tabs = models.JSONField(null=True, blank=True, default=None)
+    # A group is a (not private) profile of one object type of the area: its members are the users granted through it.
+    target = models.CharField(max_length=100, blank=True)
 
     class Meta:
         verbose_name = _('area profile')

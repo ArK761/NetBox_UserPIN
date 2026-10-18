@@ -408,3 +408,12 @@ Until an area has owners, only the protection keepers (without any keeper: the s
 
 **Entering an area without a PIN**: a user who was granted access but has no PIN is sent to create one (no 2FA needed)
 with a note saying why, and then continues to the page he wanted.
+
+**Groups** (the way access is given): under a protected object type (DCIM › Device) the owners create groups - a named
+set of rights (e.g. *Reading*, *Writing*) with its tabs and fields - and put users into them.
+
+* writing rights bring reading along; a user is in one group per type: adding him to another group moves him, and
+  leaving the last group means no access;
+* the first protection keeper switches the global protection ("everything not allowed is denied") on;
+* an access request is approved by choosing the group the user goes into, or by creating it on the spot; the
+  object type is protected by that approval if it was not yet.

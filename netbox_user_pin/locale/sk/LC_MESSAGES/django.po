@@ -5494,6 +5494,163 @@ msgstr ""
 "„{name}“ je teraz chránené. Určte vlastníkov; dovtedy to vidia len "
 "správcovia ochrany."
 
+msgid "Groups"
+msgstr "Skupiny"
+
+msgid ""
+"A group is a set of rights for one object type (e.g. DCIM › Device: reading,"
+" writing). Put users into it: they get exactly what the group has. A user is"
+" in one group per type; adding him to another one moves him, and leaving the"
+" last one means no access. Tabs and fields are set under “Fields and tabs”."
+msgstr ""
+"Skupina je sada práv pre jeden typ objektu (napr. DCIM › Device: čítanie, "
+"zápis). Pridaj do nej používateľov: dostanú presne to, čo skupina má. "
+"Používateľ je pri type v jednej skupine; pridaním do inej sa presunie a "
+"odchod z poslednej znamená žiadny prístup. Záložky a polia sa nastavujú cez "
+"„Polia a záložky“."
+
+msgid "Fields and tabs"
+msgstr "Polia a záložky"
+
+msgid "Remove from the group"
+msgstr "Odobrať zo skupiny"
+
+msgid "No members."
+msgstr "Žiadni členovia."
+
+msgid "Add user to the group"
+msgstr "Pridať používateľa do skupiny"
+
+msgid "Save group"
+msgstr "Uložiť skupinu"
+
+msgid "No groups yet."
+msgstr "Zatiaľ žiadne skupiny."
+
+msgid "New group"
+msgstr "Nová skupina"
+
+msgid "Create group"
+msgstr "Vytvoriť skupinu"
+
+msgid "Individual access (without a group)"
+msgstr "Individuálny prístup (bez skupiny)"
+
+msgid "Name of the group"
+msgstr "Názov skupiny"
+
+msgid "Whoever may add, change or delete may read as well."
+msgstr "Kto smie pridávať, meniť alebo mazať, smie aj čítať."
+
+msgid "Write the name of the group."
+msgstr "Napíš názov skupiny."
+
+msgid "A group with this name exists."
+msgstr "Skupina s týmto názvom už existuje."
+
+msgid "The group has members. Remove them first."
+msgstr "Skupina má členov. Najprv ich odober."
+
+msgid "Group created."
+msgstr "Skupina vytvorená."
+
+msgid "Group deleted."
+msgstr "Skupina zmazaná."
+
+msgid "Added to the group."
+msgstr "Pridaný do skupiny."
+
+msgid "Choose a user."
+msgstr "Vyber používateľa."
+
+msgid "Choose a group of this object type."
+msgstr "Vyber skupinu tohto typu objektu."
+
+msgid "Reading"
+msgstr "Čítanie"
+
+msgid "Writing"
+msgstr "Zápis"
+
+msgid "Group"
+msgstr "Skupina"
+
+msgid "— choose a group or a user —"
+msgstr "— vyber skupinu alebo používateľa —"
+
+msgid "Choose a group or a user above. The fields appear after you choose."
+msgstr "Vyber skupinu alebo používateľa vyššie. Polia sa zobrazia po výbere."
+
+msgid "Put the user into a group"
+msgstr "Zaradiť používateľa do skupiny"
+
+msgid "A new group"
+msgstr "Nová skupina"
+
+msgid "Name of the new group (empty: Reading / Writing)"
+msgstr "Názov novej skupiny (prázdne: Čítanie / Zápis)"
+
+msgid ""
+"Granting protects this object type, if it is not protected yet, and creates "
+"the group. Appoint the owners afterwards. Until then only the protection "
+"keepers and the members of the group see it."
+msgstr ""
+"Udelenie začne chrániť tento typ objektu, ak ešte nie je chránený, a vytvorí"
+" skupinu. Vlastníkov určíš potom. Dovtedy to vidia len správcovia ochrany a "
+"členovia skupiny."
+
+msgid "everything not allowed is denied"
+msgstr "všetko nepovolené je zakázané"
+
+msgid "protection not active yet"
+msgstr "ochrana zatiaľ nie je aktívna"
+
+msgid ""
+"As soon as the first keeper is appointed, everything that no group or access"
+" allows is denied to everybody except the keepers (they are exempt, so "
+"nobody locks himself out). Login and the own profile stay open."
+msgstr ""
+"Hneď ako určíš prvého správcu, všetko, čo nepovoľuje žiadna skupina ani "
+"prístup, je zakázané pre všetkých okrem správcov (tí sú výnimka, aby sa "
+"nikto nezamkol). Prihlásenie a vlastný profil ostávajú otvorené."
+
+msgid "Appoint another keeper"
+msgstr "Určiť ďalšieho správcu"
+
+msgid "Appoint the first keeper (switches the protection on)"
+msgstr "Určiť prvého správcu (zapne ochranu)"
+
+msgid "What is set up"
+msgstr "Čo je nastavené"
+
+msgid "Search a user, a group or an object type…"
+msgstr "Hľadaj používateľa, skupinu alebo typ objektu…"
+
+msgid "no members"
+msgstr "bez členov"
+
+msgid "no groups yet"
+msgstr "zatiaľ bez skupín"
+
+msgid "individually:"
+msgstr "individuálne:"
+
+msgid "Nothing is set up yet. Add an object type below."
+msgstr "Zatiaľ nie je nič nastavené. Pridaj typ objektu nižšie."
+
+msgid "Add an app or an object type"
+msgstr "Pridať aplikáciu alebo typ objektu"
+
+msgid ""
+"Adding only prepares the structure: nobody gets access until you create a "
+"group and put users into it."
+msgstr ""
+"Pridanie len pripraví štruktúru: nikto nedostane prístup, kým nevytvoríš "
+"skupinu a nedáš do nej používateľov."
+
+msgid "Choose an app or an object type."
+msgstr "Vyber aplikáciu alebo typ objektu."
+
 #~ msgid ""
 #~ "There is no other administrator or delegate with PIN and 2FA who could "
 #~ "confirm."

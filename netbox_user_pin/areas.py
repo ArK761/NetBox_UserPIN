@@ -322,6 +322,19 @@ def tabs_of(target):
     return sorted(result, key=lambda t: t['label'].lower())
 
 
+def set_group_tabs(group, tabs, actor, request=None):
+    """Choose the system tabs the members of a group may open."""
+    area = group.area
+    if not _may_grant(actor, area) or group.private:
+        raise PermissionDenied
+    known = {t['name'] for t in tabs_of(group.target) if not t['plugin']}
+    group.tabs = sorted(t for t in tabs if t in known)
+    group.save()
+    _log(PinEventAction.AREA_CHANGED, area, actor, request=request,
+         detail=f'group {group.name} tabs: {", ".join(group.tabs) or "main page only"}')
+    clear_cache()
+
+
 def tab_allowed(user, area, target, tab_name):
     """May the user open this (system) tab? Owners always; others as their grants for the object type allow."""
     if _unrestricted(user, area):
@@ -752,7 +765,8 @@ def _create_requested_area(req, actor, request):
     return area
 
 
-def decide_request(req, actor, approve, profile=None, hours=None, request=None, rights=None, target=None):
+def decide_request(req, actor, approve, profile=None, hours=None, request=None, rights=None, target=None,
+                   group=None, group_name='', group_rights=None):
     if req.status != AreaRequestStatus.PENDING:
         raise ValidationError(_('The request has been dealt with already.'))
     area = req.area
@@ -782,7 +796,17 @@ def decide_request(req, actor, approve, profile=None, hours=None, request=None, 
         target = req.target if '.' in req.target else ''
     if rights is None and profile is None:
         rights = req.rights  # as asked
-    if rights:
+    if '.' in req.target and (group is not None or group_name or group_rights is not None):
+        if group is None:  # the decider creates the group the request needs
+            wanted = _clean_group_rights(area, group_rights or req.rights)
+            name = (group_name or '').strip() or (_('Reading') if wanted == ['view'] else _('Writing'))
+            group = AreaProfile.objects.filter(area=area, name=name, target=req.target, private=False).first()
+            if group is None:
+                group = create_group(area, req.target, name, wanted, actor, request=request)
+        elif group.area_id != area.pk or group.target != req.target:
+            raise ValidationError(_('Choose a group of this object type.'))
+        grant = add_member(group, req.user, hours, actor, request=request, notify=False)
+    elif rights:
         grant = grant_custom(area, req.user, target, rights, hours, actor, request=request, notify=False)
     else:
         grant = grant_access(area, req.user, profile, hours, actor, request=request, notify=False)
@@ -873,11 +897,115 @@ def grant_access(area, user, profile, hours, actor, request=None, notify=True, t
     return grant
 
 
+#
+# Groups: a named set of rights for one object type; the users granted through it are its members
+#
+
+WRITE_RIGHTS = ('add', 'change', 'delete')
+
+
+def _with_view(rights):
+    """Who may write must be able to read: writing rights bring ``view`` along."""
+    rights = list(dict.fromkeys(rights))
+    if set(rights) & set(WRITE_RIGHTS) and 'view' not in rights:
+        rights.insert(0, 'view')
+    return rights
+
+
+def groups_of(area, target=None):
+    query = AreaProfile.objects.filter(area=area, private=False).exclude(target='')
+    return query.filter(target=target) if target else query
+
+
+def group_members(group):
+    now = timezone.now()
+    return [g for g in AreaGrant.objects.filter(profile=group, revoked__isnull=True).select_related('user')
+            if g.expires is None or g.expires > now]
+
+
+def _clean_group_rights(area, rights):
+    known = set(rights_available(area))
+    rights = _with_view([r for r in rights if r in known])
+    if not rights:
+        raise ValidationError(_('Choose at least one right.'))
+    return rights
+
+
+def create_group(area, target, name, rights, actor, filters=None, request=None):
+    if not _may_grant(actor, area):
+        raise PermissionDenied
+    name = (name or '').strip()[:100]
+    if not name:
+        raise ValidationError(_('Write the name of the group.'))
+    if target not in area_models(area):
+        raise ValidationError(_('"%(target)s" is not protected by this area.') % {'target': target})
+    if AreaProfile.objects.filter(area=area, name=name).exists():
+        raise ValidationError(_('A group with this name exists.'))
+    group = AreaProfile.objects.create(area=area, name=name, rights=_clean_group_rights(area, rights),
+                                       filters=filters or {}, private=False, target=target, tabs=[])
+    _log(PinEventAction.AREA_CHANGED, area, actor, request=request,
+         detail=f'group {name} ({target}): {", ".join(group.rights)}')
+    return group
+
+
+def update_group(group, actor, name=None, rights=None, filters=None, request=None):
+    area = group.area
+    if not _may_grant(actor, area) or group.private:
+        raise PermissionDenied
+    if name is not None:
+        name = name.strip()[:100]
+        if not name:
+            raise ValidationError(_('Write the name of the group.'))
+        if AreaProfile.objects.filter(area=area, name=name).exclude(pk=group.pk).exists():
+            raise ValidationError(_('A group with this name exists.'))
+        group.name = name
+    if rights is not None:
+        group.rights = _clean_group_rights(area, rights)
+    if filters is not None:
+        group.filters = filters
+    group.save()
+    _log(PinEventAction.AREA_CHANGED, area, actor, request=request,
+         detail=f'group {group.name} ({group.target}): {", ".join(group.rights)}')
+    clear_cache()
+
+
+def delete_group(group, actor, request=None):
+    area = group.area
+    if not _may_grant(actor, area) or group.private:
+        raise PermissionDenied
+    if group_members(group):
+        raise ValidationError(_('The group has members. Remove them first.'))
+    _log(PinEventAction.AREA_CHANGED, area, actor, request=request, detail=f'group {group.name} deleted')
+    group.delete()
+    clear_cache()
+
+
+def add_member(group, user, hours, actor, request=None, notify=True):
+    """
+    Put ``user`` into the group. A user is in one group per object type: the others are left, so writing rights given
+    later replace the reading ones, and leaving the last group means no access.
+    """
+    area = group.area
+    if not _may_grant(actor, area) or group.private or not group.target:
+        raise PermissionDenied
+    now = timezone.now()
+    for grant in AreaGrant.objects.filter(area=area, user=user, target=group.target, revoked__isnull=True
+                                          ).exclude(profile=group):
+        grant.revoked, grant.revoked_by_name = now, actor.username
+        grant.save()
+        _log(PinEventAction.AREA_REVOKED, area, actor, user=user, request=request,
+             detail=f'moved to group {group.name}')
+    existing = [g for g in group_members(group) if g.user_id == user.pk]
+    if existing:
+        return existing[0]
+    return grant_access(area, user, group, hours, actor, request=request, notify=notify, target=group.target)
+
+
 def revoke_grant(grant, actor, request=None):
     """Owners revoke; the user may end their own access."""
     if grant.revoked is not None:
         return
-    if not (is_owner(actor, grant.area) or actor.pk == grant.user_id):
+    if not (_may_grant(actor, grant.area) or actor.pk == grant.user_id):
         raise PermissionDenied
     grant.revoked, grant.revoked_by_name = timezone.now(), actor.username
     grant.save()
@@ -932,9 +1060,15 @@ def add_keeper(user, actor, request=None):
     if not (service.has_pin(user) and service.has_2fa(user)):
         raise ValidationError(_('%(user)s must have a PIN and 2FA set up first (My PIN).') % {'user': user.username})
     _ensure_pin_allowed(user, actor, request)
+    first = not PolicyKeeper.objects.exists()
     keeper, created = PolicyKeeper.objects.get_or_create(user=user, defaults={'added_by_name': actor.username})
     if created:
         service.log_event(PinEventAction.KEEPER_ADDED, user=user, actor=actor, request=request)
+        settings = service.get_settings()
+        if first and not settings.default_deny:  # the first keeper switches the global protection on
+            settings.default_deny = True
+            settings.save()
+            service.log_event(PinEventAction.DENY_ENABLED, actor=actor, request=request)
         service.send_user_mail(user, _('You are a protection keeper'), _(
             'You were appointed a protection keeper: you can switch "deny everything not allowed" on and off and '
             'hand the duty over. You cannot remove your 2FA or resign alone; another keeper has to take over.'),
