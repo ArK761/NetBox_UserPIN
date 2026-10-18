@@ -42,7 +42,8 @@
             <td>{% for g in row.groups %}<div><strong>{{ g.name }}</strong>: {% for u in g.members %}{{ u }}{% if not forloop.last %}, {% endif %}{% empty %}<span class="text-secondary">{% trans "no members" %}</span>{% endfor %}</div>{% empty %}<span class="text-secondary">{% trans "no groups yet" %}</span>{% endfor %}
               {% if row.individual %}<div class="small text-secondary">{% trans "individually:" %} {{ row.individual|join:", " }}</div>{% endif %}</td>
             <td>{% for name in row.owners %}{{ name }}{% if not forloop.last %}, {% endif %}{% empty %}<span class="badge text-bg-orange">{% trans "no owner yet" %}</span>{% endfor %}</td>
-            <td class="text-end"><a class="btn btn-sm btn-outline-primary" href="{% url 'plugins:netbox_user_pin:area' pk=row.area.pk %}">{% trans "Open" %}</a></td>
+            <td class="text-end text-nowrap"><a class="btn btn-sm btn-outline-primary" href="{% url 'plugins:netbox_user_pin:area' pk=row.area.pk %}">{% trans "Open" %}</a>
+              {% if is_core or is_keeper %}<form method="post" class="d-inline" onsubmit="return confirm('{% trans "Remove the protection of this object type? Its groups and accesses are deleted." %}');">{% csrf_token %}<input type="hidden" name="action" value="unprotect"><input type="hidden" name="pk" value="{{ row.area.pk }}"><button class="btn btn-sm btn-outline-danger" type="submit">{% trans "Delete" %}</button></form>{% endif %}</td>
           </tr>
           {% endfor %}
         </tbody>

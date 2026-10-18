@@ -1,0 +1,92 @@
+{% extends 'generic/_base.html' %}
+{% load userpin_tags i18n %}
+{% block title %}{{ group.name }} – {{ target_label }}{% endblock %}
+{% block content %}
+{% pin_build %}
+<p><a href="{% url 'plugins:netbox_user_pin:area' pk=area.pk %}"><i class="mdi mdi-arrow-left"></i> {{ target_label }}</a></p>
+<h2 class="mb-3">{% trans "Group" %}: {{ group.name }} <span class="text-secondary small">{{ target_label }}</span></h2>
+
+<div class="card">
+  <h2 class="card-header">{% trans "Members" %}</h2>
+  <div class="card-body">
+    <div class="mb-3">{% for g in members %}<span class="badge text-bg-blue me-1">{{ g.user.username }}{% if can_manage %}
+      <form method="post" class="d-inline">{% csrf_token %}<input type="hidden" name="action" value="revoke"><input type="hidden" name="pk" value="{{ g.pk }}"><button type="submit" class="btn btn-link btn-sm p-0 text-white" title="{% trans 'Remove from the group' %}">×</button></form>{% endif %}</span>{% empty %}<span class="text-secondary">{% trans "No members." %}</span>{% endfor %}</div>
+    {% if can_manage %}
+    <form method="post" class="d-flex flex-column gap-2" style="max-width: 32rem">{% csrf_token %}<input type="hidden" name="action" value="member-add">
+      <div>{{ member_form.user }}</div>
+      <div><button class="btn btn-primary" type="submit"><i class="mdi mdi-account-plus"></i> {% trans "Add user to the group" %}</button></div>
+    </form>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <h2 class="card-header">{% trans "What the group may do" %}</h2>
+  <form method="post">{% csrf_token %}<input type="hidden" name="action" value="rights">
+    <div class="card-body">
+      <div class="mb-3"><label class="form-label">{% trans "Name of the group" %}</label><input class="form-control w-auto" name="name" value="{{ group.name }}" maxlength="100" {% if not can_manage %}readonly{% endif %}></div>
+      <div class="mb-3"><div class="fw-bold mb-1">{% trans "Rights" %}</div>
+        {% for value, label in rights %}<div class="form-check form-check-inline"><input class="form-check-input" type="checkbox" name="rights" value="{{ value }}" id="r-{{ value }}" {% if value in rights_set %}checked{% endif %} {% if not can_manage %}disabled{% endif %}><label class="form-check-label" for="r-{{ value }}">{{ label }}</label></div>{% endfor %}
+        <div class="form-text">{% trans "Whoever may add, change or delete may read as well." %}</div></div>
+      <div class="mb-1"><div class="fw-bold mb-1">{% trans "Tabs of the detail page (the main page is always allowed)" %}</div>
+        {% for t in tabs %}<div class="form-check form-check-inline"><input class="form-check-input" type="checkbox" name="tab__{{ t.name }}" id="t-{{ t.name }}" {% if t.allowed %}checked{% endif %} {% if not can_manage %}disabled{% endif %}><label class="form-check-label" for="t-{{ t.name }}">{{ t.label }}</label></div>{% endfor %}
+        {% if plugin_tabs %}<div class="small text-secondary mt-1"><i class="mdi mdi-puzzle-outline"></i> {% trans "Tabs of plugins follow the area of that plugin:" %} {% for t in plugin_tabs %}{{ t.label }}{% if not forloop.last %}, {% endif %}{% endfor %}</div>{% endif %}</div>
+    </div>
+    {% if can_manage %}<div class="card-body pt-0"><button class="btn btn-primary" type="submit">{% trans "Save" %}</button></div>{% endif %}
+  </form>
+</div>
+
+<div class="card">
+  <h2 class="card-header">{% trans "Fields" %}</h2>
+  <form method="post">{% csrf_token %}<input type="hidden" name="action" value="fields">
+    <div class="card-body d-flex flex-wrap gap-2 align-items-center">
+      <input type="search" class="form-control w-auto" style="min-width: 16rem" data-target="#pin-fields" id="pin-field-search" placeholder="{% trans 'Search a field…' %}">
+      <strong class="ms-2">{% trans "Set all shown fields:" %}</strong>
+      <button type="button" class="btn btn-sm btn-outline-secondary pin-bulk" data-mode="default">{% trans "By rights" %}</button>
+      <button type="button" class="btn btn-sm btn-outline-secondary pin-bulk" data-mode="hidden">{% trans "Hidden" %}</button>
+      <button type="button" class="btn btn-sm btn-outline-secondary pin-bulk" data-mode="read">{% trans "Read only" %}</button>
+      <button type="button" class="btn btn-sm btn-outline-secondary pin-bulk" data-mode="write">{% trans "Read and write" %}</button>
+    </div>
+    <table class="table table-hover" id="pin-fields">
+      <thead><tr><th>{% trans "Field" %}</th><th>{% trans "Kind" %}</th><th>{% trans "Rule" %}</th><th>{% trans "Values must include" %}</th></tr></thead>
+      <tbody>
+        {% for row in rows %}
+        <tr>
+          <td><strong>{{ row.label }}</strong> <code class="small text-secondary">{{ row.key }}</code></td>
+          <td>{% if row.kind == 'custom' %}<span class="badge text-bg-cyan">{% trans "custom field" %}</span>{% else %}{% trans "field" %}{% endif %}</td>
+          <td class="text-nowrap">
+            <label class="me-2"><input type="radio" name="mode__{{ row.key }}" value="default" {% if row.mode == 'default' %}checked{% endif %}> {% trans "By rights" %}</label>
+            <label class="me-2"><input type="radio" name="mode__{{ row.key }}" value="hidden" {% if row.mode == 'hidden' %}checked{% endif %}> {% trans "Hidden" %}</label>
+            <label class="me-2"><input type="radio" name="mode__{{ row.key }}" value="read" {% if row.mode == 'read' %}checked{% endif %}> {% trans "Read only" %}</label>
+            <label><input type="radio" name="mode__{{ row.key }}" value="write" {% if row.mode == 'write' %}checked{% endif %}> {% trans "Read and write" %}</label>
+          </td>
+          <td>{% if row.kind == 'custom' %}<input type="text" class="form-control form-control-sm" name="contains__{{ row.key }}" value="{{ row.contains }}" maxlength="200" placeholder="{% trans 'optional' %}">{% else %}<span class="text-secondary small">{% trans "custom fields only" %}</span>{% endif %}</td>
+        </tr>
+        {% empty %}<tr><td colspan="4" class="text-secondary">{% trans "No fields." %}</td></tr>{% endfor %}
+      </tbody>
+    </table>
+    {% if can_manage %}<div class="card-body text-end"><button class="btn btn-primary" type="submit">{% trans "Save fields" %}</button></div>{% endif %}
+  </form>
+</div>
+{% if can_manage and not members %}
+<form method="post" onsubmit="return confirm('{% trans "Delete this group?" %}');">{% csrf_token %}<input type="hidden" name="action" value="group-delete"><button class="btn btn-outline-danger" type="submit">{% trans "Delete the group" %}</button></form>
+{% endif %}
+<script>
+  document.getElementById('pin-field-search').addEventListener('input', function () {
+    var q = this.value.toLowerCase();
+    document.querySelectorAll('#pin-fields tbody tr').forEach(function (row) {
+      row.style.display = (!q || row.textContent.toLowerCase().indexOf(q) >= 0) ? '' : 'none';
+    });
+  });
+  document.querySelectorAll('.pin-bulk').forEach(function (button) {
+    button.addEventListener('click', function () {
+      document.querySelectorAll('#pin-fields tbody tr').forEach(function (row) {
+        if (row.style.display === 'none') { return; }
+        var radio = row.querySelector('input[type=radio][value=' + button.dataset.mode + ']');
+        if (radio) { radio.checked = true; }
+      });
+    });
+  });
+</script>
+{% include 'netbox_user_pin/inc/table_tools.html' %}
+{% endblock %}

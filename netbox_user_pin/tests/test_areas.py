@@ -10,7 +10,7 @@ from django.utils import timezone
 from netbox_user_pin import area_guard, areas
 from netbox_user_pin.forms import PinSettingsForm
 from netbox_user_pin.models import (
-    AreaGrant, AreaProfile, AreaRequest, AreaRequestStatus, PinEvent, PinEventAction, PinSettings, ProtectedArea,
+    AreaFieldRule, AreaGrant, AreaProfile, AreaRequest, AreaRequestStatus, PinEvent, PinEventAction, PinSettings, ProtectedArea,
 )
 
 from netbox_user_pin import service
@@ -454,7 +454,7 @@ class PagesTest(AreaTestCase):
         for name, kwargs in (('areas', {}), ('area', {'pk': area.pk}), ('my_access', {})):
             response = self.client.get(reverse(f'plugins:netbox_user_pin:{name}', kwargs=kwargs))
             self.assertEqual(response.status_code, 200, name)
-        self.assertContains(self.client.get(reverse('plugins:netbox_user_pin:area', kwargs={'pk': area.pk})), 'Create group')
+        self.assertContains(self.client.get(reverse('plugins:netbox_user_pin:area', kwargs={'pk': area.pk})), 'Create the group')
 
     def test_a_stranger_does_not_see_the_area_page(self):
         area = self.make_area()
@@ -978,8 +978,7 @@ class GroupsTest(AreaTestCase):
     def test_group_rules(self):
         with self.assertRaises(ValidationError):
             areas.create_group(self.area, 'dcim.device', '', ['view'], self.owner1)
-        with self.assertRaises(ValidationError):
-            areas.create_group(self.area, 'dcim.device', 'X', [], self.owner1)
+        self.assertEqual(areas.create_group(self.area, 'dcim.device', 'Default', [], self.owner1).rights, ['view'])
         with self.assertRaises(ValidationError):
             areas.create_group(self.area, 'dcim.site', 'X', ['view'], self.owner1)  # not protected by the area
         with self.assertRaises(PermissionDenied):
@@ -997,17 +996,30 @@ class GroupsTest(AreaTestCase):
     def test_the_page_creates_a_group_and_adds_users(self):
         admin_login(self.client, self.owner1)
         url = reverse('plugins:netbox_user_pin:area', kwargs={'pk': self.area.pk})
-        response = self.client.post(url, {'action': 'group-create', 'target': 'dcim.device', 'name': 'Technici',
-                                          'rights': ['view', 'change']})
+        response = self.client.post(url, {'action': 'group-create', 'target': 'dcim.device', 'name': 'Technici'})
         self.assertEqual(response.status_code, 302, response.content[:300])
         group = AreaProfile.objects.get(name='Technici')
-        self.assertEqual((group.target, group.private), ('dcim.device', False))
-        response = self.client.post(url, {'action': 'member-add', 'pk': group.pk, 'user': self.user.pk})
+        self.assertEqual((group.target, group.private, group.rights), ('dcim.device', False, ['view']))
+        group_url = reverse('plugins:netbox_user_pin:group', kwargs={'pk': self.area.pk, 'gid': group.pk})
+        self.assertEqual(response['Location'], group_url)  # straight into the group
+        html = self.client.get(group_url).content.decode()
+        self.assertIn('Technici', html)
+        self.assertIn('name="tab__interfaces"', html)
+        self.assertIn('name="mode__description"', html)
+        self.assertIn('pin-bulk', html)
+        # inside the group: rights, tabs, fields and users
+        response = self.client.post(group_url, {'action': 'rights', 'name': 'Technici', 'rights': ['change'],
+                                                'tab__interfaces': 'on'})
+        self.assertEqual(response.status_code, 302)
+        group.refresh_from_db()
+        self.assertEqual((group.rights, group.tabs), (['view', 'change'], ['interfaces']))
+        self.client.post(group_url, {'action': 'fields', 'mode__description': 'hidden', 'mode__name': 'default'})
+        self.assertEqual(AreaFieldRule.objects.get(profile=group, field='description').mode, 'hidden')
+        response = self.client.post(group_url, {'action': 'member-add', 'user': self.user.pk})
         self.assertEqual(response.status_code, 302)
         self.assertEqual([g.user for g in areas.group_members(group)], [self.user])
-        html = self.client.get(url).content.decode()
-        self.assertIn('Technici', html)
-        self.assertIn('usera', html)
+        self.assertIn('usera', self.client.get(group_url).content.decode())
+        self.assertIn('Technici', self.client.get(url).content.decode())
 
     def test_approving_a_request_puts_the_user_into_a_group_or_creates_it(self):
         req = areas.request_target_access(self.user, 'dcim.device', ['view'], 'I need the devices')
@@ -1036,3 +1048,20 @@ class FirstKeeperTest(AreaTestCase):
         self.assertFalse(PinSettings.load().default_deny)
         areas.add_keeper(keeper, self.master)
         self.assertTrue(PinSettings.load().default_deny)
+
+
+class UnprotectAndOwnersTest(AreaTestCase):
+    def test_a_keeper_removes_the_protection_and_an_ineligible_last_owner(self):
+        keeper = User.objects.create_superuser('keeper', 'k@example.com', 'x')
+        service.set_pin(keeper, GOOD_PIN)
+        enable_2fa(keeper)
+        areas.add_keeper(keeper, self.master)
+        area = self.make_area(owners=False)
+        from netbox_user_pin.models import AreaOwner
+        AreaOwner.objects.create(area=area, user=keeper)  # a hyperadmin owner (as before the rule existed)
+        areas.remove_owner(area, keeper, keeper)  # the last one, but he must not own it
+        self.assertFalse(area.owners.exists())
+        admin_login(self.client, keeper)
+        response = self.client.post(reverse('plugins:netbox_user_pin:areas'), {'action': 'unprotect', 'pk': area.pk})
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(ProtectedArea.objects.filter(pk=area.pk).exists())

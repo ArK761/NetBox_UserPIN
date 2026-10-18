@@ -33,6 +33,7 @@ urlpatterns = [
     path('my-roles/', views.MyRolesView.as_view(), name='my_roles'),
     path('areas/', area_views.AreaListView.as_view(), name='areas'),
     path('areas/<int:pk>/', area_views.AreaView.as_view(), name='area'),
+    path('areas/<int:pk>/groups/<int:gid>/', area_views.GroupView.as_view(), name='group'),
     path('areas/<int:pk>/fields/', area_views.AreaFieldsView.as_view(), name='area_fields'),
     path('areas/<slug:key>/request/', area_views.AreaRequestView.as_view(), name='area_request'),
     path('request-access/', area_views.AccessRequestView.as_view(), name='request_access'),

@@ -582,13 +582,17 @@ def add_owner(area, user, actor, request=None):
 
 
 def remove_owner(area, user, actor, request=None):
-    """Only an owner removes an owner (never the master alone), and never the last one."""
-    if not is_owner(actor, area):
-        raise PermissionDenied
+    """
+    Only an owner removes an owner (never the master alone), and never the last one. A superuser or a protection
+    keeper cannot be an owner: the protection keepers remove such an owner, even the last one.
+    """
     owner = AreaOwner.objects.filter(area=area, user=user).first()
+    ineligible = owner is not None and (owner.user.is_superuser or is_keeper(owner.user))
+    if not (is_owner(actor, area) or (ineligible and is_keeper(actor))):
+        raise PermissionDenied
     if owner is None:
         return
-    if area.owners.count() <= 1:
+    if area.owners.count() <= 1 and not ineligible:
         raise ValidationError(_('The last owner cannot be removed. Appoint another owner first.'))
     owner.delete()
     _log(PinEventAction.AREA_OWNER_REMOVED, area, actor, user=user, request=request)
@@ -616,7 +620,7 @@ def update_area(area, actor, name=None, description=None, targets=None, enabled=
 def delete_area(area, actor, request=None):
     if area.plugin:
         raise ValidationError(_('The area of a plugin cannot be deleted; switch the plugin integration off.'))
-    if not _core_or_owner(actor, area):
+    if not (_core_or_owner(actor, area) or is_keeper(actor)):
         raise PermissionDenied
     _log(PinEventAction.AREA_DELETED, area, actor, request=request, detail=area.name)
     area.delete()
@@ -938,6 +942,7 @@ def _clean_group_rights(area, rights):
 
 
 def create_group(area, target, name, rights, actor, filters=None, request=None):
+    rights = rights or ['view']  # a new group reads; what else it may do is ticked inside the group
     if not _may_grant(actor, area):
         raise PermissionDenied
     name = (name or '').strip()[:100]

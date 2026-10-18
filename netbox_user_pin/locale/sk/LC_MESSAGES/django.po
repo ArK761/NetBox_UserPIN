@@ -5704,6 +5704,48 @@ msgstr ""
 "Vedúci a delegáti oddelení (a zástupcovia CORE). Nie superuseri a správcovia"
 " ochrany: o tých rozhodujú vlastníci."
 
+msgid "Create the group"
+msgstr "Vytvoriť skupinu"
+
+msgid ""
+"Create a group by its name, open it, tick what it may do (rights, tabs, "
+"fields) and add its users. A user is in one group; adding him to another one"
+" moves him, and leaving the last one means no access."
+msgstr ""
+"Vytvor skupinu názvom, otvor ju, zaškrtni, čo smie (práva, záložky, polia) a"
+" pridaj do nej používateľov. Používateľ je v jednej skupine; pridaním do "
+"inej sa presunie a odchod z poslednej znamená žiadny prístup."
+
+msgid "Group created. Set what it may do and add its users."
+msgstr "Skupina vytvorená. Nastav, čo smie, a pridaj jej používateľov."
+
+msgid "The protection was removed."
+msgstr "Ochrana bola odstránená."
+
+msgid ""
+"Remove the protection of this object type? Its groups and accesses are "
+"deleted."
+msgstr ""
+"Odstrániť ochranu tohto typu objektu? Jeho skupiny a prístupy sa zmažú."
+
+msgid "What the group may do"
+msgstr "Čo skupina smie"
+
+msgid "Search a field…"
+msgstr "Hľadať pole…"
+
+msgid "Save fields"
+msgstr "Uložiť polia"
+
+msgid "Delete this group?"
+msgstr "Zmazať túto skupinu?"
+
+msgid "Removed from the group."
+msgstr "Odobraný zo skupiny."
+
+msgid "Tabs of plugins follow the area of that plugin:"
+msgstr "Záložky pluginov riadi oblasť toho pluginu:"
+
 #~ msgid ""
 #~ "There is no other administrator or delegate with PIN and 2FA who could "
 #~ "confirm."

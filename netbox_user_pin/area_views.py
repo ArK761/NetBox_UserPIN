@@ -20,7 +20,7 @@ from .models import (
 )
 from .views import ADMIN_SCOPE, _errors, _next_url, _step_up_context
 
-__all__ = ('AccessRequestView', 'RequestDecideView', 'AreaFieldsView', 'AreaListView', 'AreaRequestView', 'AreaView', 'MyAccessView')
+__all__ = ('GroupView', 'AccessRequestView', 'RequestDecideView', 'AreaFieldsView', 'AreaListView', 'AreaRequestView', 'AreaView', 'MyAccessView')
 
 
 class AreaViewMixin(LoginRequiredMixin, PinRequiredMixin):
@@ -155,6 +155,11 @@ class AreaListView(AreaViewMixin, View):
                 messages.success(request, _('Area "{name}" created. Appoint its owners now - until then only the '
                                             'master has access to it.').format(name=area.name))
                 return redirect('plugins:netbox_user_pin:area', pk=area.pk)
+            if action == 'unprotect':
+                area = get_object_or_404(ProtectedArea, pk=request.POST.get('pk'))
+                areas.delete_area(area, request.user, request=request)
+                messages.success(request, _('The protection was removed.'))
+                return redirect('plugins:netbox_user_pin:areas')
             if action == 'protect':
                 if not roles.is_core(request.user):
                     raise PermissionDenied
@@ -215,7 +220,10 @@ class AreaView(AreaViewMixin, View):
         return render(request, self.template_name, {
             'heading': _target_label(single) if single else area.name, 'single_target': single,
             'area': area, 'status': code, 'status_label': label, 'targets': targets,
-            'owners': list(areas.owners(area)), 'is_owner': mine, 'can_manage': areas.can_manage(request.user, area),
+            'owners': list(areas.owners(area)), 'is_owner': mine,
+            'owner_rows': [(u, (mine and area.owners.count() > 1) or ((u.is_superuser or areas.is_keeper(u))
+                                                                     and areas.is_keeper(request.user)))
+                           for u in areas.owners(area)], 'can_manage': areas.can_manage(request.user, area),
             'bootstrap': not area.owners.exists(),
             'active_grants': [(g, _grant_rows(area, g)) for g in grants if g.is_active],
             'old_grants': [g for g in grants if not g.is_active][:15],
@@ -299,9 +307,10 @@ class AreaView(AreaViewMixin, View):
                 form = GroupForm(request.POST, area=area)
                 if not form.is_valid():
                     return self._render(request, area, group_form=form)
-                areas.create_group(area, form.cleaned_data['target'], form.cleaned_data['name'],
-                                   form.cleaned_data['rights'], request.user, request=request)
-                messages.success(request, _('Group created.'))
+                group = areas.create_group(area, form.cleaned_data['target'], form.cleaned_data['name'], None,
+                                           request.user, request=request)
+                messages.success(request, _('Group created. Set what it may do and add its users.'))
+                return redirect('plugins:netbox_user_pin:group', pk=area.pk, gid=group.pk)
             elif action == 'group-update':
                 group = get_object_or_404(AreaProfile, pk=request.POST.get('pk'), area=area, private=False)
                 areas.update_group(group, request.user, name=request.POST.get('name', group.name),
@@ -591,3 +600,79 @@ class MyAccessView(LoginRequiredMixin, View):
         except ValidationError as exc:
             _errors(request, exc)
         return redirect('plugins:netbox_user_pin:my_access')
+
+
+class GroupView(AreaViewMixin, View):
+    """One group: its members, what it may do (rights, tabs) and the rule of every field."""
+    template_name = 'netbox_user_pin/group.html'
+
+    def _objects(self, request, pk, gid):
+        area = get_object_or_404(ProtectedArea, pk=pk)
+        if not areas.can_see(request.user, area):
+            raise PermissionDenied
+        group = get_object_or_404(AreaProfile, pk=gid, area=area, private=False)
+        if not group.target:
+            raise PermissionDenied
+        return area, group
+
+    def _render(self, request, area, group):
+        target = group.target
+        app_label, _dot, model = target.partition('.')
+        rules = {r.field: r for r in AreaFieldRule.objects.filter(area=area, profile=group, target=target)}
+        rows = []
+        for key, label, kind in fieldrules.fields_of(app_label, model):
+            rule = rules.get(key)
+            rows.append({'key': key, 'label': label, 'kind': kind, 'mode': rule.mode if rule else 'default',
+                         'contains': rule.contains if rule else ''})
+        tabs = areas.tabs_of(target)
+        return render(request, self.template_name, {
+            'area': area, 'group': group, 'target': target, 'target_label': _target_label(target),
+            'members': areas.group_members(group), 'member_form': GroupMemberForm(),
+            'rights': [(r, areas.right_label(area, r)) for r in areas.rights_available(area)],
+            'rights_set': set(group.rights),
+            'tabs': [dict(t, allowed=group.tabs is None or t['name'] in group.tabs) for t in tabs if not t['plugin']],
+            'plugin_tabs': [t for t in tabs if t['plugin']], 'rows': rows,
+            'can_manage': areas.can_manage(request.user, area) or areas._may_grant(request.user, area),
+            'settings': service.get_settings(),
+        })
+
+    def get(self, request, pk, gid):
+        area, group = self._objects(request, pk, gid)
+        return self._render(request, area, group)
+
+    def post(self, request, pk, gid):
+        area, group = self._objects(request, pk, gid)
+        action = request.POST.get('action')
+        try:
+            if action == 'rights':
+                areas.update_group(group, request.user, name=request.POST.get('name', group.name),
+                                   rights=request.POST.getlist('rights'), request=request)
+                areas.set_group_tabs(group, [k[5:] for k in request.POST if k.startswith('tab__')], request.user,
+                                     request=request)
+                messages.success(request, _('Saved.'))
+            elif action == 'fields':
+                app_label, _dot, model = group.target.partition('.')
+                rules = {key: (request.POST.get(f'mode__{key}', 'default'), request.POST.get(f'contains__{key}', ''))
+                         for key, _label, _kind in fieldrules.fields_of(app_label, model)}
+                count = areas.save_field_rules(area, group, group.target, rules, request.user, request=request)
+                messages.success(request, _('Saved ({n} changes).').format(n=count))
+            elif action == 'member-add':
+                form = GroupMemberForm(request.POST)
+                if form.is_valid():
+                    areas.add_member(group, form.cleaned_data['user'], None, request.user, request=request)
+                    messages.success(request, _('Added to the group.'))
+                else:
+                    messages.error(request, _('Choose a user.'))
+            elif action == 'revoke':
+                areas.revoke_grant(get_object_or_404(AreaGrant, pk=request.POST.get('pk'), profile=group),
+                                   request.user, request=request)
+                messages.success(request, _('Removed from the group.'))
+            elif action == 'group-delete':
+                areas.delete_group(group, request.user, request=request)
+                messages.success(request, _('Group deleted.'))
+                return redirect('plugins:netbox_user_pin:area', pk=area.pk)
+            else:
+                raise PermissionDenied
+        except ValidationError as exc:
+            _errors(request, exc)
+        return redirect('plugins:netbox_user_pin:group', pk=area.pk, gid=group.pk)
