@@ -150,13 +150,14 @@ def is_manager(user):
     return is_core(user) or managed_departments(user).exists()
 
 
-def manager_users():
+def manager_users(include_superusers=True):
     """Accounts with a PIN role above a plain user: CORE (superusers, deputies), department heads and delegates."""
     user_model = get_user_model()
     managers = _effective(PinDelegate.objects.filter(role__in=(RoleKind.HEAD, RoleKind.DELEGATE))).values('user_id')
-    return user_model.objects.filter(
-        Q(is_superuser=True) | Q(pin_roles__in=core_roles()) | Q(pk__in=managers), is_active=True
-    ).distinct().order_by('username')
+    query = Q(pin_roles__in=core_roles()) | Q(pk__in=managers)
+    if include_superusers:
+        query |= Q(is_superuser=True)
+    return user_model.objects.filter(query, is_active=True).distinct().order_by('username')
 
 
 def visible_users(user):

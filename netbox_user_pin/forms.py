@@ -511,13 +511,15 @@ class KeeperForm(forms.Form):
 class AreaOwnerForm(forms.Form):
     user = UserChoiceField(queryset=get_user_model().objects.none(), label=_('User'), with_email=True,
                            widget=forms.Select(attrs=SEARCHABLE),
-                           help_text=_('Only users with a PIN role above a plain user: CORE, department head or '
-                                       'delegate.'))
+                           help_text=_('Department heads and delegates (and CORE deputies). Not the superusers and the protection '
+                                       'keepers: the owners decide about them.'))
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         from . import roles
-        self.fields['user'].queryset = roles.manager_users()
+        from .models import PolicyKeeper
+        self.fields['user'].queryset = roles.manager_users(include_superusers=False).exclude(
+            pk__in=PolicyKeeper.objects.values('user_id'))
 
 
 class AreaProfileForm(forms.Form):

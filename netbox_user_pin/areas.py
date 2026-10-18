@@ -546,7 +546,13 @@ def _unique_key(name):
 
 
 def _check_owner_role(user):
-    """The one who may shut a superuser out must stand above a plain user in the PIN: CORE, head or delegate."""
+    """
+    The owner decides about the superusers, so he is none of them (nor a protection keeper): a department head, a
+    delegate or a CORE deputy.
+    """
+    if user.is_superuser or is_keeper(user):
+        raise ValidationError(_('%(user)s is a superuser or a protection keeper and cannot own an area: the owners '
+                                'are the ones who decide about them.') % {'user': user.username})
     if not roles.is_manager(user):
         raise ValidationError(_('%(user)s cannot own an area: an owner must hold a PIN role above a plain user '
                                 '(CORE, department head or delegate).') % {'user': user.username})

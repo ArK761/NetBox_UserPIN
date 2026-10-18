@@ -917,7 +917,8 @@ class OwnerRoleTest(AreaTestCase):
         with self.assertRaises(ValidationError):
             areas.add_owner(area, plain, self.master)
         areas.add_owner(area, self.owner1, self.master)  # a department head
-        areas.add_owner(area, self.master, self.owner1)  # CORE (superuser)
+        with self.assertRaises(ValidationError):
+            areas.add_owner(area, self.master, self.owner1)  # a superuser decides nothing about himself
         from netbox_user_pin import roles
         names = set(roles.manager_users().values_list('username', flat=True))
         self.assertIn('owner1', names)

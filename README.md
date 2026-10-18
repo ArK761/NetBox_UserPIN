@@ -402,8 +402,8 @@ door is visible), what it opens is decided like this:
 * the tab of a **plugin** follows the protected area of that plugin (add the plugin's app as an area); under "deny
   everything not allowed" a plugin that no area covers is refused.
 
-**Who may own an area**: only an account with a PIN role above a plain user - CORE (superusers, CORE deputies), a
-department head or a delegate. Nobody else can be appointed (the owner is the one who decides about superusers).
+**Who may own an area**: a department head, a delegate or a CORE deputy - never a superuser or a protection keeper
+(the owner is the one who decides about them).
 Until an area has owners, only the protection keepers (without any keeper: the superusers) see its data.
 
 **Entering an area without a PIN**: a user who was granted access but has no PIN is sent to create one (no 2FA needed)
