@@ -454,7 +454,7 @@ class PagesTest(AreaTestCase):
         for name, kwargs in (('areas', {}), ('area', {'pk': area.pk}), ('my_access', {})):
             response = self.client.get(reverse(f'plugins:netbox_user_pin:{name}', kwargs=kwargs))
             self.assertEqual(response.status_code, 200, name)
-        self.assertContains(self.client.get(reverse('plugins:netbox_user_pin:area', kwargs={'pk': area.pk})), 'Grant access')
+        self.assertContains(self.client.get(reverse('plugins:netbox_user_pin:area', kwargs={'pk': area.pk})), 'Create group')
 
     def test_a_stranger_does_not_see_the_area_page(self):
         area = self.make_area()

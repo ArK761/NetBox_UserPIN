@@ -5651,6 +5651,45 @@ msgstr ""
 msgid "Choose an app or an object type."
 msgstr "Vyber aplikáciu alebo typ objektu."
 
+msgid ""
+"This object type has no owners yet: only the protection keepers see it. "
+"Appoint the owners below; from then on they decide who gets access."
+msgstr ""
+"Tento typ objektu zatiaľ nemá vlastníkov: vidia ho len správcovia ochrany. "
+"Určte vlastníkov nižšie; odvtedy rozhodujú oni, kto dostane prístup."
+
+msgid ""
+"A group is a set of rights, tabs and fields. Put users into it: they get "
+"exactly what the group has. A user is in one group; adding him to another "
+"one moves him, and leaving the last one means no access. Whoever may write "
+"may read as well."
+msgstr ""
+"Skupina je sada práv, záložiek a polí. Pridaj do nej používateľov: dostanú "
+"presne to, čo skupina má. Používateľ je v jednej skupine; pridaním do inej "
+"sa presunie a odchod z poslednej znamená žiadny prístup. Kto smie zapisovať,"
+" smie aj čítať."
+
+msgid "Tabs of the detail page (the main page is always allowed)"
+msgstr "Záložky detailu (hlavná stránka je vždy povolená)"
+
+msgid "Tabs of plugins follow the area of that plugin."
+msgstr "Záložky pluginov riadi oblasť toho pluginu."
+
+msgid "Delete the group"
+msgstr "Zmazať skupinu"
+
+msgid "individually"
+msgstr "individuálne"
+
+msgid "Nobody yet."
+msgstr "Zatiaľ nikto."
+
+msgid "Owners decide who gets access."
+msgstr "Vlastníci rozhodujú, kto dostane prístup."
+
+msgid "Settings of the area"
+msgstr "Nastavenia oblasti"
+
 #~ msgid ""
 #~ "There is no other administrator or delegate with PIN and 2FA who could "
 #~ "confirm."

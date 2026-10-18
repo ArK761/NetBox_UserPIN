@@ -210,8 +210,11 @@ class AreaView(AreaViewMixin, View):
         mine = areas.is_owner(request.user, area)
         grants = list(area.grants.select_related('user', 'profile'))
         pending = list(area.requests.filter(status=AreaRequestStatus.PENDING).select_related('user'))
+        targets = areas.targets_of(area)
+        single = targets[0] if len(targets) == 1 and '.' in targets[0] else ''
         return render(request, self.template_name, {
-            'area': area, 'status': code, 'status_label': label, 'targets': areas.targets_of(area),
+            'heading': _target_label(single) if single else area.name, 'single_target': single,
+            'area': area, 'status': code, 'status_label': label, 'targets': targets,
             'owners': list(areas.owners(area)), 'is_owner': mine, 'can_manage': areas.can_manage(request.user, area),
             'bootstrap': not area.owners.exists(),
             'active_grants': [(g, _grant_rows(area, g)) for g in grants if g.is_active],
@@ -235,7 +238,9 @@ class AreaView(AreaViewMixin, View):
         for group in areas.groups_of(area):
             blocks.setdefault(group.target, []).append({
                 'group': group, 'rights': [areas.right_label(area, r) for r in group.rights],
-                'rights_set': set(group.rights), 'members': areas.group_members(group)})
+                'rights_set': set(group.rights), 'members': areas.group_members(group),
+                'tabs': [dict(t, allowed=group.tabs is None or t['name'] in group.tabs)
+                         for t in areas.tabs_of(group.target) if not t['plugin']]})
         return [{'target': t, 'label': _target_label(t), 'groups': gs} for t, gs in sorted(blocks.items())]
 
     def get(self, request, pk):
@@ -301,6 +306,9 @@ class AreaView(AreaViewMixin, View):
                 group = get_object_or_404(AreaProfile, pk=request.POST.get('pk'), area=area, private=False)
                 areas.update_group(group, request.user, name=request.POST.get('name', group.name),
                                    rights=request.POST.getlist('rights'), request=request)
+                if request.POST.get('tabs_form'):
+                    areas.set_group_tabs(group, [k[5:] for k in request.POST if k.startswith('tab__')],
+                                         request.user, request=request)
                 messages.success(request, _('Saved.'))
             elif action == 'group-delete':
                 areas.delete_group(get_object_or_404(AreaProfile, pk=request.POST.get('pk'), area=area,
