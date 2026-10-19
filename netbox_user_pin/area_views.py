@@ -98,6 +98,30 @@ def _tree(user):
     return tree
 
 
+def _chosen_users(request, queryset=None):
+    """The users picked in a multi-select (field ``users``; ``user`` still works): active accounts only."""
+    from django.contrib.auth import get_user_model
+    ids = [i for i in request.POST.getlist('users') + request.POST.getlist('user') if str(i).isdigit()]
+    users = get_user_model().objects.filter(pk__in=ids, is_active=True)
+    return list(users if queryset is None else users.filter(pk__in=queryset.values('pk')))
+
+
+def _user_choices(queryset):
+    return [(u.pk, service.user_label(u)) for u in queryset.order_by('username')]
+
+
+def _all_user_choices():
+    from django.contrib.auth import get_user_model
+    return _user_choices(get_user_model().objects.filter(is_active=True))
+
+
+def _owner_choices():
+    from django.contrib.auth import get_user_model
+    from .models import PolicyKeeper
+    queryset = roles.manager_users(include_superusers=False).exclude(pk__in=PolicyKeeper.objects.values('user_id'))
+    return _user_choices(queryset)
+
+
 def _status(area):
     """(code, label) of what the area does now."""
     if area in areas.active_areas():
@@ -234,6 +258,7 @@ class AreaView(AreaViewMixin, View):
             'target_form': AreaTargetForm(exclude=areas.targets_of(area)),
             'target_labels': [(t, _target_label(t)) for t in areas.targets_of(area)],
             'owner_form': AreaOwnerForm(), 'group_blocks': self._group_blocks(area),
+            'owner_choices': _owner_choices(),
             'group_form': forms.get('group_form') or GroupForm(area=area), 'member_form': GroupMemberForm(),
             'grant_form': forms.get('grant_form') or AreaGrantForm(area=area),
             'rights': [(r, areas.right_label(area, r)) for r in areas.rights_available(area)],
@@ -283,10 +308,15 @@ class AreaView(AreaViewMixin, View):
                 areas.remove_target(area, request.POST.get('target', ''), request.user, request=request)
                 messages.success(request, _('Object type removed.'))
             elif action == 'owner-add':
-                form = AreaOwnerForm(request.POST)
-                if form.is_valid():
-                    areas.add_owner(area, form.cleaned_data['user'], request.user, request=request)
-                    messages.success(request, _('Owner added.'))
+                chosen = _chosen_users(request)
+                if not chosen:
+                    messages.error(request, _('Choose a user.'))
+                if chosen:
+                    added, problems = areas.add_owners(area, chosen, request.user, request=request)
+                    for user in added:
+                        messages.success(request, _('Owner added: {name}').format(name=user.username))
+                    for exc in problems:
+                        _errors(request, exc)
             elif action == 'owner-remove':
                 areas.remove_owner(area, get_object_or_404(User, pk=request.POST.get('pk')), request.user,
                                    request=request)
@@ -325,12 +355,13 @@ class AreaView(AreaViewMixin, View):
                 messages.success(request, _('Group deleted.'))
             elif action == 'member-add':
                 group = get_object_or_404(AreaProfile, pk=request.POST.get('pk'), area=area, private=False)
-                form = GroupMemberForm(request.POST)
-                if form.is_valid():
-                    areas.add_member(group, form.cleaned_data['user'], None, request.user, request=request)
-                    messages.success(request, _('Added to the group.'))
-                else:
+                chosen = _chosen_users(request)
+                if not chosen:
                     messages.error(request, _('Choose a user.'))
+                for user in chosen:
+                    areas.add_member(group, user, None, request.user, request=request)
+                if chosen:
+                    messages.success(request, _('Added to the group.'))
             elif action == 'grant':
                 form = AreaGrantForm(request.POST, area=area)
                 if not form.is_valid():
@@ -627,7 +658,7 @@ class GroupView(AreaViewMixin, View):
         tabs = areas.tabs_of(target)
         return render(request, self.template_name, {
             'area': area, 'group': group, 'target': target, 'target_label': _target_label(target),
-            'members': areas.group_members(group), 'member_form': GroupMemberForm(),
+            'members': areas.group_members(group), 'user_choices': _all_user_choices(),
             'rights': [(r, areas.right_label(area, r)) for r in areas.rights_available(area)],
             'rights_set': set(group.rights),
             'tabs': [dict(t, allowed=group.tabs is None or t['name'] in group.tabs) for t in tabs if not t['plugin']],
@@ -657,12 +688,13 @@ class GroupView(AreaViewMixin, View):
                 count = areas.save_field_rules(area, group, group.target, rules, request.user, request=request)
                 messages.success(request, _('Saved ({n} changes).').format(n=count))
             elif action == 'member-add':
-                form = GroupMemberForm(request.POST)
-                if form.is_valid():
-                    areas.add_member(group, form.cleaned_data['user'], None, request.user, request=request)
-                    messages.success(request, _('Added to the group.'))
-                else:
+                chosen = _chosen_users(request)
+                if not chosen:
                     messages.error(request, _('Choose a user.'))
+                for user in chosen:
+                    areas.add_member(group, user, None, request.user, request=request)
+                if chosen:
+                    messages.success(request, _('Added to the group.'))
             elif action == 'revoke':
                 areas.revoke_grant(get_object_or_404(AreaGrant, pk=request.POST.get('pk'), profile=group),
                                    request.user, request=request)

@@ -60,5 +60,15 @@
         if (query && select.options.length > 1 && !select.value) { select.selectedIndex = 1; }
       });
     });
+    // multi-select of users: input.pin-multi-search narrows the options of the select below it
+    document.querySelectorAll('input.pin-multi-search').forEach(function (box) {
+      var select = box.parentNode.querySelector('select.pin-multi');
+      box.addEventListener('input', function () {
+        var query = box.value.toLowerCase();
+        Array.prototype.forEach.call(select.options, function (option) {
+          option.style.display = (!query || option.text.toLowerCase().indexOf(query) >= 0) ? '' : 'none';
+        });
+      });
+    });
   })();
 </script>

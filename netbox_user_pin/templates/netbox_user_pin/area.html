@@ -28,6 +28,8 @@
 </div>
 {% endif %}
 
+<div class="row">
+<div class="col-12 col-xl-6">
 <div class="card">
   <h2 class="card-header">{% trans "Groups" %}</h2>
   <div class="card-body">
@@ -54,10 +56,11 @@
       <button class="btn btn-primary" type="submit">{% trans "Create the group" %}</button>
     </form>
     {% endif %}
-    {% if can_manage %}<hr><p class="mb-0"><a class="btn btn-sm btn-outline-warning" href="{% url 'plugins:netbox_user_pin:area_fields' pk=area.pk %}?grant=nobody"><i class="mdi mdi-eye-off"></i> {% trans "Fields hidden from everybody" %}</a></p>{% endif %}
   </div>
 </div>
 
+</div>
+<div class="col-12 col-xl-6">
 <div class="card">
   <h2 class="card-header">{% trans "Users" %}</h2>
   <div class="card-body pb-0"><input type="search" class="form-control form-control-sm pin-filter" data-target="#pin-grants"></div>
@@ -84,14 +87,17 @@
     </ul>
     {% if can_manage %}
     <form method="post" class="d-flex flex-column gap-2">{% csrf_token %}<input type="hidden" name="action" value="owner-add">
-      <div>{{ owner_form.user }}<div class="form-text">{{ owner_form.user.help_text }}</div></div>
-      <div><button class="btn btn-primary" type="submit">{% trans "Add owner" %}</button></div>
+      {% include 'netbox_user_pin/inc/user_multiselect.html' with choices=owner_choices %}
+      <div class="form-text mb-2">{{ owner_form.user.help_text }}</div>
+      <div><button class="btn btn-primary" type="submit">{% trans "Add the owners" %}</button></div>
     </form>
     {% if owners|length == 1 %}<p class="small text-warning mt-2 mb-0">{% trans "Appoint at least two owners, so that a decision can be taken when one is away." %}</p>{% endif %}
     {% endif %}
   </div>
 </div>
 
+</div>
+</div>
 {% if can_manage and not area.plugin %}
 <details class="mb-3">
   <summary class="text-secondary">{% trans "Settings of the area" %}</summary>

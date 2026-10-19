@@ -5752,6 +5752,37 @@ msgstr "Klikni a nastav, ktoré polia skupina vidí alebo mení."
 msgid "values must include (optional)"
 msgstr "hodnoty musia obsahovať (voliteľné)"
 
+msgid "Choose one or more (hold Ctrl or Shift)."
+msgstr "Vyber jedného alebo viacerých (podrž Ctrl alebo Shift)."
+
+msgid "Add the owners"
+msgstr "Pridať vlastníkov"
+
+msgid "Add users to the group"
+msgstr "Pridať používateľov do skupiny"
+
+msgid "Owner added: {name}"
+msgstr "Vlastník pridaný: {name}"
+
+msgid "What the switches mean"
+msgstr "Čo znamenajú prepínače"
+
+msgid ""
+"the field follows the rights of the group: a group that may add or change "
+"also writes the field, a group that may only view only reads it."
+msgstr ""
+"pole sa riadi právami skupiny: skupina, ktorá smie pridávať alebo meniť, "
+"pole aj zapisuje; skupina, ktorá smie len zobraziť, ho len číta."
+
+msgid "the group does not see the field."
+msgstr "skupina pole nevidí."
+
+msgid "it sees the field but cannot change it."
+msgstr "pole vidí, ale nemôže ho zmeniť."
+
+msgid "it sees and changes the field."
+msgstr "pole vidí aj mení."
+
 #~ msgid ""
 #~ "There is no other administrator or delegate with PIN and 2FA who could "
 #~ "confirm."

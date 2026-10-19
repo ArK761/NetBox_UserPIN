@@ -581,6 +581,25 @@ def add_owner(area, user, actor, request=None):
     return owner
 
 
+def add_owners(area, users, actor, request=None):
+    """Several owners at once (the right to do so is checked once, before the first one makes it the owners' own)."""
+    if not _core_or_owner(actor, area):
+        raise PermissionDenied
+    added, errors = [], []
+    for user in users:
+        try:
+            if not user.is_active:
+                raise ValidationError(_('The account is not active.'))
+            _check_owner_role(user)
+            _ensure_pin_allowed(user, actor, request)
+            _add_owner(area, user, actor, request)
+            added.append(user)
+        except ValidationError as exc:
+            errors.append(exc)
+    clear_cache()
+    return added, errors
+
+
 def remove_owner(area, user, actor, request=None):
     """
     Only an owner removes an owner (never the master alone), and never the last one. A superuser or a protection

@@ -1,0 +1,8 @@
+{% load i18n %}
+<div class="mb-2">
+  <input type="search" class="form-control form-control-sm mb-1 pin-multi-search" placeholder="{% trans 'Search…' %}">
+  <select name="users" multiple size="7" class="form-select pin-multi">
+    {% for pk, label in choices %}<option value="{{ pk }}">{{ label }}</option>{% endfor %}
+  </select>
+  <div class="form-text">{% trans "Choose one or more (hold Ctrl or Shift)." %}</div>
+</div>

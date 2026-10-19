@@ -1015,9 +1015,10 @@ class GroupsTest(AreaTestCase):
         self.assertEqual((group.rights, group.tabs), (['view', 'change'], ['interfaces']))
         self.client.post(group_url, {'action': 'fields', 'mode__description': 'hidden', 'mode__name': 'default'})
         self.assertEqual(AreaFieldRule.objects.get(profile=group, field='description').mode, 'hidden')
-        response = self.client.post(group_url, {'action': 'member-add', 'user': self.user.pk})
+        other = User.objects.create_user('userb', 'b@example.com')
+        response = self.client.post(group_url, {'action': 'member-add', 'users': [self.user.pk, other.pk]})
         self.assertEqual(response.status_code, 302)
-        self.assertEqual([g.user for g in areas.group_members(group)], [self.user])
+        self.assertEqual({g.user for g in areas.group_members(group)}, {self.user, other})  # several at once
         self.assertIn('usera', self.client.get(group_url).content.decode())
         self.assertIn('Technici', self.client.get(url).content.decode())
 
@@ -1065,3 +1066,18 @@ class UnprotectAndOwnersTest(AreaTestCase):
         response = self.client.post(reverse('plugins:netbox_user_pin:areas'), {'action': 'unprotect', 'pk': area.pk})
         self.assertEqual(response.status_code, 302)
         self.assertFalse(ProtectedArea.objects.filter(pk=area.pk).exists())
+
+
+class SeveralOwnersTest(AreaTestCase):
+    def test_several_owners_at_once_and_only_the_eligible_ones(self):
+        area = self.make_area(owners=False)
+        admin_login(self.client, self.master)
+        url = reverse('plugins:netbox_user_pin:area', kwargs={'pk': area.pk})
+        plain = User.objects.create_user('plain', 'p@example.com')
+        response = self.client.post(url, {'action': 'owner-add', 'users': [self.owner1.pk, self.owner2.pk, plain.pk]})
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual({o.username for o in areas.owners(area)}, {'owner1', 'owner2'})  # the plain user was refused
+        admin_login(self.client, self.owner1)  # an owner sees the owners' form with the multi-select
+        html = self.client.get(url).content.decode()
+        self.assertIn('name="users"', html)
+        self.assertNotIn('Fields hidden from everybody', html)

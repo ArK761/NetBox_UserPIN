@@ -32,8 +32,8 @@
           <form method="post" class="d-inline">{% csrf_token %}<input type="hidden" name="action" value="revoke"><input type="hidden" name="pk" value="{{ g.pk }}"><button type="submit" class="btn btn-link btn-sm p-0 text-white" title="{% trans 'Remove from the group' %}">×</button></form>{% endif %}</span>{% empty %}<span class="text-secondary">{% trans "No members." %}</span>{% endfor %}</div>
         {% if can_manage %}
         <form method="post" class="d-flex flex-column gap-2">{% csrf_token %}<input type="hidden" name="action" value="member-add">
-          <div>{{ member_form.user }}</div>
-          <div><button class="btn btn-primary" type="submit"><i class="mdi mdi-account-plus"></i> {% trans "Add user to the group" %}</button></div>
+          {% include 'netbox_user_pin/inc/user_multiselect.html' with choices=user_choices %}
+          <div><button class="btn btn-primary" type="submit"><i class="mdi mdi-account-plus"></i> {% trans "Add users to the group" %}</button></div>
         </form>
         {% endif %}
       </div>
@@ -44,6 +44,13 @@
 <details class="card mt-3" id="pin-fields-box">
   <summary class="card-header" style="cursor: pointer"><h2 class="card-title mb-0 d-inline"><i class="mdi mdi-form-textbox"></i> {% trans "Fields" %}</h2> <span class="text-secondary small ms-2">{% trans "Click to set which fields the group sees or changes." %}</span></summary>
   <form method="post">{% csrf_token %}<input type="hidden" name="action" value="fields">
+    <div class="card-body border-bottom">
+      <div class="alert alert-info small mb-0"><strong>{% trans "What the switches mean" %}</strong><br>
+        <strong>{% trans "By rights" %}</strong> – {% trans "the field follows the rights of the group: a group that may add or change also writes the field, a group that may only view only reads it." %}<br>
+        <strong>{% trans "Hidden" %}</strong> – {% trans "the group does not see the field." %}
+        <strong>{% trans "Read only" %}</strong> – {% trans "it sees the field but cannot change it." %}
+        <strong>{% trans "Read and write" %}</strong> – {% trans "it sees and changes the field." %}</div>
+    </div>
     <div class="card-body border-bottom d-flex flex-wrap gap-2 align-items-center">
       <input type="search" class="form-control w-auto" style="min-width: 16rem" id="pin-field-search" placeholder="{% trans 'Search a field…' %}">
       <strong class="ms-2">{% trans "Set all shown fields:" %}</strong>
