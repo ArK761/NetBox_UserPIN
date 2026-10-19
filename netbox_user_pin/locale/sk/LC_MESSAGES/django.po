@@ -5746,6 +5746,12 @@ msgstr "Odobraný zo skupiny."
 msgid "Tabs of plugins follow the area of that plugin:"
 msgstr "Záložky pluginov riadi oblasť toho pluginu:"
 
+msgid "Click to set which fields the group sees or changes."
+msgstr "Klikni a nastav, ktoré polia skupina vidí alebo mení."
+
+msgid "values must include (optional)"
+msgstr "hodnoty musia obsahovať (voliteľné)"
+
 #~ msgid ""
 #~ "There is no other administrator or delegate with PIN and 2FA who could "
 #~ "confirm."
