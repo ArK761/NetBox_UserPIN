@@ -37,8 +37,8 @@ class FieldRulesCase(AreaTestCase):
         self.area = areas.create_area('Tenants', ['tenancy.tenant', 'dcim.device'], [], self.master)
         areas.add_owner(self.area, self.owner1, self.master)
         areas.add_owner(self.area, self.owner2, self.owner1)
-        self.edit = self.area.profiles.get(name='Edit')
-        self.read = self.area.profiles.get(name='Read')
+        self.edit = self.profile(self.area, 'Edit')
+        self.read = self.profile(self.area, 'Read')
         self.grant = areas.grant_access(self.area, self.appadmin, self.edit, None, self.owner1)
 
     def rule(self, field, mode, contains='', profile=None, target='tenancy.tenant', actor=None):

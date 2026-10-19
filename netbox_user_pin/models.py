@@ -820,7 +820,7 @@ class AreaProfile(models.Model):
         verbose_name = _('area profile')
         verbose_name_plural = _('area profiles')
         ordering = ('pk',)
-        constraints = [models.UniqueConstraint(fields=('area', 'name'), name='userpin_area_profile_unique')]
+        constraints = [models.UniqueConstraint(fields=('area', 'target', 'name'), name='userpin_area_profile_unique')]
 
     def __str__(self):
         return f'{self.area}: {self.name}'

@@ -14,10 +14,14 @@
         <div class="card-body">
           <div class="mb-3"><label class="form-label">{% trans "Name of the group" %}</label><input class="form-control" name="name" value="{{ group.name }}" maxlength="100" {% if not can_manage %}readonly{% endif %}></div>
           <div class="mb-3"><div class="fw-bold mb-1">{% trans "Rights" %}</div>
-            {% for value, label in rights %}<div class="form-check form-check-inline"><input class="form-check-input" type="checkbox" name="rights" value="{{ value }}" id="r-{{ value }}" {% if value in rights_set %}checked{% endif %} {% if not can_manage %}disabled{% endif %}><label class="form-check-label" for="r-{{ value }}">{{ label }}</label></div>{% endfor %}
+            <div class="row row-cols-1 row-cols-md-2 g-1">
+              {% for value, label in rights %}<div class="col"><div class="form-check"><input class="form-check-input" type="checkbox" name="rights" value="{{ value }}" id="r-{{ value }}" {% if value in rights_set %}checked{% endif %} {% if not can_manage %}disabled{% endif %}><label class="form-check-label" for="r-{{ value }}">{{ label }}</label></div></div>{% endfor %}
+            </div>
             <div class="form-text">{% trans "Whoever may add, change or delete may read as well." %}</div></div>
           <div class="mb-1"><div class="fw-bold mb-1">{% trans "Tabs of the detail page (the main page is always allowed)" %}</div>
-            {% for t in tabs %}<div class="form-check form-check-inline"><input class="form-check-input" type="checkbox" name="tab__{{ t.name }}" id="t-{{ t.name }}" {% if t.allowed %}checked{% endif %} {% if not can_manage %}disabled{% endif %}><label class="form-check-label" for="t-{{ t.name }}">{{ t.label }}</label></div>{% endfor %}
+            <div class="row row-cols-1 row-cols-md-2 g-1">
+              {% for t in tabs %}<div class="col"><div class="form-check"><input class="form-check-input" type="checkbox" name="tab__{{ t.name }}" id="t-{{ t.name }}" {% if t.allowed %}checked{% endif %} {% if not can_manage %}disabled{% endif %}><label class="form-check-label" for="t-{{ t.name }}">{{ t.label }}</label></div></div>{% endfor %}
+            </div>
             {% if plugin_tabs %}<div class="small text-secondary mt-1"><i class="mdi mdi-puzzle-outline"></i> {% trans "Tabs of plugins follow the area of that plugin:" %} {% for t in plugin_tabs %}{{ t.label }}{% if not forloop.last %}, {% endif %}{% endfor %}</div>{% endif %}</div>
         </div>
         {% if can_manage %}<div class="card-body pt-0"><button class="btn btn-primary" type="submit">{% trans "Save" %}</button></div>{% endif %}
@@ -59,24 +63,24 @@
       <button type="button" class="btn btn-sm btn-outline-warning pin-bulk" data-mode="read">{% trans "Read only" %}</button>
       <button type="button" class="btn btn-sm btn-outline-success pin-bulk" data-mode="write">{% trans "Read and write" %}</button>
     </div>
-    <table class="table table-hover align-middle mb-0" id="pin-fields">
-      <tbody>
+    <div class="card-body">
+      <div class="row row-cols-1 row-cols-xl-2 g-2" id="pin-fields">
         {% for row in rows %}
-        <tr>
-          <td style="width: 38%"><strong>{{ row.label }}</strong> {% if row.kind == 'custom' %}<span class="badge text-bg-cyan">{% trans "custom field" %}</span>{% endif %}<div><code class="small text-secondary">{{ row.key }}</code></div></td>
-          <td class="text-nowrap">
-            <div class="btn-group btn-group-sm" role="group">
+        <div class="col pin-field-row">
+          <div class="border rounded p-2 h-100">
+            <div class="mb-1"><strong>{{ row.label }}</strong> {% if row.kind == 'custom' %}<span class="badge text-bg-cyan">{% trans "custom field" %}</span>{% endif %} <code class="small text-secondary">{{ row.key }}</code></div>
+            <div class="btn-group btn-group-sm flex-wrap" role="group">
               <input type="radio" class="btn-check" name="mode__{{ row.key }}" id="m{{ forloop.counter }}-d" value="default" autocomplete="off" {% if row.mode == 'default' %}checked{% endif %}><label class="btn btn-outline-secondary" for="m{{ forloop.counter }}-d">{% trans "By rights" %}</label>
               <input type="radio" class="btn-check" name="mode__{{ row.key }}" id="m{{ forloop.counter }}-h" value="hidden" autocomplete="off" {% if row.mode == 'hidden' %}checked{% endif %}><label class="btn btn-outline-danger" for="m{{ forloop.counter }}-h">{% trans "Hidden" %}</label>
               <input type="radio" class="btn-check" name="mode__{{ row.key }}" id="m{{ forloop.counter }}-r" value="read" autocomplete="off" {% if row.mode == 'read' %}checked{% endif %}><label class="btn btn-outline-warning" for="m{{ forloop.counter }}-r">{% trans "Read only" %}</label>
               <input type="radio" class="btn-check" name="mode__{{ row.key }}" id="m{{ forloop.counter }}-w" value="write" autocomplete="off" {% if row.mode == 'write' %}checked{% endif %}><label class="btn btn-outline-success" for="m{{ forloop.counter }}-w">{% trans "Read and write" %}</label>
             </div>
-          </td>
-          <td style="width: 22%">{% if row.kind == 'custom' %}<input type="text" class="form-control form-control-sm" name="contains__{{ row.key }}" value="{{ row.contains }}" maxlength="200" placeholder="{% trans 'values must include (optional)' %}">{% endif %}</td>
-        </tr>
-        {% empty %}<tr><td colspan="3" class="text-secondary">{% trans "No fields." %}</td></tr>{% endfor %}
-      </tbody>
-    </table>
+            {% if row.kind == 'custom' %}<input type="text" class="form-control form-control-sm mt-2" name="contains__{{ row.key }}" value="{{ row.contains }}" maxlength="200" placeholder="{% trans 'values must include (optional)' %}">{% endif %}
+          </div>
+        </div>
+        {% empty %}<div class="col text-secondary">{% trans "No fields." %}</div>{% endfor %}
+      </div>
+    </div>
     {% if can_manage %}<div class="card-body text-end"><button class="btn btn-primary" type="submit">{% trans "Save fields" %}</button></div>{% endif %}
   </form>
 </details>
@@ -86,13 +90,13 @@
 <script>
   document.getElementById('pin-field-search').addEventListener('input', function () {
     var q = this.value.toLowerCase();
-    document.querySelectorAll('#pin-fields tbody tr').forEach(function (row) {
+    document.querySelectorAll('#pin-fields .pin-field-row').forEach(function (row) {
       row.style.display = (!q || row.textContent.toLowerCase().indexOf(q) >= 0) ? '' : 'none';
     });
   });
   document.querySelectorAll('.pin-bulk').forEach(function (button) {
     button.addEventListener('click', function () {
-      document.querySelectorAll('#pin-fields tbody tr').forEach(function (row) {
+      document.querySelectorAll('#pin-fields .pin-field-row').forEach(function (row) {
         if (row.style.display === 'none') { return; }
         var radio = row.querySelector('input[type=radio][value=' + button.dataset.mode + ']');
         if (radio) { radio.checked = true; }

@@ -50,7 +50,10 @@ class AreaTestCase(PinTestCase):
         return area
 
     def profile(self, area, name='Read'):
-        return area.profiles.get(name=name)
+        """A profile of the old kind (plugins register them): made on demand, areas of their own do not have any."""
+        from netbox_user_pin.models import AreaProfile
+        rights = dict(areas.DEFAULT_PROFILES).get(name, ('view',))
+        return AreaProfile.objects.get_or_create(area=area, name=name, target='', defaults={'rights': list(rights)})[0]
 
     def login(self, user, unlock=True):
         """Log in; a user who holds access has to unlock the PIN to enter an area."""
@@ -886,7 +889,6 @@ class TabsTest(AreaTestCase):
         areas.grant_custom(area, self.normal, 'dcim.device', ['view'], None, self.owner1)
         self.login(self.normal)
         self.assertContains(self.client.get(self.main), 'PLATFORM_X')
-        profile = area.profiles.get(name='Read')
         grant = AreaGrant.objects.get(user=self.normal)
         areas.save_field_rules(area, grant.profile, 'dcim.device', {'platform': ('hidden', '')}, self.owner1)
         areas.clear_cache()

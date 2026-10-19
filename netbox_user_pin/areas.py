@@ -525,8 +525,6 @@ def create_area(name, targets, owners_, actor, description='', max_hours=24, req
     key = _unique_key(name)
     area = ProtectedArea.objects.create(key=key, name=name, description=description, targets=targets,
                                         max_hours=max_hours)
-    for name_, rights in DEFAULT_PROFILES:
-        AreaProfile.objects.create(area=area, name=name_, rights=list(rights))
     _log(PinEventAction.AREA_CREATED, area, actor, request=request, detail=f'targets: {", ".join(targets)}')
     for user in owners_:
         _check_owner_role(user)
@@ -782,8 +780,6 @@ def _create_requested_area(req, actor, request):
     area = ProtectedArea.objects.create(
         key=_unique_key(name), name=name, targets=[req.target], max_hours=24,
         description=_('Created from the access request of %(user)s.') % {'user': req.user.username})
-    for name_, rights in DEFAULT_PROFILES:
-        AreaProfile.objects.create(area=area, name=name_, rights=list(rights))
     _log(PinEventAction.AREA_CREATED, area, actor, request=request,
          detail=f'targets: {req.target} (from the request of {req.user.username})')
     settings = service.get_settings()
@@ -970,7 +966,7 @@ def create_group(area, target, name, rights, actor, filters=None, request=None):
         raise ValidationError(_('Write the name of the group.'))
     if target not in area_models(area):
         raise ValidationError(_('"%(target)s" is not protected by this area.') % {'target': target})
-    if AreaProfile.objects.filter(area=area, name=name).exists():
+    if AreaProfile.objects.filter(area=area, target=target, private=False, name__iexact=name).exists():
         raise ValidationError(_('A group with this name exists.'))
     group = AreaProfile.objects.create(area=area, name=name, rights=_clean_group_rights(area, rights),
                                        filters=filters or {}, private=False, target=target, tabs=[])
@@ -987,7 +983,8 @@ def update_group(group, actor, name=None, rights=None, filters=None, request=Non
         name = name.strip()[:100]
         if not name:
             raise ValidationError(_('Write the name of the group.'))
-        if AreaProfile.objects.filter(area=area, name=name).exclude(pk=group.pk).exists():
+        if AreaProfile.objects.filter(area=area, target=group.target, private=False, name__iexact=name
+                                      ).exclude(pk=group.pk).exists():
             raise ValidationError(_('A group with this name exists.'))
         group.name = name
     if rights is not None:
