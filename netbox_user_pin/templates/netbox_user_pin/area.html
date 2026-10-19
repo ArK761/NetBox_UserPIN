@@ -28,9 +28,9 @@
 </div>
 {% endif %}
 
-<div class="row">
+<div class="row g-3 mb-3">
 <div class="col-12 col-xl-6">
-<div class="card">
+<div class="card h-100">
   <h2 class="card-header">{% trans "Groups" %}</h2>
   <div class="card-body">
     <p class="text-secondary small mb-3">{% trans "Create a group by its name, open it, tick what it may do (rights, tabs, fields) and add its users. A user is in one group; adding him to another one moves him, and leaving the last one means no access." %}</p>
@@ -61,7 +61,7 @@
 
 </div>
 <div class="col-12 col-xl-6">
-<div class="card">
+<div class="card h-100">
   <h2 class="card-header">{% trans "Users" %}</h2>
   <div class="card-body pb-0"><input type="search" class="form-control form-control-sm pin-filter" data-target="#pin-grants"></div>
   <table class="table table-hover pin-sortable" id="pin-grants">
@@ -75,7 +75,11 @@
   </table>
 </div>
 
-<div class="card">
+</div>
+</div>
+<div class="row g-3 mb-3">
+<div class="col-12 col-xl-6">
+<div class="card h-100">
   <h2 class="card-header">{% trans "Owners" %}</h2>
   <div class="card-body">
     <p class="text-secondary small">{% trans "Owners decide who gets access." %}</p>

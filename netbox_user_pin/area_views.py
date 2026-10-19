@@ -245,8 +245,7 @@ class AreaView(AreaViewMixin, View):
             'heading': _target_label(single) if single else area.name, 'single_target': single,
             'area': area, 'status': code, 'status_label': label, 'targets': targets,
             'owners': list(areas.owners(area)), 'is_owner': mine,
-            'owner_rows': [(u, (mine and area.owners.count() > 1) or ((u.is_superuser or areas.is_keeper(u))
-                                                                     and areas.is_keeper(request.user)))
+            'owner_rows': [(u, (mine and area.owners.count() > 1) or areas.is_keeper(request.user))
                            for u in areas.owners(area)], 'can_manage': areas.can_manage(request.user, area),
             'bootstrap': not area.owners.exists(),
             'active_grants': [(g, _grant_rows(area, g)) for g in grants if g.is_active],

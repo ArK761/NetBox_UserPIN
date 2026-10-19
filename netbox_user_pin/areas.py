@@ -607,11 +607,12 @@ def remove_owner(area, user, actor, request=None):
     """
     owner = AreaOwner.objects.filter(area=area, user=user).first()
     ineligible = owner is not None and (owner.user.is_superuser or is_keeper(owner.user))
-    if not (is_owner(actor, area) or (ineligible and is_keeper(actor))):
+    keeper = is_keeper(actor)  # the protection keepers run the whole protection: they may remove any owner
+    if not (is_owner(actor, area) or keeper):
         raise PermissionDenied
     if owner is None:
         return
-    if area.owners.count() <= 1 and not ineligible:
+    if area.owners.count() <= 1 and not (ineligible or keeper):
         raise ValidationError(_('The last owner cannot be removed. Appoint another owner first.'))
     owner.delete()
     _log(PinEventAction.AREA_OWNER_REMOVED, area, actor, user=user, request=request)

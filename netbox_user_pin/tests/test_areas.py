@@ -1081,3 +1081,20 @@ class SeveralOwnersTest(AreaTestCase):
         html = self.client.get(url).content.decode()
         self.assertIn('name="users"', html)
         self.assertNotIn('Fields hidden from everybody', html)
+
+
+class KeeperRemovesOwnersTest(AreaTestCase):
+    def test_a_keeper_removes_any_owner_even_the_last(self):
+        keeper = User.objects.create_superuser('keeper', 'k@example.com', 'x')
+        service.set_pin(keeper, GOOD_PIN)
+        enable_2fa(keeper)
+        areas.add_keeper(keeper, self.master)
+        area = self.make_area(owners=False)
+        areas.add_owner(area, self.owner1, self.master)
+        with self.assertRaises(ValidationError):
+            areas.remove_owner(area, self.owner1, self.owner1)  # an owner never removes the last one
+        admin_login(self.client, keeper)
+        response = self.client.post(reverse('plugins:netbox_user_pin:area', kwargs={'pk': area.pk}),
+                                    {'action': 'owner-remove', 'pk': self.owner1.pk})
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(area.owners.exists())
