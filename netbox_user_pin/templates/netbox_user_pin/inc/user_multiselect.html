@@ -1,8 +1,10 @@
 {% load i18n %}
 <div class="mb-2">
+  <div class="fw-bold mb-1">{% trans "Choose who to add" %}</div>
   <input type="search" class="form-control form-control-sm mb-1 pin-multi-search" placeholder="{% trans 'Search…' %}">
-  <select name="users" multiple size="7" class="form-select pin-multi">
-    {% for pk, label in choices %}<option value="{{ pk }}">{{ label }}</option>{% endfor %}
-  </select>
-  <div class="form-text">{% trans "Choose one or more (hold Ctrl or Shift)." %}</div>
+  <div class="border rounded p-2 pin-multi" style="max-height: 14rem; overflow-y: auto">
+    {% for pk, label in choices %}<div class="form-check pin-multi-item"><input class="form-check-input" type="checkbox" name="users" value="{{ pk }}" id="{{ uid|default:'u' }}-{{ pk }}"><label class="form-check-label" for="{{ uid|default:'u' }}-{{ pk }}">{{ label }}</label></div>
+    {% empty %}<span class="text-secondary small">{% trans "Nobody to choose from." %}</span>{% endfor %}
+  </div>
+  <div class="form-text">{% trans "Tick one or more users." %}</div>
 </div>

@@ -116,10 +116,14 @@ def _all_user_choices():
 
 
 def _owner_choices():
+    """Every active account with what he meets for owning an area (the eligible ones first)."""
     from django.contrib.auth import get_user_model
-    from .models import PolicyKeeper
-    queryset = roles.manager_users(include_superusers=False).exclude(pk__in=PolicyKeeper.objects.values('user_id'))
-    return _user_choices(queryset)
+    rows = []
+    for user in get_user_model().objects.filter(is_active=True).order_by('username'):
+        checks = areas.owner_requirements(user)
+        rows.append({'pk': user.pk, 'label': service.user_label(user), 'checks': checks,
+                     'ok': all(ok for _text, ok in checks)})
+    return sorted(rows, key=lambda r: (not r['ok'], r['label'].lower()))
 
 
 def _status(area):

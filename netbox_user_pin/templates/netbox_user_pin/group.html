@@ -36,7 +36,7 @@
           <form method="post" class="d-inline">{% csrf_token %}<input type="hidden" name="action" value="revoke"><input type="hidden" name="pk" value="{{ g.pk }}"><button type="submit" class="btn btn-link btn-sm p-0 text-white" title="{% trans 'Remove from the group' %}">×</button></form>{% endif %}</span>{% empty %}<span class="text-secondary">{% trans "No members." %}</span>{% endfor %}</div>
         {% if can_manage %}
         <form method="post" class="d-flex flex-column gap-2">{% csrf_token %}<input type="hidden" name="action" value="member-add">
-          {% include 'netbox_user_pin/inc/user_multiselect.html' with choices=user_choices %}
+          {% include 'netbox_user_pin/inc/user_multiselect.html' with choices=user_choices uid='m' %}
           <div><button class="btn btn-primary" type="submit"><i class="mdi mdi-account-plus"></i> {% trans "Add users to the group" %}</button></div>
         </form>
         {% endif %}
@@ -49,11 +49,15 @@
   <summary class="card-header" style="cursor: pointer"><h2 class="card-title mb-0 d-inline"><i class="mdi mdi-form-textbox"></i> {% trans "Fields" %}</h2> <span class="text-secondary small ms-2">{% trans "Click to set which fields the group sees or changes." %}</span></summary>
   <form method="post">{% csrf_token %}<input type="hidden" name="action" value="fields">
     <div class="card-body border-bottom">
-      <div class="alert alert-info small mb-0"><strong>{% trans "What the switches mean" %}</strong><br>
-        <strong>{% trans "By rights" %}</strong> – {% trans "the field follows the rights of the group: a group that may add or change also writes the field, a group that may only view only reads it." %}<br>
-        <strong>{% trans "Hidden" %}</strong> – {% trans "the group does not see the field." %}
-        <strong>{% trans "Read only" %}</strong> – {% trans "it sees the field but cannot change it." %}
-        <strong>{% trans "Read and write" %}</strong> – {% trans "it sees and changes the field." %}</div>
+      <div class="alert alert-info small mb-0 d-block">
+        <div class="fw-bold mb-1">{% trans "What the switches mean" %}</div>
+        <ul class="mb-0 ps-3">
+          <li><strong>{% trans "By rights" %}</strong> – {% trans "the field follows the rights of the group: a group that may add or change also writes the field, a group that may only view only reads it." %}</li>
+          <li><strong>{% trans "Hidden" %}</strong> – {% trans "the group does not see the field." %}</li>
+          <li><strong>{% trans "Read only" %}</strong> – {% trans "it sees the field but cannot change it." %}</li>
+          <li><strong>{% trans "Read and write" %}</strong> – {% trans "it sees and changes the field." %}</li>
+        </ul>
+      </div>
     </div>
     <div class="card-body border-bottom d-flex flex-wrap gap-2 align-items-center">
       <input type="search" class="form-control w-auto" style="min-width: 16rem" id="pin-field-search" placeholder="{% trans 'Search a field…' %}">
@@ -64,21 +68,19 @@
       <button type="button" class="btn btn-sm btn-outline-success pin-bulk" data-mode="write">{% trans "Read and write" %}</button>
     </div>
     <div class="card-body">
-      <div class="row row-cols-1 row-cols-xl-2 g-2" id="pin-fields">
+      <div class="list-group" id="pin-fields">
         {% for row in rows %}
-        <div class="col pin-field-row">
-          <div class="border rounded p-2 h-100">
-            <div class="mb-1"><strong>{{ row.label }}</strong> {% if row.kind == 'custom' %}<span class="badge text-bg-cyan">{% trans "custom field" %}</span>{% endif %} <code class="small text-secondary">{{ row.key }}</code></div>
-            <div class="btn-group btn-group-sm flex-wrap" role="group">
-              <input type="radio" class="btn-check" name="mode__{{ row.key }}" id="m{{ forloop.counter }}-d" value="default" autocomplete="off" {% if row.mode == 'default' %}checked{% endif %}><label class="btn btn-outline-secondary" for="m{{ forloop.counter }}-d">{% trans "By rights" %}</label>
-              <input type="radio" class="btn-check" name="mode__{{ row.key }}" id="m{{ forloop.counter }}-h" value="hidden" autocomplete="off" {% if row.mode == 'hidden' %}checked{% endif %}><label class="btn btn-outline-danger" for="m{{ forloop.counter }}-h">{% trans "Hidden" %}</label>
-              <input type="radio" class="btn-check" name="mode__{{ row.key }}" id="m{{ forloop.counter }}-r" value="read" autocomplete="off" {% if row.mode == 'read' %}checked{% endif %}><label class="btn btn-outline-warning" for="m{{ forloop.counter }}-r">{% trans "Read only" %}</label>
-              <input type="radio" class="btn-check" name="mode__{{ row.key }}" id="m{{ forloop.counter }}-w" value="write" autocomplete="off" {% if row.mode == 'write' %}checked{% endif %}><label class="btn btn-outline-success" for="m{{ forloop.counter }}-w">{% trans "Read and write" %}</label>
-            </div>
-            {% if row.kind == 'custom' %}<input type="text" class="form-control form-control-sm mt-2" name="contains__{{ row.key }}" value="{{ row.contains }}" maxlength="200" placeholder="{% trans 'values must include (optional)' %}">{% endif %}
+        <div class="list-group-item pin-field-row d-flex flex-wrap align-items-center gap-3">
+          <div style="min-width: 14rem; flex: 1 1 14rem"><strong>{{ row.label }}</strong> {% if row.kind == 'custom' %}<span class="badge text-bg-cyan">{% trans "custom field" %}</span>{% endif %}<div><code class="small text-secondary">{{ row.key }}</code></div></div>
+          <div class="btn-group btn-group-sm" role="group">
+            <input type="radio" class="btn-check" name="mode__{{ row.key }}" id="m{{ forloop.counter }}-d" value="default" autocomplete="off" {% if row.mode == 'default' %}checked{% endif %}><label class="btn btn-outline-secondary" for="m{{ forloop.counter }}-d">{% trans "By rights" %}</label>
+            <input type="radio" class="btn-check" name="mode__{{ row.key }}" id="m{{ forloop.counter }}-h" value="hidden" autocomplete="off" {% if row.mode == 'hidden' %}checked{% endif %}><label class="btn btn-outline-danger" for="m{{ forloop.counter }}-h">{% trans "Hidden" %}</label>
+            <input type="radio" class="btn-check" name="mode__{{ row.key }}" id="m{{ forloop.counter }}-r" value="read" autocomplete="off" {% if row.mode == 'read' %}checked{% endif %}><label class="btn btn-outline-warning" for="m{{ forloop.counter }}-r">{% trans "Read only" %}</label>
+            <input type="radio" class="btn-check" name="mode__{{ row.key }}" id="m{{ forloop.counter }}-w" value="write" autocomplete="off" {% if row.mode == 'write' %}checked{% endif %}><label class="btn btn-outline-success" for="m{{ forloop.counter }}-w">{% trans "Read and write" %}</label>
           </div>
+          {% if row.kind == 'custom' %}<input type="text" class="form-control form-control-sm" style="max-width: 16rem" name="contains__{{ row.key }}" value="{{ row.contains }}" maxlength="200" placeholder="{% trans 'values must include (optional)' %}">{% endif %}
         </div>
-        {% empty %}<div class="col text-secondary">{% trans "No fields." %}</div>{% endfor %}
+        {% empty %}<div class="list-group-item text-secondary">{% trans "No fields." %}</div>{% endfor %}
       </div>
     </div>
     {% if can_manage %}<div class="card-body text-end"><button class="btn btn-primary" type="submit">{% trans "Save fields" %}</button></div>{% endif %}

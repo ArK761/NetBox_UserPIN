@@ -543,17 +543,29 @@ def _unique_key(name):
     return key
 
 
+def owner_requirements(user):
+    """[(text, ok)]: what an account needs to own an area; every line is met or it is what blocks him."""
+    plain = not (user.is_superuser or is_keeper(user))
+    role = roles.manager_users(include_superusers=False).filter(pk=user.pk).exists()
+    return [
+        (_('Is not a superuser or a protection keeper') if plain else
+         _('Is a superuser or a protection keeper (they are decided about)'), plain),
+        (_('Is a department head, a delegate or a CORE deputy') if role else
+         _('Is no department head, delegate or CORE deputy'), role),
+        (_('Has a PIN') if service.has_pin(user) else _('Has no PIN yet'), service.has_pin(user)),
+        (_('Has 2FA') if service.has_2fa(user) else _('Has no 2FA yet'), service.has_2fa(user)),
+    ]
+
+
 def _check_owner_role(user):
     """
     The owner decides about the superusers, so he is none of them (nor a protection keeper): a department head, a
-    delegate or a CORE deputy.
+    delegate or a CORE deputy, with a PIN and 2FA.
     """
-    if user.is_superuser or is_keeper(user):
-        raise ValidationError(_('%(user)s is a superuser or a protection keeper and cannot own an area: the owners '
-                                'are the ones who decide about them.') % {'user': user.username})
-    if not roles.is_manager(user):
-        raise ValidationError(_('%(user)s cannot own an area: an owner must hold a PIN role above a plain user '
-                                '(CORE, department head or delegate).') % {'user': user.username})
+    problems = [text for text, ok in owner_requirements(user) if not ok]
+    if problems:
+        raise ValidationError(_('%(user)s cannot own an area: %(why)s.') % {
+            'user': user.username, 'why': '; '.join(str(p).lower() for p in problems)})
 
 
 def _add_owner(area, user, actor, request):

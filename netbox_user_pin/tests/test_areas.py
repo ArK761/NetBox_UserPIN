@@ -37,6 +37,9 @@ class AreaTestCase(PinTestCase):
                                    status=RoleStatus.ACTIVE)
         PinDelegate.objects.create(user=self.owner2, role=RoleKind.DELEGATE, department=department,
                                    status=RoleStatus.ACTIVE)
+        for owner in (self.owner1, self.owner2):  # an owner decides with a PIN and 2FA
+            service.set_pin(owner, GOOD_PIN)
+            enable_2fa(owner)
         self.appadmin = User.objects.create_superuser('appadmin', 'a@example.com', 'x')  # superuser, not a network man
         settings = PinSettings.load()
         settings.areas_enabled = True
@@ -291,7 +294,6 @@ class RequestFlowTest(AreaTestCase):
         area = self.make_area()
         areas.request_access(area, self.appadmin, 'I need the devices')
         req = AreaRequest.objects.get()
-        service.set_pin(self.owner1, GOOD_PIN)
         secret = enable_2fa(self.owner1)
         self.login(self.owner1)
         self.client.post(reverse('plugins:netbox_user_pin:unlock'), {'pin': GOOD_PIN, 'scope': 'user-pin-admin'})
@@ -1079,9 +1081,11 @@ class SeveralOwnersTest(AreaTestCase):
         response = self.client.post(url, {'action': 'owner-add', 'users': [self.owner1.pk, self.owner2.pk, plain.pk]})
         self.assertEqual(response.status_code, 302)
         self.assertEqual({o.username for o in areas.owners(area)}, {'owner1', 'owner2'})  # the plain user was refused
-        admin_login(self.client, self.owner1)  # an owner sees the owners' form with the multi-select
+        admin_login(self.client, self.owner1)  # an owner sees the owners' form with the list of everybody
         html = self.client.get(url).content.decode()
         self.assertIn('name="users"', html)
+        self.assertIn('Has no PIN yet', html)  # the red ones show what blocks them
+        self.assertIn('Has 2FA', html)
         self.assertNotIn('Fields hidden from everybody', html)
 
 
@@ -1100,3 +1104,22 @@ class KeeperRemovesOwnersTest(AreaTestCase):
                                     {'action': 'owner-remove', 'pk': self.owner1.pk})
         self.assertEqual(response.status_code, 302)
         self.assertFalse(area.owners.exists())
+
+
+class OwnerRequirementsTest(AreaTestCase):
+    def test_what_blocks_an_owner_is_listed_and_enforced(self):
+        area = self.make_area(owners=False)
+        from netbox_user_pin.models import Department, PinDelegate, RoleKind, RoleStatus
+        head = User.objects.create_user('head', 'h@example.com')
+        PinDelegate.objects.create(user=head, role=RoleKind.HEAD, department=Department.objects.first(),
+                                   status=RoleStatus.ACTIVE)
+        checks = dict((str(text), ok) for text, ok in areas.owner_requirements(head))
+        self.assertEqual(checks['Is a department head, a delegate or a CORE deputy'], True)
+        self.assertEqual(checks['Has no PIN yet'], False)
+        self.assertEqual(checks['Has no 2FA yet'], False)
+        with self.assertRaises(ValidationError):
+            areas.add_owner(area, head, self.master)  # no PIN and no 2FA yet
+        service.set_pin(head, GOOD_PIN)
+        enable_2fa(head)
+        areas.add_owner(area, head, self.master)
+        self.assertEqual([u.username for u in areas.owners(area)], ['head'])

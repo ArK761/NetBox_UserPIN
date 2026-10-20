@@ -5783,6 +5783,46 @@ msgstr "pole vidí, ale nemôže ho zmeniť."
 msgid "it sees and changes the field."
 msgstr "pole vidí aj mení."
 
+msgid "Choose who to add"
+msgstr "Vyber, koho pridať"
+
+msgid "Nobody to choose from."
+msgstr "Nie je koho vybrať."
+
+msgid "Tick one or more users."
+msgstr "Zaškrtni jedného alebo viacerých používateľov."
+
+msgid "Is not a superuser or a protection keeper"
+msgstr "Nie je superuser ani správca ochrany"
+
+msgid "Is a superuser or a protection keeper (they are decided about)"
+msgstr "Je superuser alebo správca ochrany (o tých sa rozhoduje)"
+
+msgid "Is a department head, a delegate or a CORE deputy"
+msgstr "Je vedúci, delegát oddelenia alebo zástupca CORE"
+
+msgid "Is no department head, delegate or CORE deputy"
+msgstr "Nie je vedúci, delegát oddelenia ani zástupca CORE"
+
+msgid "Has a PIN"
+msgstr "Má PIN"
+
+msgid "Has no PIN yet"
+msgstr "Zatiaľ nemá PIN"
+
+msgid "Has 2FA"
+msgstr "Má 2FA"
+
+msgid "Has no 2FA yet"
+msgstr "Zatiaľ nemá 2FA"
+
+msgid "%(user)s cannot own an area: %(why)s."
+msgstr "%(user)s nemôže vlastniť oblasť: %(why)s."
+
+msgid "Green: may be an owner. Red: cannot, under him is what blocks him."
+msgstr ""
+"Zelený: smie byť vlastníkom. Červený: nesmie, pod ním je, čo mu v tom bráni."
+
 #~ msgid ""
 #~ "There is no other administrator or delegate with PIN and 2FA who could "
 #~ "confirm."

@@ -1,0 +1,19 @@
+{% load i18n %}
+<div class="mb-2">
+  <div class="fw-bold mb-1">{% trans "Choose who to add" %}</div>
+  <input type="search" class="form-control form-control-sm mb-1 pin-multi-search" placeholder="{% trans 'Search…' %}">
+  <div class="border rounded p-2 pin-multi" style="max-height: 22rem; overflow-y: auto">
+    {% for u in choices %}
+    <div class="pin-multi-item mb-2 {% if u.ok %}border-start border-3 border-success{% else %}border-start border-3 border-danger{% endif %} ps-2">
+      <div class="form-check">
+        <input class="form-check-input" type="checkbox" name="users" value="{{ u.pk }}" id="o-{{ u.pk }}" {% if not u.ok %}disabled{% endif %}>
+        <label class="form-check-label fw-bold {% if u.ok %}text-success{% else %}text-danger{% endif %}" for="o-{{ u.pk }}">{{ u.label }}</label>
+      </div>
+      <ul class="list-unstyled small ms-4 mb-0">
+        {% for text, ok in u.checks %}<li class="{% if ok %}text-success{% else %}text-danger{% endif %}"><i class="mdi {% if ok %}mdi-check{% else %}mdi-close{% endif %}"></i> {{ text }}</li>{% endfor %}
+      </ul>
+    </div>
+    {% empty %}<span class="text-secondary small">{% trans "Nobody to choose from." %}</span>{% endfor %}
+  </div>
+  <div class="form-text">{% trans "Green: may be an owner. Red: cannot, under him is what blocks him." %}</div>
+</div>

@@ -91,7 +91,7 @@
     </ul>
     {% if can_manage %}
     <form method="post" class="d-flex flex-column gap-2">{% csrf_token %}<input type="hidden" name="action" value="owner-add">
-      {% include 'netbox_user_pin/inc/user_multiselect.html' with choices=owner_choices %}
+      {% include 'netbox_user_pin/inc/owner_picker.html' with choices=owner_choices %}
       <div class="form-text mb-2">{{ owner_form.user.help_text }}</div>
       <div><button class="btn btn-primary" type="submit">{% trans "Add the owners" %}</button></div>
     </form>
