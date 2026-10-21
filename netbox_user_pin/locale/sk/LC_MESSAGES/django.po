@@ -5998,6 +5998,10 @@ msgstr ""
 "Niektorý typ objektu je citlivý alebo ho chráni iná oblasť: do tejto ho môže"
 " pridať iba ochranca."
 
+msgid ""
+"You do not administer any protected area. Here is what you are allowed."
+msgstr "Nespravujete žiadnu chránenú oblasť. Tu je to, čo máte povolené."
+
 #~ msgid ""
 #~ "There is no other administrator or delegate with PIN and 2FA who could "
 #~ "confirm."

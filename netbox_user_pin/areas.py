@@ -675,7 +675,11 @@ def check_perm(user, perm):
     area = area_for(app_label, model or None, package=app_label) if _cache['areas'] else None
     if area is None:
         if model and default_deny_blocks(user, app_label, model, app_label):
-            return False, None  # nothing allows it: no menu item, no button
+            # nothing allows it. The door (menu item) stays, so that the "request access" page can be reached;
+            # buttons do not, and the system apps (users, permissions, jobs ...) have no door at all
+            if action == 'view' and app_label not in SENSITIVE_APPS:
+                return None
+            return False, None
         return None
     rights = _memo_rights(user, area, f'{app_label}.{model}' if model else None)
     if not rights:
@@ -744,6 +748,15 @@ def _may_take(actor, area, target):
 
 def can_manage(actor, area):
     return _core_or_owner(actor, area)
+
+
+def administers_any(user):
+    """Does the user have anything to do on the pages of the protected areas (a keeper, a stand-in, an owner)?"""
+    if not getattr(user, 'is_authenticated', False):
+        return False
+    if is_keeper(user) or _stand_in(user):
+        return True
+    return any(is_owner(user, owner.area) for owner in AreaOwner.objects.filter(user=user).select_related('area'))
 
 
 def can_see(actor, area):

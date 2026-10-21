@@ -44,6 +44,12 @@ def _plugin_perm(user, perm):
     action, _underscore, model = codename.partition('_')
     if action != 'view':
         return None
+    if areas.keepers():  # with protection keepers a superuser is no PIN authority by being a superuser
+        if user.is_superuser and not roles.core_roles().filter(user=user).exists():
+            if model in ('userpin', 'pinevent'):
+                return roles.managed_departments(user).exists()
+            if model == 'pinsettings':
+                return False
     if model in ('userpin', 'pinevent'):
         return roles.is_manager(user)
     if model == 'pinsettings':

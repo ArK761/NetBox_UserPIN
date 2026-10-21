@@ -26,8 +26,13 @@ __all__ = ('GroupView', 'AccessRequestView', 'RequestDecideView', 'AreaFieldsVie
 class AreaViewMixin(LoginRequiredMixin, PinRequiredMixin):
     """Logged in, allowed to use a PIN and unlocked; 2FA (if the user has it) is asked once in a while only."""
     pin_scope = ADMIN_SCOPE
+    idle_to_access = False  # the overview page: whoever has nothing to administer is sent to what he may do
 
     def dispatch(self, request, *args, **kwargs):
+        if self.idle_to_access and request.user.is_authenticated and not areas.administers_any(request.user):
+            # nothing to administer: no PIN to set up, a pointer to what the user is allowed instead
+            messages.info(request, _('You do not administer any protected area. Here is what you are allowed.'))
+            return redirect('plugins:netbox_user_pin:my_access')
         if request.user.is_authenticated and (response := area_gate(request)) is not None:
             return response
         return super().dispatch(request, *args, **kwargs)
@@ -140,6 +145,7 @@ def _status(area):
 
 
 class AreaListView(AreaViewMixin, View):
+    idle_to_access = True
     template_name = 'netbox_user_pin/areas.html'
 
     def _render(self, request, form=None):

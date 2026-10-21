@@ -361,6 +361,7 @@ class CustomGrantTest(AreaTestCase):
 class TwoFactorWindowTest(AreaTestCase):
     def test_window_expires_with_the_setting(self):
         from datetime import timedelta
+        self.make_area()
         admin_login(self.client, self.owner1)
         request = self.client.get(reverse('plugins:netbox_user_pin:areas')).wsgi_request
         self.assertTrue(service.has_recent_2fa(request))
@@ -632,6 +633,20 @@ class DefaultDenyTest(AreaTestCase):
         self.assertFalse(master.has_perm('users.view_user'))  # no menu item, no button
         self.login(master, unlock=False)
         self.assertEqual(self.client.get('/core/background-queues/').status_code, 403)
+
+    def test_nobody_special_gets_no_pin_prompt_and_keeps_the_doors(self):
+        self.add_keeper()
+        areas.clear_cache()
+        plain = User.objects.create_user('plainsu', 'ps@example.com', is_superuser=True)
+        from netbox_user_pin import area_guard
+        plain = User.objects.get(pk=plain.pk)
+        area_guard.arm_user(plain)
+        self.assertTrue(plain.has_perm('dcim.view_site'))  # the door stays: the page behind it explains and offers a request
+        self.assertFalse(plain.has_perm('dcim.add_site'))
+        self.assertFalse(plain.has_perm('netbox_user_pin.view_userpin'))  # no administration of PIN for him
+        self.login(plain, unlock=False)
+        response = self.client.get(reverse('plugins:netbox_user_pin:areas'))
+        self.assertRedirects(response, reverse('plugins:netbox_user_pin:my_access'), fetch_redirect_response=False)
 
     def test_owner_cannot_take_sensitive_or_foreign_types_and_master_cannot_manage_with_keepers(self):
         area = self.make_area(targets=('dcim.device',))
