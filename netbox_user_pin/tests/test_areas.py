@@ -1179,6 +1179,15 @@ class RowConditionsTest(AreaTestCase):
         query = areas.row_filter(user, self.area, 'dcim', 'device')
         return sorted(self.Device.objects.filter(query).values_list('name', flat=True))
 
+    def test_superuser_member_sees_only_matching_rows_through_restrict(self):
+        boss = User.objects.create_user('boss', 'b@example.com', is_superuser=True)
+        areas.add_member(self.group, boss, None, self.owner1)
+        areas.add_group_condition(self.group, self.owner1, 'name', 'contains', ['agg'])
+        areas.clear_cache()
+        boss = User.objects.get(pk=boss.pk)
+        self.assertEqual(sorted(self.Device.objects.restrict(boss, 'view').values_list('name', flat=True)),
+                         ['AGG_01', 'AGG_02'])
+
     def test_conditions_is_is_not_contains_starts_with_is_one_of(self):
         self.assertEqual(self.names(), ['AGG_01', 'AGG_02', 'PRINTER_1'])  # no condition: everything
         areas.add_group_condition(self.group, self.owner1, 'role', 'eq', [str(self.role1.pk)])
