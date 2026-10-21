@@ -61,6 +61,20 @@ DEFAULT_DENY_EXEMPT = frozenset({
     'extras.bookmark', 'extras.notification', 'extras.notificationgroup', 'extras.subscription', 'extras.dashboard',
     'users.userconfig', 'users.token',
 })
+# ... and for each of them the field of its owner: outside of the protected areas everybody (a superuser included,
+# the protection keepers excepted) sees and changes only their own rows of these types.
+OWN_ROWS = {
+    'extras.bookmark': 'user', 'extras.notification': 'user', 'extras.subscription': 'user',
+    'extras.dashboard': 'user', 'users.userconfig': 'user', 'users.token': 'user',
+}
+
+
+def own_rows_only(user, app_label, model):
+    """The field by which the rows of this type are narrowed to the user's own ones, or None."""
+    field = OWN_ROWS.get(f'{app_label}.{model}')
+    if field and default_deny_active() and not is_keeper(user):
+        return field
+    return None
 
 
 #

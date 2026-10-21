@@ -618,6 +618,18 @@ class DefaultDenyTest(AreaTestCase):
     def add_keeper(self):
         return areas.add_keeper(self.keeper, self.master)
 
+    @override_settings(API_TOKEN_PEPPERS={1: 'x' * 50})
+    def test_own_rows_only_outside_areas(self):
+        from users.models import Token
+        Token.objects.create(user=self.master, description='mine')
+        Token.objects.create(user=self.plain, description='theirs')
+        self.assertEqual(Token.objects.restrict(self.master, 'view').count(), Token.objects.count())  # no keeper
+        self.add_keeper()
+        areas.clear_cache()
+        self.assertEqual(list(Token.objects.restrict(self.master, 'view').values_list('user__username', flat=True)),
+                         ['master'])
+        self.assertEqual(Token.objects.restrict(self.keeper, 'view').count(), Token.objects.count())
+
     def test_keeper_needs_pin_and_2fa(self):
         with self.assertRaises(ValidationError):
             areas.add_keeper(self.plain, self.master)

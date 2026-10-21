@@ -320,7 +320,11 @@ def install():
             meta = self.model._meta
             area = areas.area_for(meta.app_label, meta.model_name, package=meta.app_label)
             if area is None:
-                return original(self, user, action)
+                result = original(self, user, action)
+                field = areas.own_rows_only(user, meta.app_label, meta.model_name)
+                if field and getattr(user, 'is_authenticated', False):
+                    return result.filter(**{field: user})
+                return result
             query = areas.row_filter(user, area, meta.app_label, meta.model_name, action)
             if query is None:
                 return self.none()
