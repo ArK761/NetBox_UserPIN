@@ -5949,6 +5949,9 @@ msgstr "Viac hodnôt: oddeľ ich čiarkou."
 msgid "Add condition"
 msgstr "Pridať podmienku"
 
+msgid "This field cannot be compared by a text."
+msgstr "Toto pole sa nedá porovnať textom."
+
 #~ msgid ""
 #~ "There is no other administrator or delegate with PIN and 2FA who could "
 #~ "confirm."

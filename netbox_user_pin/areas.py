@@ -407,9 +407,21 @@ def _spec_q(spec):
     query = Q()
     for condition in spec:
         lookup, negated = ROW_OPS[condition['op']]
-        part = Q(**{f"{condition['field']}__{lookup}": condition['value']})
+        lookup = condition.get('lookup') or lookup
+        part = Q(**{f"{condition.get('path') or condition['field']}__{lookup}": condition['value']})
         query &= ~part if negated else part
     return query
+
+
+def _name_field(model):
+    """The field by which people call the objects of a model: name, label, slug ..."""
+    for candidate in ('name', 'label', 'slug', 'model', 'title'):
+        try:
+            model._meta.get_field(candidate)
+            return candidate
+        except Exception:  # noqa: BLE001 - no such field
+            continue
+    return None
 
 
 def filter_fields(target):
@@ -464,10 +476,24 @@ def _clean_condition(target, field, op, values):
         return model_field.to_python(text)
 
     try:
-        converted = [convert(v) for v in values]
+        extra = {}
+        if model_field.is_relation:
+            # a relation is chosen by its number from a list, or written as text: then the name of the related object
+            by_name = lookup in ('icontains', 'istartswith') or not all(v.lstrip('-').isdigit() for v in values)
+            if by_name:
+                name = _name_field(model_field.related_model)
+                if name is None:
+                    raise ValidationError(_('This field cannot be compared by a text.'))
+                extra = {'path': f'{field}__{name}', 'lookup': 'iexact' if lookup == 'exact' else lookup}
+                converted = list(values)
+            else:
+                converted = [convert(v) for v in values]
+        else:
+            converted = [convert(v) for v in values]
         value = converted if multi else converted[0]
-        condition = {'field': field, 'op': op, 'value': [str(v) for v in value] if multi else str(value)}
-        model._default_manager.filter(**{f'{field}__{lookup}': value}).query  # noqa: B018
+        condition = {'field': field, 'op': op, 'value': [str(v) for v in value] if multi else str(value), **extra}
+        model._default_manager.filter(**{f"{extra.get('path') or field}__{extra.get('lookup') or lookup}": value}
+                                      ).query  # noqa: B018
     except (ValidationError, FieldError, ValueError, TypeError) as exc:
         raise ValidationError(_('The condition is not valid: %(error)s') % {'error': exc})
     return condition

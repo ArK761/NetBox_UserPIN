@@ -1199,10 +1199,18 @@ class RowConditionsTest(AreaTestCase):
         areas.remove_group_condition(self.group, self.owner1, 0)
         areas.add_group_condition(self.group, self.owner1, 'role', 'nin', [str(self.role1.pk), str(self.role2.pk)])
         self.assertEqual(self.names(), [])
+        areas.remove_group_condition(self.group, self.owner1, 0)
+        # a relation by a text: the name of the related object, whatever is written
+        areas.add_group_condition(self.group, self.owner1, 'role', 'contains', ['swit'])
+        self.assertEqual(self.names(), ['AGG_01', 'PRINTER_1'])
+        areas.remove_group_condition(self.group, self.owner1, 0)
+        areas.add_group_condition(self.group, self.owner1, 'role', 'eq', ['router'])
+        self.assertEqual(self.names(), ['AGG_02'])
+        self.assertIn('Role is router', [text for _i, text in areas.group_conditions(self.group)])
 
     def test_invalid_conditions_and_permissions(self):
         for field, op, values in (('nonsense', 'eq', ['x']), ('name', 'nonsense', ['x']), ('name', 'eq', []),
-                                  ('role', 'eq', ['not a number'])):
+                                  ('site', 'startswith', [''])):
             with self.assertRaises(ValidationError):
                 areas.add_group_condition(self.group, self.owner1, field, op, values)
         with self.assertRaises(PermissionDenied):
