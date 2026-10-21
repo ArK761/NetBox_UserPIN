@@ -195,15 +195,16 @@ def area_for(app_label=None, model=None, package=None):
     """The active area protecting this app / object type / plugin package, or None."""
     if app_label in NEVER or package in NEVER:
         return None
+    broad = None
     for area in active_areas():
         for target in targets_of(area):
             if '.' in target:
                 target_app, target_model = target.split('.', 1)
                 if app_label == target_app and model == target_model:
-                    return area
-            elif target in (app_label, package):
-                return area
-    return None
+                    return area  # an area of the very object type wins over one of its whole app
+            elif target in (app_label, package) and broad is None:
+                broad = area
+    return broad
 
 
 #
@@ -408,7 +409,15 @@ def _spec_q(spec):
     for condition in spec:
         lookup, negated = ROW_OPS[condition['op']]
         lookup = condition.get('lookup') or lookup
-        part = Q(**{f"{condition.get('path') or condition['field']}__{lookup}": condition['value']})
+        path = condition.get('path') or condition['field']
+        if condition.get('ci') and condition['op'] in ('in', 'nin'):  # a text: capital letters do not matter
+            part = Q()
+            for value in condition['value']:
+                part |= Q(**{f'{path}__iexact': value})
+        elif condition.get('ci') and condition['op'] in ('eq', 'ne'):
+            part = Q(**{f'{path}__iexact': condition['value']})
+        else:
+            part = Q(**{f"{path}__{lookup}": condition['value']})
         query &= ~part if negated else part
     return query
 
@@ -492,6 +501,8 @@ def _clean_condition(target, field, op, values):
             converted = [convert(v) for v in values]
         value = converted if multi else converted[0]
         condition = {'field': field, 'op': op, 'value': [str(v) for v in value] if multi else str(value), **extra}
+        if not model_field.is_relation and model_field.get_internal_type() in ('CharField', 'TextField', 'SlugField'):
+            condition['ci'] = True  # texts are compared without regard to the case
         model._default_manager.filter(**{f"{extra.get('path') or field}__{extra.get('lookup') or lookup}": value}
                                       ).query  # noqa: B018
     except (ValidationError, FieldError, ValueError, TypeError) as exc:

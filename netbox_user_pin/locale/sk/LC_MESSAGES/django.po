@@ -5964,6 +5964,13 @@ msgstr ""
 "keď je podmienok viac, musia platiť všetky. Podmienku pridáš v zozname polí "
 "nižšie: tlačidlom Riadky pri poli."
 
+msgid ""
+"This user has another access without a row condition, so he sees all the "
+"records."
+msgstr ""
+"Tento používateľ má aj iný prístup bez podmienky na riadky, preto vidí "
+"všetky záznamy."
+
 #~ msgid ""
 #~ "There is no other administrator or delegate with PIN and 2FA who could "
 #~ "confirm."

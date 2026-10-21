@@ -21,10 +21,29 @@ from django.utils import translation
 from django.utils.translation import gettext as _
 from django.utils.http import urlencode
 
-from . import areas, service
+from . import areas, roles, service
 from .models import AreaRequest, AreaRequestStatus, PinEventAction
 
 logger = logging.getLogger('netbox_user_pin')
+
+def _plugin_perm(user, perm):
+    """
+    The administration of the plugin follows the roles in the PIN, not the NetBox permissions of the user: CORE and the
+    heads / delegates of departments see Users, Departments, Approvals and the Audit log; CORE the Settings and Mail.
+    ``None``: not a permission of this kind (NetBox decides).
+    """
+    app_label, _dot, codename = perm.partition('.')
+    if app_label != 'netbox_user_pin':
+        return None
+    action, _underscore, model = codename.partition('_')
+    if action != 'view':
+        return None
+    if model in ('userpin', 'pinevent'):
+        return roles.is_manager(user)
+    if model == 'pinsettings':
+        return roles.is_core(user)
+    return None
+
 
 def arm_user(user):
     """
@@ -36,6 +55,9 @@ def arm_user(user):
     original = user.has_perm
 
     def has_perm(perm, obj=None):
+        decided = _plugin_perm(user, perm)
+        if decided is not None:
+            return decided
         verdict = areas.check_perm(user, perm)
         if verdict is None:
             return original(perm, obj)
@@ -49,7 +71,7 @@ def arm_user(user):
 def arm(request):
     """Arm the request's user while an area is active."""
     user = getattr(request, 'user', None)
-    if user is None or not areas.active_areas():
+    if user is None:
         return
     try:
         if isinstance(user, SimpleLazyObject):

@@ -668,6 +668,7 @@ class GroupView(AreaViewMixin, View):
         return render(request, self.template_name, {
             'area': area, 'group': group, 'target': target, 'target_label': _target_label(target),
             'members': areas.group_members(group), 'user_choices': _all_user_choices(),
+            'wide_members': self._wide_members(area, group),
             'rights': [(r, areas.right_label(area, r)) for r in areas.rights_available(area)],
             'rights_set': set(group.rights),
             'tabs': [dict(t, allowed=group.tabs is None or t['name'] in group.tabs) for t in tabs if not t['plugin']],
@@ -677,6 +678,17 @@ class GroupView(AreaViewMixin, View):
             'can_manage': areas.can_manage(request.user, area) or areas._may_grant(request.user, area),
             'settings': service.get_settings(),
         })
+
+    @staticmethod
+    def _wide_members(area, group):
+        """Members who see all the records anyway: another access of theirs has no row condition."""
+        result = set()
+        for grant in areas.group_members(group):
+            for other in areas.active_grants(grant.user, area, group.target):
+                if other.profile_id != group.pk and 'view' in other.profile.rights and \
+                        not (other.profile.filters or {}).get(group.target):
+                    result.add(grant.user_id)
+        return result
 
     def get(self, request, pk, gid):
         area, group = self._objects(request, pk, gid)

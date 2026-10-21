@@ -1208,6 +1208,30 @@ class RowConditionsTest(AreaTestCase):
         self.assertEqual(self.names(), ['AGG_02'])
         self.assertIn('Role is router', [text for _i, text, _f in areas.group_conditions(self.group)])
 
+    def test_texts_ignore_the_case_and_contains_means_anywhere_in_the_name(self):
+        areas.add_group_condition(self.group, self.owner1, 'name', 'contains', ['gg_0'])  # in the middle, small letters
+        self.assertEqual(self.names(), ['AGG_01', 'AGG_02'])
+        areas.remove_group_condition(self.group, self.owner1, 0)
+        areas.add_group_condition(self.group, self.owner1, 'name', 'eq', ['agg_01'])
+        self.assertEqual(self.names(), ['AGG_01'])
+        areas.remove_group_condition(self.group, self.owner1, 0)
+        areas.add_group_condition(self.group, self.owner1, 'name', 'in', ['agg_01', 'printer_1'])
+        self.assertEqual(self.names(), ['AGG_01', 'PRINTER_1'])
+
+    def test_a_member_with_another_access_without_a_condition_is_marked(self):
+        areas.add_group_condition(self.group, self.owner1, 'name', 'contains', ['agg'])
+        areas.grant_custom(self.area, self.user, 'dcim.device', ['view'], None, self.owner1)  # sees everything
+        self.assertEqual(self.names(), ['AGG_01', 'AGG_02', 'PRINTER_1'])  # one access without a condition shows all
+        admin_login(self.client, self.owner1)
+        html = self.client.get(reverse('plugins:netbox_user_pin:group', kwargs={
+            'pk': self.area.pk, 'gid': self.group.pk})).content.decode()
+        self.assertIn('mdi-alert', html)
+
+    def test_an_area_of_the_type_wins_over_one_of_the_whole_app(self):
+        broad = areas.create_area('All of DCIM', ['dcim'], [], self.master)
+        self.assertEqual(areas.area_for('dcim', 'device', package='dcim'), self.area)  # the type-level one
+        self.assertEqual(areas.area_for('dcim', 'site', package='dcim'), broad)
+
     def test_invalid_conditions_and_permissions(self):
         for field, op, values in (('nonsense', 'eq', ['x']), ('name', 'nonsense', ['x']), ('name', 'eq', []),
                                   ('site', 'startswith', [''])):
@@ -1231,3 +1255,25 @@ class RowConditionsTest(AreaTestCase):
         self.assertIn('form="rd-0"', html)  # the condition can be removed
         self.client.post(url, {'action': 'rule-delete', 'index': 0})
         self.assertNotIn('Role is not Switch', self.client.get(url).content.decode())
+
+
+class PluginMenuByRolesTest(AreaTestCase):
+    def test_the_administration_follows_the_roles_in_the_pin_not_the_netbox_permissions(self):
+        from django.contrib.contenttypes.models import ContentType
+        from users.models import ObjectPermission
+
+        from netbox_user_pin.models import UserPin
+        user = User.objects.create_user('netboxadmin', 'n@example.com')
+        permission = ObjectPermission.objects.create(name='all of the PIN', actions=['view'])
+        permission.object_types.add(ContentType.objects.get_for_model(UserPin))
+        permission.users.add(user)
+        self.assertTrue(user.has_perm('netbox_user_pin.view_userpin'))  # NetBox alone would show the menu
+        area_guard.arm_user(user)
+        self.assertFalse(user.has_perm('netbox_user_pin.view_userpin'))  # no role in the PIN: no administration
+        head = User.objects.get(pk=self.owner1.pk)  # a department head
+        area_guard.arm_user(head)
+        self.assertTrue(head.has_perm('netbox_user_pin.view_userpin'))
+        self.assertFalse(head.has_perm('netbox_user_pin.view_pinsettings'))  # the settings are for CORE
+        master = User.objects.get(pk=self.master.pk)
+        area_guard.arm_user(master)
+        self.assertTrue(master.has_perm('netbox_user_pin.view_pinsettings'))
