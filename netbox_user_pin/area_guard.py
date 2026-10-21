@@ -145,6 +145,15 @@ def _overview(user, blocked):
     return {'entries': entries, 'via': via}
 
 
+def _scope_hint(overview, blocked):
+    """The text offered in "What exactly" of the request: what the user needs to see the blocked type as a value."""
+    if not overview['via'] or not blocked:
+        return ''
+    via = overview['via'][0]
+    return _('Show %(blocked)s - the value of the field %(field)s of %(type)s') % {
+        'blocked': areas.target_label(blocked), 'field': via['field'], 'type': via['type']}
+
+
 def denied_response(request, area, right='view', target=None, tab_label=None):
     """``area=None``: refused by "deny everything not allowed"."""
     user = request.user
@@ -158,7 +167,7 @@ def denied_response(request, area, right='view', target=None, tab_label=None):
                 **_request_context(request, None, right, target), 'tab_label': tab_label,
                 'pending': AreaRequest.objects.filter(user=user, target=target or '', status=AreaRequestStatus.PENDING
                                                       ).first() if getattr(user, 'is_authenticated', False) else None,
-                'overview': _overview(user, target),
+                'overview': (overview := _overview(user, target)), 'scope_hint': _scope_hint(overview, target),
             }, status=403)
             response.render() if hasattr(response, 'render') else None
         return response
@@ -173,7 +182,8 @@ def denied_response(request, area, right='view', target=None, tab_label=None):
             'area': area, 'right': right, 'pending': pending, 'owners': areas.owners(area),
             'has_owners': True,
             'next': request.get_full_path(), **_request_context(request, area, right, target),
-            'tab_label': tab_label, 'overview': _overview(user, target),
+            'tab_label': tab_label, 'overview': (overview := _overview(user, target)),
+            'scope_hint': _scope_hint(overview, target),
         }, status=403)
         response.render() if hasattr(response, 'render') else None
     return response

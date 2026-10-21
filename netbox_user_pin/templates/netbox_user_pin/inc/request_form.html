@@ -4,6 +4,6 @@
   <div class="mb-3"><strong>{% trans "What do you need?" %}</strong><br>
     {% for r, label in rights %}<label class="me-3"><input type="checkbox" class="form-check-input" name="rights" value="{{ r }}" {% if r == right %}checked{% endif %}> {{ label }}</label>{% endfor %}</div>
   <div class="mb-3"><label class="form-label">{% trans "Why do you need the access?" %} *</label><input class="form-control" type="text" name="note" maxlength="200" minlength="5" required></div>
-  <div class="mb-3"><label class="form-label">{% trans "What exactly (section, group, object …)" %}</label><input class="form-control" type="text" name="scope" maxlength="200" value="{% if tab_label %}{% trans "Tab" %}: {{ tab_label }}{% endif %}"></div>
+  <div class="mb-3"><label class="form-label">{% trans "What exactly (section, group, object …)" %}</label><input class="form-control" type="text" name="scope" maxlength="200" value="{% if tab_label %}{% trans "Tab" %}: {{ tab_label }}{% elif scope_hint %}{{ scope_hint }}{% endif %}"></div>
   <button class="btn btn-primary" type="submit"><i class="mdi mdi-email-fast"></i> {% trans "Request access" %}</button>
 </form>

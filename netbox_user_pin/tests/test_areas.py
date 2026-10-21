@@ -1150,3 +1150,6 @@ class DeniedOverviewTest(AreaTestCase):
         self.assertIn('Technici', html)
         self.assertIn('Role', html)  # the field that is allowed
         self.assertIn('is not allowed to you', html)  # Device role is only the value of the Role field
+        self.assertIn('Ask the administrator', html)
+        self.assertIn('Show DCIM &gt; Device role', html)  # offered in the request
+        self.assertLess(html.index('What you are allowed'), html.index('Access denied'))  # the overview is on top

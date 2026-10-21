@@ -5862,6 +5862,17 @@ msgstr ""
 "(toto pole máte v skupine povolené); jeho vlastná stránka (zoznam, detail) "
 "nie je súčasťou vášho nastavenia."
 
+msgid ""
+"Ask the administrator to set the permissions at least to the level where the"
+" list of the object type is shown (its name at least) and then its fields."
+msgstr ""
+"Požiadaj správcu, aby nastavenie povolil aspoň na úrovni, na ktorej sa "
+"zobrazí zoznam tohto typu objektu (aspoň jeho názov) a potom jeho príslušné "
+"polia."
+
+msgid "Show %(blocked)s - the value of the field %(field)s of %(type)s"
+msgstr "Zobraziť %(blocked)s – hodnotu poľa %(field)s v objekte %(type)s"
+
 #~ msgid ""
 #~ "There is no other administrator or delegate with PIN and 2FA who could "
 #~ "confirm."
