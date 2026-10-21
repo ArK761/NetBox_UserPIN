@@ -5952,6 +5952,18 @@ msgstr "Pridať podmienku"
 msgid "This field cannot be compared by a text."
 msgstr "Toto pole sa nedá porovnať textom."
 
+msgid "Show only the records where this field…"
+msgstr "Zobraziť len záznamy, kde toto pole…"
+
+msgid ""
+"Which records of this object type the group sees. Without a condition it "
+"sees all of them; several conditions must all hold. Add a condition in the "
+"list of fields below: the Rows button of the field."
+msgstr ""
+"Ktoré záznamy tohto typu objektu skupina vidí. Bez podmienky vidí všetky; "
+"keď je podmienok viac, musia platiť všetky. Podmienku pridáš v zozname polí "
+"nižšie: tlačidlom Riadky pri poli."
+
 #~ msgid ""
 #~ "There is no other administrator or delegate with PIN and 2FA who could "
 #~ "confirm."

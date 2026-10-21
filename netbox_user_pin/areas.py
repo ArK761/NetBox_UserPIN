@@ -511,11 +511,11 @@ def condition_text(target, condition):
 
 
 def group_conditions(group):
-    """[(index, text)] of the row conditions of a group (for its object type)."""
+    """[(index, text, field)] of the row conditions of a group (for its object type)."""
     spec = (group.filters or {}).get(group.target) or []
     if isinstance(spec, dict):
-        return [(i, f'{k} = {v}') for i, (k, v) in enumerate(spec.items())]
-    return [(i, condition_text(group.target, c)) for i, c in enumerate(spec)]
+        return [(i, f'{k} = {v}', '') for i, (k, v) in enumerate(spec.items())]
+    return [(i, condition_text(group.target, c), c['field']) for i, c in enumerate(spec)]
 
 
 def add_group_condition(group, actor, field, op, values, request=None):

@@ -1206,7 +1206,7 @@ class RowConditionsTest(AreaTestCase):
         areas.remove_group_condition(self.group, self.owner1, 0)
         areas.add_group_condition(self.group, self.owner1, 'role', 'eq', ['router'])
         self.assertEqual(self.names(), ['AGG_02'])
-        self.assertIn('Role is router', [text for _i, text in areas.group_conditions(self.group)])
+        self.assertIn('Role is router', [text for _i, text, _f in areas.group_conditions(self.group)])
 
     def test_invalid_conditions_and_permissions(self):
         for field, op, values in (('nonsense', 'eq', ['x']), ('name', 'nonsense', ['x']), ('name', 'eq', []),
@@ -1219,10 +1219,15 @@ class RowConditionsTest(AreaTestCase):
     def test_the_page_lists_adds_and_removes_conditions(self):
         admin_login(self.client, self.owner1)
         url = reverse('plugins:netbox_user_pin:group', kwargs={'pk': self.area.pk, 'gid': self.group.pk})
+        html = self.client.get(url).content.decode()
+        self.assertIn('pin-rule-panel', html)  # the condition is added with the field, in the list of fields
+        self.assertIn('data-field="role"', html)
         response = self.client.post(url, {'action': 'rule-add', 'field': 'role', 'op': 'ne', 'values': [self.role1.pk]})
         self.assertEqual(response.status_code, 302, response.content[:300])
+        self.assertTrue(response['Location'].endswith('#pin-fields-box'))
         html = self.client.get(url).content.decode()
         self.assertIn('Role is not Switch', html)
         self.assertIn('pin-filter-fields', html)
+        self.assertIn('form="rd-0"', html)  # the condition can be removed
         self.client.post(url, {'action': 'rule-delete', 'index': 0})
         self.assertNotIn('Role is not Switch', self.client.get(url).content.decode())

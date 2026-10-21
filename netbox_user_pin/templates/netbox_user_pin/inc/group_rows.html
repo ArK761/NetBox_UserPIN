@@ -2,49 +2,9 @@
 <div class="card mt-3">
   <h2 class="card-header"><i class="mdi mdi-filter-outline"></i> {% trans "Rows" %}</h2>
   <div class="card-body">
-    <p class="text-secondary small">{% trans "Which records of this object type the group sees. Without a condition it sees all of them. When there are several conditions, all of them must hold." %}</p>
+    <p class="text-secondary small mb-2">{% trans "Which records of this object type the group sees. Without a condition it sees all of them; several conditions must all hold. Add a condition in the list of fields below: the Rows button of the field." %}</p>
     {% for index, text in conditions %}
-    <div class="d-flex align-items-center gap-2 mb-1"><span class="badge text-bg-blue fs-6">{{ text }}</span>
-      {% if can_manage %}<form method="post" class="d-inline">{% csrf_token %}<input type="hidden" name="action" value="rule-delete"><input type="hidden" name="index" value="{{ index }}"><button class="btn btn-sm btn-outline-danger py-0" type="submit" title="{% trans 'Remove the condition' %}">×</button></form>{% endif %}</div>
-    {% empty %}<div class="text-secondary mb-2">{% trans "No condition: the group sees all records." %}</div>{% endfor %}
-    {% if can_manage %}
-    <form method="post" class="row g-2 align-items-start mt-2">{% csrf_token %}<input type="hidden" name="action" value="rule-add">
-      <div class="col-12 col-md-3"><select name="field" id="pin-rule-field" class="form-select" required>
-        <option value="">{% trans "— field —" %}</option>
-        {% for f in filter_fields %}<option value="{{ f.key }}">{{ f.label }}</option>{% endfor %}</select></div>
-      <div class="col-12 col-md-3"><select name="op" id="pin-rule-op" class="form-select" required>
-        {% for key, label in ops %}<option value="{{ key }}">{{ label }}</option>{% endfor %}</select></div>
-      <div class="col-12 col-md-4">
-        <input type="text" name="value_text" id="pin-rule-text" class="form-control" placeholder="{% trans 'value' %}" data-multi="{% trans 'Several values: separate them with a comma.' %}">
-        <select name="values" id="pin-rule-choice" class="form-select" style="display: none" disabled></select>
-        <div class="form-text" id="pin-rule-help"></div></div>
-      <div class="col-12 col-md-2"><button class="btn btn-primary w-100" type="submit">{% trans "Add condition" %}</button></div>
-    </form>
-    {{ filter_fields|json_script:"pin-filter-fields" }}
-    <script>
-      (function () {
-        var fields = JSON.parse(document.getElementById('pin-filter-fields').textContent), byKey = {};
-        fields.forEach(function (f) { byKey[f.key] = f; });
-        var field = document.getElementById('pin-rule-field'), op = document.getElementById('pin-rule-op'),
-            text = document.getElementById('pin-rule-text'), choice = document.getElementById('pin-rule-choice'),
-            help = document.getElementById('pin-rule-help');
-        function refresh() {
-          var meta = byKey[field.value], multi = op.value === 'in' || op.value === 'nin';
-          var free = op.value === 'contains' || op.value === 'ncontains' || op.value === 'startswith';
-          if (meta && meta.choices && !free) {
-            choice.innerHTML = '';
-            meta.choices.forEach(function (c) { var o = document.createElement('option'); o.value = c[0]; o.text = c[1]; choice.appendChild(o); });
-            choice.multiple = multi; choice.size = multi ? 6 : 1;
-            choice.style.display = ''; choice.disabled = false; text.style.display = 'none'; text.disabled = true;
-            help.textContent = '';
-          } else {
-            choice.style.display = 'none'; choice.disabled = true; text.style.display = ''; text.disabled = false;
-            help.textContent = multi ? text.dataset.multi : '';
-          }
-        }
-        field.addEventListener('change', refresh); op.addEventListener('change', refresh); refresh();
-      })();
-    </script>
-    {% endif %}
+    <span class="badge text-bg-blue fs-6 me-1 mb-1">{{ text }}{% if can_manage %} <button type="submit" form="rd-{{ index }}" class="btn btn-link btn-sm p-0 text-white" title="{% trans 'Remove the condition' %}">×</button>{% endif %}</span>
+    {% empty %}<span class="text-secondary">{% trans "No condition: the group sees all records." %}</span>{% endfor %}
   </div>
 </div>

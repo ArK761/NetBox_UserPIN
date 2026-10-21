@@ -80,6 +80,19 @@
             <input type="radio" class="btn-check" name="mode__{{ row.key }}" id="m{{ forloop.counter }}-w" value="write" autocomplete="off" {% if row.mode == 'write' %}checked{% endif %}><label class="btn btn-outline-success" for="m{{ forloop.counter }}-w">{% trans "Read and write" %}</label>
           </div>
           {% if row.kind == 'custom' %}<input type="text" class="form-control form-control-sm" style="max-width: 16rem" name="contains__{{ row.key }}" value="{{ row.contains }}" maxlength="200" placeholder="{% trans 'values must include (optional)' %}">{% endif %}
+          {% if row.filterable and can_manage %}<button type="button" class="btn btn-sm {% if row.conds %}btn-primary{% else %}btn-outline-primary{% endif %} pin-filter-toggle" data-panel="rule-{{ forloop.counter }}" title="{% trans 'Show only the records where this field…' %}"><i class="mdi mdi-filter-outline"></i> {% trans "Rows" %}</button>{% endif %}
+          {% if row.conds %}<div class="w-100 d-flex flex-wrap gap-2">{% for index, text in row.conds %}<span class="badge text-bg-blue fs-6">{{ text }} {% if can_manage %}<button type="submit" form="rd-{{ index }}" class="btn btn-link btn-sm p-0 text-white" title="{% trans 'Remove the condition' %}">×</button>{% endif %}</span>{% endfor %}</div>{% endif %}
+          {% if row.filterable and can_manage %}
+          <div class="w-100 d-none pin-rule-panel" id="rule-{{ forloop.counter }}" data-field="{{ row.key }}">
+            <div class="d-flex flex-wrap gap-2 align-items-start border rounded p-2">
+              <select name="op" form="rf-{{ forloop.counter }}" class="form-select form-select-sm w-auto pin-rule-op">{% for key, label in ops %}<option value="{{ key }}">{{ label }}</option>{% endfor %}</select>
+              <input type="text" name="value_text" form="rf-{{ forloop.counter }}" class="form-control form-control-sm w-auto pin-rule-text" placeholder="{% trans 'value' %}" style="min-width: 14rem">
+              <select name="values" form="rf-{{ forloop.counter }}" class="form-select form-select-sm w-auto pin-rule-choice d-none" disabled></select>
+              <button type="submit" form="rf-{{ forloop.counter }}" class="btn btn-sm btn-primary">{% trans "Add condition" %}</button>
+              <span class="small text-secondary pin-rule-help"></span>
+            </div>
+          </div>
+          {% endif %}
         </div>
         {% empty %}<div class="list-group-item text-secondary">{% trans "No fields." %}</div>{% endfor %}
       </div>
@@ -87,6 +100,11 @@
     {% if can_manage %}<div class="card-body text-end"><button class="btn btn-primary" type="submit">{% trans "Save fields" %}</button></div>{% endif %}
   </form>
 </details>
+{% if can_manage %}
+{% for index, text in conditions %}<form id="rd-{{ index }}" method="post" class="d-none">{% csrf_token %}<input type="hidden" name="action" value="rule-delete"><input type="hidden" name="index" value="{{ index }}"></form>{% endfor %}
+{% for row in rows %}{% if row.filterable %}<form id="rf-{{ forloop.counter }}" method="post" class="d-none">{% csrf_token %}<input type="hidden" name="action" value="rule-add"><input type="hidden" name="field" value="{{ row.key }}"></form>{% endif %}{% endfor %}
+{{ filter_fields|json_script:"pin-filter-fields" }}
+{% endif %}
 {% if can_manage and not members %}
 <form method="post" onsubmit="return confirm('{% trans "Delete this group?" %}');">{% csrf_token %}<input type="hidden" name="action" value="group-delete"><button class="btn btn-outline-danger" type="submit">{% trans "Delete the group" %}</button></form>
 {% endif %}
@@ -106,6 +124,41 @@
       });
     });
   });
+  (function () {
+    var MULTI_HELP = "{% trans 'Several values: separate them with a comma.' %}";
+    var box = document.getElementById('pin-fields-box');
+    if (box && location.hash === '#pin-fields-box') { box.open = true; }
+    var meta = document.getElementById('pin-filter-fields');
+    if (!meta) { return; }
+    var byKey = {};
+    JSON.parse(meta.textContent).forEach(function (f) { byKey[f.key] = f; });
+    function refresh(panel) {
+      var info = byKey[panel.dataset.field], op = panel.querySelector('.pin-rule-op').value,
+          text = panel.querySelector('.pin-rule-text'), choice = panel.querySelector('.pin-rule-choice'),
+          help = panel.querySelector('.pin-rule-help'), multi = op === 'in' || op === 'nin',
+          free = op === 'contains' || op === 'ncontains' || op === 'startswith';
+      if (info && info.choices && !free) {
+        choice.innerHTML = '';
+        info.choices.forEach(function (c) { var o = document.createElement('option'); o.value = c[0]; o.text = c[1]; choice.appendChild(o); });
+        choice.multiple = multi; choice.size = multi ? 6 : 1;
+        choice.classList.remove('d-none'); choice.disabled = false; text.classList.add('d-none'); text.disabled = true;
+        help.textContent = '';
+      } else {
+        choice.classList.add('d-none'); choice.disabled = true; text.classList.remove('d-none'); text.disabled = false;
+        help.textContent = multi ? MULTI_HELP : '';
+      }
+    }
+    document.querySelectorAll('.pin-filter-toggle').forEach(function (button) {
+      button.addEventListener('click', function () {
+        var panel = document.getElementById(button.dataset.panel);
+        panel.classList.toggle('d-none');
+        if (!panel.classList.contains('d-none')) { refresh(panel); }
+      });
+    });
+    document.querySelectorAll('.pin-rule-op').forEach(function (select) {
+      select.addEventListener('change', function () { refresh(select.closest('.pin-rule-panel')); });
+    });
+  })();
 </script>
 {% include 'netbox_user_pin/inc/table_tools.html' %}
 {% endblock %}

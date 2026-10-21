@@ -659,6 +659,12 @@ class GroupView(AreaViewMixin, View):
             rows.append({'key': key, 'label': label, 'kind': kind, 'mode': rule.mode if rule else 'default',
                          'contains': rule.contains if rule else ''})
         tabs = areas.tabs_of(target)
+        conditions = areas.group_conditions(group)
+        filter_fields = areas.filter_fields(target)
+        filterable = {f['key'] for f in filter_fields}
+        for row in rows:  # the conditions of a field are shown (and added) with the field
+            row['filterable'] = row['key'] in filterable
+            row['conds'] = [(i, text) for i, text, field in conditions if field == row['key']]
         return render(request, self.template_name, {
             'area': area, 'group': group, 'target': target, 'target_label': _target_label(target),
             'members': areas.group_members(group), 'user_choices': _all_user_choices(),
@@ -666,7 +672,7 @@ class GroupView(AreaViewMixin, View):
             'rights_set': set(group.rights),
             'tabs': [dict(t, allowed=group.tabs is None or t['name'] in group.tabs) for t in tabs if not t['plugin']],
             'plugin_tabs': [t for t in tabs if t['plugin']], 'rows': rows,
-            'conditions': areas.group_conditions(group), 'filter_fields': areas.filter_fields(target),
+            'conditions': [(i, text) for i, text, _field in conditions], 'filter_fields': filter_fields,
             'ops': list(areas.row_op_labels().items()),
             'can_manage': areas.can_manage(request.user, area) or areas._may_grant(request.user, area),
             'settings': service.get_settings(),
@@ -730,4 +736,5 @@ class GroupView(AreaViewMixin, View):
                 raise PermissionDenied
         except ValidationError as exc:
             _errors(request, exc)
-        return redirect('plugins:netbox_user_pin:group', pk=area.pk, gid=group.pk)
+        anchor = '#pin-fields-box' if action in ('rule-add', 'rule-delete', 'fields') else ''
+        return redirect(reverse('plugins:netbox_user_pin:group', kwargs={'pk': area.pk, 'gid': group.pk}) + anchor)
