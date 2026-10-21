@@ -1123,3 +1123,30 @@ class OwnerRequirementsTest(AreaTestCase):
         enable_2fa(head)
         areas.add_owner(area, head, self.master)
         self.assertEqual([u.username for u in areas.owners(area)], ['head'])
+
+
+class DeniedOverviewTest(AreaTestCase):
+    def test_the_refusal_says_what_the_user_is_allowed_and_why_the_linked_type_is_closed(self):
+        from dcim.models import Device, DeviceRole, DeviceType, Manufacturer, Site
+        area = self.make_area(targets=('dcim.device',))
+        user = User.objects.create_user('usera', 'a@example.com')
+        group = areas.create_group(area, 'dcim.device', 'Technici', ['view'], self.owner1)
+        areas.add_member(group, user, None, self.owner1)
+        fields = {'name': ('hidden', ''), 'description': ('hidden', ''), 'comments': ('hidden', '')}
+        areas.save_field_rules(area, group, 'dcim.device', {**fields, 'role': ('read', '')}, self.owner1)
+        areas.clear_cache()
+        # the Device role is no area of any kind: with the default deny on it is refused
+        keeper = User.objects.create_superuser('keeper', 'k@example.com', 'x')
+        service.set_pin(keeper, GOOD_PIN)
+        enable_2fa(keeper)
+        areas.add_keeper(keeper, self.master)
+        areas.clear_cache()
+        role = DeviceRole.objects.create(name='R1', slug='r1', color='ff0000')
+        self.login(user)
+        response = self.client.get(f'/dcim/device-roles/{role.pk}/')
+        self.assertEqual(response.status_code, 403)
+        html = response.content.decode()
+        self.assertIn('What you are allowed', html)
+        self.assertIn('Technici', html)
+        self.assertIn('Role', html)  # the field that is allowed
+        self.assertIn('is not allowed to you', html)  # Device role is only the value of the Role field

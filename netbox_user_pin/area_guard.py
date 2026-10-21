@@ -11,6 +11,7 @@ the change log). Keep that in mind when an area contains sensitive data.
 import logging
 import time
 
+from django.apps import apps
 from django.conf import settings as django_settings
 from django.core.cache import cache
 from django.http import JsonResponse
@@ -100,6 +101,50 @@ def _request_context(request, area, right, target):
     }
 
 
+def _overview(user, blocked):
+    """
+    What the user is allowed (his groups: rights, visible fields, tabs) and, when the blocked object type is only a
+    value of a field he sees (Device › Role), which field - so that the refusal can be explained.
+    """
+    from .fieldrules import compute_policy, fields_of
+    from .models import AreaFieldMode, AreaGrant
+    entries, via = [], []
+    if not getattr(user, 'is_authenticated', False):
+        return {'entries': entries, 'via': via}
+    for grant in AreaGrant.objects.filter(user=user, revoked__isnull=True).select_related('area', 'profile'):
+        if not grant.is_active or not grant.target:
+            continue
+        app_label, _dot, model_name = grant.target.partition('.')
+        try:
+            model = apps.get_model(app_label, model_name)
+            policy = compute_policy(user, grant.area, app_label, model_name)
+        except LookupError:
+            continue
+        visible = []
+        for key, label, _kind in fields_of(app_label, model_name):
+            mode = policy.mode(key) if policy else None
+            if mode != AreaFieldMode.HIDDEN:
+                visible.append((label, mode))
+        tabs = areas.tabs_of(grant.target)
+        allowed_tabs = [t['label'] for t in tabs if not t['plugin'] and (
+            grant.profile.tabs is None or t['name'] in grant.profile.tabs)]
+        entries.append({
+            'type': areas.target_label(grant.target),
+            'group': grant.profile.name if not grant.profile.private else _('individually'),
+            'rights': [str(areas.right_label(grant.area, r)) for r in grant.profile.rights],
+            'fields': visible, 'all_fields': policy is None, 'tabs': allowed_tabs,
+        })
+        if blocked and blocked != grant.target:
+            for field in model._meta.get_fields():
+                related = getattr(field, 'related_model', None)
+                if (related is not None and getattr(field, 'concrete', False) and
+                        f'{related._meta.app_label}.{related._meta.model_name}' == blocked and
+                        (policy is None or policy.mode(field.name) != AreaFieldMode.HIDDEN)):
+                    via.append({'type': areas.target_label(grant.target),
+                                'field': str(getattr(field, 'verbose_name', field.name)).capitalize()})
+    return {'entries': entries, 'via': via}
+
+
 def denied_response(request, area, right='view', target=None, tab_label=None):
     """``area=None``: refused by "deny everything not allowed"."""
     user = request.user
@@ -113,6 +158,7 @@ def denied_response(request, area, right='view', target=None, tab_label=None):
                 **_request_context(request, None, right, target), 'tab_label': tab_label,
                 'pending': AreaRequest.objects.filter(user=user, target=target or '', status=AreaRequestStatus.PENDING
                                                       ).first() if getattr(user, 'is_authenticated', False) else None,
+                'overview': _overview(user, target),
             }, status=403)
             response.render() if hasattr(response, 'render') else None
         return response
@@ -127,7 +173,7 @@ def denied_response(request, area, right='view', target=None, tab_label=None):
             'area': area, 'right': right, 'pending': pending, 'owners': areas.owners(area),
             'has_owners': True,
             'next': request.get_full_path(), **_request_context(request, area, right, target),
-            'tab_label': tab_label,
+            'tab_label': tab_label, 'overview': _overview(user, target),
         }, status=403)
         response.render() if hasattr(response, 'render') else None
     return response

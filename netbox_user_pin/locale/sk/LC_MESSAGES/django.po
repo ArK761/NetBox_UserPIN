@@ -5823,6 +5823,45 @@ msgid "Green: may be an owner. Red: cannot, under him is what blocks him."
 msgstr ""
 "Zelený: smie byť vlastníkom. Červený: nesmie, pod ním je, čo mu v tom bráni."
 
+msgid "What you are allowed"
+msgstr "Čo máte povolené"
+
+msgid ""
+"The current configuration from the administrator does not allow you to see "
+"this. Here is what it allows:"
+msgstr ""
+"Súčasné nastavenie od správcu vám toto zobraziť nedovoľuje. Toto vám "
+"povoľuje:"
+
+msgid "all, according to the rights"
+msgstr "všetky, podľa práv"
+
+msgid "none"
+msgstr "žiadne"
+
+msgid "none (only the main page)"
+msgstr "žiadne (len hlavná stránka)"
+
+msgid "Tabs"
+msgstr "Záložky"
+
+msgid "read only"
+msgstr "len čítať"
+
+msgid "read and write"
+msgstr "čítať a zapisovať"
+
+msgid ""
+"The object type <strong>%(type)s</strong> is not allowed to you. You see it "
+"only as the value of the field <strong>%(field)s</strong> of "
+"<strong>%(of)s</strong> (that field is allowed in your group); its own page "
+"(list, detail) is not part of your configuration."
+msgstr ""
+"Typ objektu <strong>%(type)s</strong> vám nie je povolený. Vidíte ho len ako"
+" hodnotu poľa <strong>%(field)s</strong> v objekte <strong>%(of)s</strong> "
+"(toto pole máte v skupine povolené); jeho vlastná stránka (zoznam, detail) "
+"nie je súčasťou vášho nastavenia."
+
 #~ msgid ""
 #~ "There is no other administrator or delegate with PIN and 2FA who could "
 #~ "confirm."

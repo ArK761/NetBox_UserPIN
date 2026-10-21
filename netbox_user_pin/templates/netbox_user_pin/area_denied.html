@@ -1,7 +1,6 @@
 {% extends 'generic/_base.html' %}
 {% load userpin_tags i18n %}
-{% block title %}{% trans "Access to a protected area" %}<div class="text-center mt-3"><a class="btn btn-outline-secondary" href="javascript:history.back()"><i class="mdi mdi-arrow-left"></i> {% trans "Back" %}</a></div>
-{% endblock %}
+{% block title %}{% trans "Access to a protected area" %}{% endblock %}
 {% block content %}
 {% pin_build %}
 <div class="text-center mb-3"><span class="badge text-bg-dark fs-6"><i class="mdi mdi-shield-lock"></i> {% trans "Protected by the User PIN plugin" %}</span></div>
@@ -35,6 +34,28 @@
         {% else %}
           <div class="alert alert-secondary mb-0">{% trans "The area has no owners yet. Ask the administrator to appoint them." %}</div>
         {% endif %}
+      </div>
+    </div>
+    {% endif %}
+    {% if overview.entries %}
+    <div class="card mt-3">
+      <h2 class="card-header"><i class="mdi mdi-key-chain"></i> {% trans "What you are allowed" %}</h2>
+      <div class="card-body">
+        {% if overview.via %}
+        <p>{% for v in overview.via %}{% blocktrans with type=target_label field=v.field of=v.type %}The object type <strong>{{ type }}</strong> is not allowed to you. You see it only as the value of the field <strong>{{ field }}</strong> of <strong>{{ of }}</strong> (that field is allowed in your group); its own page (list, detail) is not part of your configuration.{% endblocktrans %}{% if not forloop.last %}<br>{% endif %}{% endfor %}</p>
+        {% else %}
+        <p>{% trans "The current configuration from the administrator does not allow you to see this. Here is what it allows:" %}</p>
+        {% endif %}
+        {% for e in overview.entries %}
+        <div class="border rounded p-2 mb-2">
+          <div><strong>{{ e.type }}</strong> <span class="text-secondary">· {% trans "Group" %}: {{ e.group }}</span></div>
+          <div class="small"><span class="text-secondary">{% trans "Rights" %}:</span> {{ e.rights|join:", " }}</div>
+          <div class="small"><span class="text-secondary">{% trans "Fields" %}:</span>
+            {% if e.all_fields %}{% trans "all, according to the rights" %}
+            {% else %}{% for label, mode in e.fields %}{{ label }}{% if mode == 'read' %} ({% trans "read only" %}){% elif mode == 'write' %} ({% trans "read and write" %}){% endif %}{% if not forloop.last %}, {% endif %}{% empty %}<em>{% trans "none" %}</em>{% endfor %}{% endif %}</div>
+          <div class="small"><span class="text-secondary">{% trans "Tabs" %}:</span> {% for label in e.tabs %}{{ label }}{% if not forloop.last %}, {% endif %}{% empty %}<em>{% trans "none (only the main page)" %}</em>{% endfor %}</div>
+        </div>
+        {% endfor %}
       </div>
     </div>
     {% endif %}
