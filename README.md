@@ -296,8 +296,15 @@ user            asks for access with a reason (+ what exactly) → owners grant 
   except the **protection keepers**. It is switched on by hand and only when a keeper exists. A keeper needs a PIN
   and 2FA, is exempt from the deny (NetBox's own permissions apply to him), cannot turn 2FA off and cannot leave
   alone – another keeper has to take over; the last keeper cannot be removed. Login, the own profile, bookmarks,
-  notifications and the user's own preferences stay open. Server emergency: `manage.py userpin_default_deny --off`.
-- **Bootstrap**: until owners are appointed only superusers have access, so an area cannot lock everybody out.
+  notifications and the user's own preferences stay open - but only the user's **own** tokens, bookmarks, notifications
+  and preferences (others' are not shown to anybody but a keeper). The deny reaches every path: lists, details, the
+  REST API, GraphQL, global search, dashboard widgets, menus and buttons (a superuser who is no keeper sees none of
+  Users, Groups, Permissions, Jobs, background tasks ...). The change log, journal and attachments never show rows of
+  objects a user may not view. Server emergency: `manage.py userpin_default_deny --off`.
+- **Bootstrap**: until owners are appointed only the keepers (without any keeper: the superusers) have access, so an
+  area cannot lock everybody out. Sensitive apps (users, auth, core ...) and types that another area protects can be
+  put into an area only by a keeper, never by an owner. An owner is an owner only while he is a head / delegate /
+  CORE deputy and neither a superuser nor a keeper.
   Once owners exist the master cannot change them, grant access or deactivate the area. The last owner cannot be
   removed; the protection cannot be switched off while areas with owners are active.
 - **Emergency** (server shell, audited): `python manage.py userpin_area_owners <area-key> --set user1 user2`.

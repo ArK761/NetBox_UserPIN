@@ -63,6 +63,8 @@ def _tree(user):
     mapping, app_map = {}, {}
     info = {}
     for area in ProtectedArea.objects.all():
+        if not areas.can_see(user, area):
+            continue  # who owns what and who is a member is for the owners and the keepers only
         groups = []
         for group in areas.groups_of(area):
             groups.append({'name': group.name, 'target': group.target,
@@ -142,8 +144,9 @@ class AreaListView(AreaViewMixin, View):
 
     def _render(self, request, form=None):
         areas.sync_plugin_areas()
-        core = roles.is_core(request.user)
-        queryset = ProtectedArea.objects.all() if core else ProtectedArea.objects.filter(owners__user=request.user)
+        core = areas._stand_in(request.user)
+        queryset = ProtectedArea.objects.filter(pk__in=[a.pk for a in ProtectedArea.objects.all()
+                                                        if areas.can_see(request.user, a)])
         waiting_list = list(areas.pending_requests_for(request.user))
         rows = []
         for area in queryset.distinct().order_by('name'):
@@ -172,7 +175,7 @@ class AreaListView(AreaViewMixin, View):
         from django.contrib.auth import get_user_model
         try:
             if action == 'create':
-                if not roles.is_core(request.user):
+                if not areas._stand_in(request.user):
                     raise PermissionDenied
                 form = AreaForm(request.POST, create=True)
                 if not form.is_valid():
@@ -189,7 +192,7 @@ class AreaListView(AreaViewMixin, View):
                 messages.success(request, _('The protection was removed.'))
                 return redirect('plugins:netbox_user_pin:areas')
             if action == 'protect':
-                if not roles.is_core(request.user):
+                if not areas._stand_in(request.user):
                     raise PermissionDenied
                 target = request.POST.get('target', '')
                 if not target:
@@ -593,6 +596,8 @@ class RequestDecideView(AreaViewMixin, View):
                         group = get_object_or_404(AreaProfile, pk=gid, area=area, private=False, target=req.target)
                     else:
                         group_name, group_rights = request.POST.get('group_name', ''), rights
+                if not rights and group is None:  # an existing group has its rights; otherwise something must be chosen
+                    raise ValidationError(_('Choose at least one right.'))
                 areas.decide_request(req, request.user, True, hours=hours or None, request=request,
                                      rights=None if '.' in req.target else rights, group=group,
                                      group_name=group_name, group_rights=group_rights)

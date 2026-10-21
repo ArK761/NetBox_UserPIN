@@ -5971,6 +5971,33 @@ msgstr ""
 "Tento používateľ má aj iný prístup bez podmienky na riadky, preto vidí "
 "všetky záznamy."
 
+msgid "Enter one valid e-mail address."
+msgstr "Zadajte jednu platnú e-mailovú adresu."
+
+msgid "Two-factor authentication is already on."
+msgstr "Dvojfaktorové overenie je už zapnuté."
+
+msgid "Four-eyes approval cannot be switched off while a department exists."
+msgstr "Schvaľovanie štyrmi očami sa nedá vypnúť, kým existuje oddelenie."
+
+msgid ""
+"The protection cannot be switched off while areas with owners are active."
+msgstr "Ochranu nemožno vypnúť, kým sú aktívne oblasti s vlastníkmi."
+
+msgid ""
+"\"%(target)s\" is sensitive or protected by another area: only a protection "
+"keeper can put it in this one."
+msgstr ""
+"„%(target)s“ je citlivé alebo ho chráni iná oblasť: do tejto ho môže pridať "
+"iba ochranca."
+
+msgid ""
+"Some object type is sensitive or protected by another area: only a "
+"protection keeper can put it in this one."
+msgstr ""
+"Niektorý typ objektu je citlivý alebo ho chráni iná oblasť: do tejto ho môže"
+" pridať iba ochranca."
+
 #~ msgid ""
 #~ "There is no other administrator or delegate with PIN and 2FA who could "
 #~ "confirm."

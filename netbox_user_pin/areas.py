@@ -59,7 +59,7 @@ _cache = {'at': 0.0, 'areas': None, 'deny': False, 'keepers': frozenset()}
 # Never refused by the default deny: what every logged-in user needs to work with their own account in NetBox.
 DEFAULT_DENY_EXEMPT = frozenset({
     'extras.bookmark', 'extras.notification', 'extras.notificationgroup', 'extras.subscription', 'extras.dashboard',
-    'users.userconfig', 'users.token',
+    'users.userconfig', 'users.token', 'core.objecttype',
 })
 # ... and for each of them the field of its owner: outside of the protected areas everybody (a superuser included,
 # the protection keepers excepted) sees and changes only their own rows of these types.
@@ -67,6 +67,26 @@ OWN_ROWS = {
     'extras.bookmark': 'user', 'extras.notification': 'user', 'extras.subscription': 'user',
     'extras.dashboard': 'user', 'users.userconfig': 'user', 'users.token': 'user',
 }
+
+
+# The types that point at an object of another type: what is in a protected area is not told by them either.
+POINTING_AT_OBJECTS = {'core.objectchange': 'changed_object_type', 'extras.journalentry': 'assigned_object_type',
+                       'extras.imageattachment': 'object_type'}
+
+
+def unseen_objects(user, app_label, model):
+    """A ``Q`` of the rows (change log, journal, attachments) that belong to objects the user may not view, or None."""
+    field = POINTING_AT_OBJECTS.get(f'{app_label}.{model}')
+    if not field or not active_areas():
+        return None
+    hidden = Q()
+    for area in active_areas():
+        for target in targets_of(area):
+            if can(user, area, 'view', target if '.' in target else None):
+                continue
+            app, _dot, name = target.partition('.')
+            hidden |= Q(**{f'{field}__app_label': app, **({f'{field}__model': name} if name else {})})
+    return hidden if hidden else None
 
 
 def own_rows_only(user, app_label, model):
@@ -122,8 +142,8 @@ def _load_active():
     try:
         sync_plugin_areas()
         rows = list(ProtectedArea.objects.all())
-    except DatabaseError:  # before the migrations
-        return []
+    except DatabaseError:  # before the migrations - or a hiccup of the database: the caller keeps what it knew
+        return None
     active = []
     for area in rows:
         if area.plugin:
@@ -141,13 +161,14 @@ def _load_active():
 
 
 def _refresh():
-    _cache['areas'] = _load_active()
+    loaded = _load_active()
+    _cache['areas'] = loaded if loaded is not None else (_cache['areas'] or [])
     try:
         keepers = frozenset(PolicyKeeper.objects.filter(user__is_active=True).values_list('user_id', flat=True))
         _cache['deny'] = bool(service.get_settings().default_deny and keepers)
         _cache['keepers'] = keepers
     except DatabaseError:
-        _cache['deny'], _cache['keepers'] = False, frozenset()
+        logger.exception('PIN: the keepers cannot be read, the last known state stays')
     _cache['at'] = time.monotonic()
 
 
@@ -230,8 +251,11 @@ def owners(area):
 
 
 def is_owner(user, area):
-    return bool(getattr(user, 'is_authenticated', False) and user.is_active
-                and AreaOwner.objects.filter(area=area, user=user).exists())
+    """An owner is still an owner only while he holds the role (head, delegate, CORE deputy) and is no superuser."""
+    if not (getattr(user, 'is_authenticated', False) and user.is_active and not user.is_superuser
+            and AreaOwner.objects.filter(area=area, user=user).exists()):
+        return False
+    return not is_keeper(user) and roles.manager_users(include_superusers=False).filter(pk=user.pk).exists()
 
 
 def active_grants(user, area, target=None):
@@ -644,11 +668,14 @@ def check_perm(user, perm):
     holds no key at all still sees the door (menu item, tab): ``True`` here, and the guard refuses the entry.
     """
     app_label, _dot, codename = perm.partition('.')
-    if not codename or not active_areas():
+    if not codename:
         return None
+    active_areas()
     action, _underscore, model = codename.partition('_')
-    area = area_for(app_label, model or None, package=app_label)
+    area = area_for(app_label, model or None, package=app_label) if _cache['areas'] else None
     if area is None:
+        if model and default_deny_blocks(user, app_label, model, app_label):
+            return False, None  # nothing allows it: no menu item, no button
         return None
     rights = _memo_rights(user, area, f'{app_label}.{model}' if model else None)
     if not rights:
@@ -667,6 +694,8 @@ def right_for_request(request, view_class=None, view_kwargs=None):
         return 'delete'
     if 'Import' in name:
         return 'add'
+    if 'BulkEdit' in name or 'BulkRename' in name:
+        return 'change'
     if method == 'POST' and view_class is not None and ('Edit' in name or 'Create' in name):
         return 'change' if (view_kwargs or {}).get('pk') else 'add'
     if method == 'POST' and view_class is not None and hasattr(view_class, 'serializer_class'):
@@ -679,10 +708,38 @@ def right_for_request(request, view_class=None, view_kwargs=None):
 #
 
 def _core_or_owner(actor, area):
-    """Who may change an area: its owners; as long as there are none, CORE / the master."""
+    """Who may change an area: its owners; as long as there are none, the keepers (CORE / the master without any)."""
     if AreaOwner.objects.filter(area=area).exists():
         return is_owner(actor, area)
+    return _stand_in(actor)
+
+
+def _stand_in(actor):
+    """Who sets up what has no owner yet: a protection keeper; while there is none, CORE / the master."""
+    active_areas()
+    if _cache['keepers']:
+        return is_keeper(actor)
     return roles.is_core(actor)
+
+
+# Apps whose data decides about accounts and the system: only a keeper (CORE / the master while there is none)
+# may protect them, never an owner of an area - or he would rule over every account.
+SENSITIVE_APPS = frozenset({'users', 'auth', 'core', 'social_django', 'django_rq', 'contenttypes', 'sessions',
+                            'account'})
+
+
+def _may_take(actor, area, target):
+    """May the actor put this app / object type in the area? Not an owner, when it is sensitive or protected already."""
+    if _stand_in(actor):
+        return True
+    app_label = target.partition('.')[0]
+    if app_label in SENSITIVE_APPS:
+        return False
+    for other in active_areas():
+        if other.pk != area.pk and any(t == target or t == app_label or t.startswith(f'{target}.')
+                                       for t in targets_of(other)):
+            return False
+    return True
 
 
 def can_manage(actor, area):
@@ -690,7 +747,8 @@ def can_manage(actor, area):
 
 
 def can_see(actor, area):
-    return roles.is_core(actor) or is_owner(actor, area)
+    return is_owner(actor, area) or is_keeper(actor) or (
+        roles.is_core(actor) and not AreaOwner.objects.filter(area=area).exists())
 
 
 def _log(action, area, actor, user=None, request=None, detail=''):
@@ -723,7 +781,7 @@ def parse_targets(text):
 
 @transaction.atomic
 def create_area(name, targets, owners_, actor, description='', max_hours=24, request=None):
-    if not roles.is_core(actor):
+    if not _stand_in(actor):
         raise PermissionDenied
     key = _unique_key(name)
     area = ProtectedArea.objects.create(key=key, name=name, description=description, targets=targets,
@@ -840,6 +898,9 @@ def update_area(area, actor, name=None, description=None, targets=None, enabled=
                          ('max_hours', max_hours)):
         if value is None or area.plugin and field in ('targets', 'enabled'):
             continue
+        if field == 'targets' and not all(_may_take(actor, area, t) for t in value if t not in (area.targets or [])):
+            raise ValidationError(_('Some object type is sensitive or protected by another area: only a protection '
+                                    'keeper can put it in this one.'))
         if getattr(area, field) != value:
             changes.append(f'{field}: {getattr(area, field)!r} -> {value!r}')
             setattr(area, field, value)
@@ -867,6 +928,7 @@ def save_profile(area, name, rights, actor, profile=None, request=None, filters=
     rights = [r for r in rights if r in known]
     if not rights:
         raise ValidationError(_('Choose at least one right.'))
+    rights = _with_view(rights)
     if profile is None:
         if AreaProfile.objects.filter(area=area, name=name).exists():
             raise ValidationError(_('A profile with this name exists.'))
@@ -1081,6 +1143,7 @@ def grant_custom(area, user, target, rights, hours, actor, filters=None, request
     rights = [r for r in rights if r in known]
     if not rights:
         raise ValidationError(_('Choose at least one right.'))
+    rights = _with_view(rights)
     if target and target not in area_models(area):
         raise ValidationError(_('"%(target)s" is not protected by this area.') % {'target': target})
     profile = AreaProfile.objects.create(area=area, name=f'{user.username} · {target or "*"} · {uuid.uuid4().hex[:6]}',
@@ -1096,12 +1159,13 @@ def grant_custom(area, user, target, rights, hours, actor, filters=None, request
 def update_grant(grant, rights, actor, filters=None, request=None):
     """Change the rights / rows of an access entry (its private profile)."""
     area = grant.area
-    if not is_owner(actor, area):
+    if not _may_grant(actor, area):
         raise PermissionDenied
     known = set(rights_available(area))
     rights = [r for r in rights if r in known]
     if not rights:
         raise ValidationError(_('Choose at least one right.'))
+    rights = _with_view(rights)
     profile = grant.profile
     if not profile.private:
         raise ValidationError(_('Revoke this access and grant it again.'))
@@ -1358,6 +1422,9 @@ def add_target(area, target, actor, request=None):
     (target,) = parse_targets(target)
     if target in (area.targets or []):
         return False
+    if not _may_take(actor, area, target):
+        raise ValidationError(_('"%(target)s" is sensitive or protected by another area: only a protection keeper '
+                                'can put it in this one.') % {'target': target})
     area.targets = list(area.targets or []) + [target]
     area.save()
     _log(PinEventAction.AREA_CHANGED, area, actor, request=request, detail=f'object added: {target}')

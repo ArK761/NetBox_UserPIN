@@ -26,6 +26,12 @@ from .models import AreaRequest, AreaRequestStatus, PinEventAction
 
 logger = logging.getLogger('netbox_user_pin')
 
+# Pages and API paths of NetBox without any object type behind them (background tasks, system information, the
+# plugin catalogue): NetBox lets every superuser in, so "deny everything not allowed" refuses them here.
+SYSTEM_PATHS = ('/core/background-', '/core/system', '/core/plugins', '/api/core/background-', '/api/core/system',
+                '/api/plugins/installed-plugins', '/api/plugins/catalog')
+
+
 def _plugin_perm(user, perm):
     """
     The administration of the plugin follows the roles in the PIN, not the NetBox permissions of the user: CORE and the
@@ -58,6 +64,8 @@ def arm_user(user):
         decided = _plugin_perm(user, perm)
         if decided is not None:
             return decided
+        if perm == 'netbox_user_pin.change_pinsettings' and not roles.is_core(user):
+            return False  # settings of the PIN: CORE only, whatever NetBox permission somebody gave himself
         verdict = areas.check_perm(user, perm)
         if verdict is None:
             return original(perm, obj)
@@ -229,6 +237,10 @@ class AreaGuardMiddleware:
             model = candidate if hasattr(candidate, '_meta') else None
         package = (cls.__module__ if cls is not None else getattr(view_func, '__module__', '') or '').split('.')[0]
         if model is None and package not in getattr(django_settings, 'PLUGINS', ()):
+            if areas.default_deny_active() and request.path_info.startswith(SYSTEM_PATHS):
+                user = request.user
+                if getattr(user, 'is_authenticated', False) and not areas.is_keeper(user):
+                    return denied_response(request, None, right='view', target=None)
             return None  # views without objects (login, logout, own profile ...) are never refused; plugin pages are
         app_label = model._meta.app_label if model else None
         model_name = model._meta.model_name if model else None
@@ -320,11 +332,18 @@ def install():
             meta = self.model._meta
             area = areas.area_for(meta.app_label, meta.model_name, package=meta.app_label)
             if area is None:
+                if areas.default_deny_blocks(user, meta.app_label, meta.model_name, meta.app_label):
+                    return self.none()  # GraphQL, search, widgets, selectors ... also obey "deny everything not allowed"
                 result = original(self, user, action)
+                hidden = areas.unseen_objects(user, meta.app_label, meta.model_name)
+                if hidden is not None:
+                    result = result.exclude(hidden)
                 field = areas.own_rows_only(user, meta.app_label, meta.model_name)
                 if field and getattr(user, 'is_authenticated', False):
                     return result.filter(**{field: user})
                 return result
+            if action not in areas.rights_available(area):  # sync, render_config, run ... need the right to change
+                action = 'change'
             query = areas.row_filter(user, area, meta.app_label, meta.model_name, action)
             if query is None:
                 return self.none()

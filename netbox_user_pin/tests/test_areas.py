@@ -46,9 +46,12 @@ class AreaTestCase(PinTestCase):
         settings.save()
 
     def make_area(self, targets=('dcim.device',), owners=True, max_hours=24):
-        area = areas.create_area('Network', list(targets), [], self.master, 'network devices', max_hours)
+        areas.clear_cache()
+        kept = areas.keepers()
+        area = areas.create_area('Network', list(targets), [], kept[0] if kept else self.master, 'network devices',
+                                 max_hours)
         if owners:
-            areas.add_owner(area, self.owner1, self.master)
+            areas.add_owner(area, self.owner1, kept[0] if kept else self.master)
             areas.add_owner(area, self.owner2, self.owner1)
         return area
 
@@ -618,6 +621,32 @@ class DefaultDenyTest(AreaTestCase):
     def add_keeper(self):
         return areas.add_keeper(self.keeper, self.master)
 
+    def test_default_deny_reaches_queries_permissions_and_system_pages(self):
+        self.add_keeper()
+        areas.clear_cache()
+        master = User.objects.get(pk=self.master.pk)
+        from netbox_user_pin import area_guard
+        area_guard.arm_user(master)
+        self.assertEqual(User.objects.restrict(master, 'view').count(), 0)  # GraphQL, search, widgets ...
+        self.assertEqual(User.objects.restrict(self.keeper, 'view').count(), User.objects.count())
+        self.assertFalse(master.has_perm('users.view_user'))  # no menu item, no button
+        self.login(master, unlock=False)
+        self.assertEqual(self.client.get('/core/background-queues/').status_code, 403)
+
+    def test_owner_cannot_take_sensitive_or_foreign_types_and_master_cannot_manage_with_keepers(self):
+        area = self.make_area(targets=('dcim.device',))
+        other = self.make_area(targets=('ipam',), owners=False)
+        with self.assertRaises(ValidationError):
+            areas.add_target(area, 'users.user', self.owner1)
+        with self.assertRaises(ValidationError):
+            areas.add_target(area, 'ipam.prefix', self.owner1)
+        self.add_keeper()
+        areas.clear_cache()
+        with self.assertRaises(PermissionDenied):
+            areas.delete_area(other, self.master)  # a superuser is no keeper
+        areas.add_target(other, 'users.user', self.keeper)  # the keeper sets up what has no owner yet
+        areas.delete_area(other, self.keeper)
+
     @override_settings(API_TOKEN_PEPPERS={1: 'x' * 50})
     def test_own_rows_only_outside_areas(self):
         from users.models import Token
@@ -1108,7 +1137,7 @@ class KeeperRemovesOwnersTest(AreaTestCase):
         enable_2fa(keeper)
         areas.add_keeper(keeper, self.master)
         area = self.make_area(owners=False)
-        areas.add_owner(area, self.owner1, self.master)
+        areas.add_owner(area, self.owner1, keeper)
         with self.assertRaises(ValidationError):
             areas.remove_owner(area, self.owner1, self.owner1)  # an owner never removes the last one
         admin_login(self.client, keeper)
@@ -1190,6 +1219,17 @@ class RowConditionsTest(AreaTestCase):
         user = User.objects.get(pk=self.user.pk)
         query = areas.row_filter(user, self.area, 'dcim', 'device')
         return sorted(self.Device.objects.filter(query).values_list('name', flat=True))
+
+    def test_changelog_hides_rows_of_objects_the_user_may_not_view(self):
+        from core.models import ObjectChange
+        outsider = User.objects.create_user('outsider', 'x@example.com')
+        areas.clear_cache()
+        hidden = areas.unseen_objects(outsider, 'core', 'objectchange')
+        self.assertIsNotNone(hidden)
+        self.assertIn('changed_object_type__app_label', str(hidden))
+        self.assertIsNone(areas.unseen_objects(self.user, 'core', 'objectchange'))  # a member sees them
+        self.assertEqual(ObjectChange.objects.restrict(self.master, 'view').filter(
+            changed_object_type__app_label='dcim', changed_object_type__model='device').count(), 0)
 
     def test_superuser_member_sees_only_matching_rows_through_restrict(self):
         boss = User.objects.create_user('boss', 'b@example.com', is_superuser=True)

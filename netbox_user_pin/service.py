@@ -21,6 +21,7 @@ from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.db.models import F
 from django.utils import timezone
 from django.utils.translation import gettext as _
 from netbox.plugins import get_plugin_config
@@ -352,13 +353,17 @@ def verify_pin(user, pin, request=None, scope=''):
     return _after_failure(PinEventAction.FAILED, user, user_pin, remaining, request, scope)
 
 
-def _register_failure(user_pin, settings):
-    """Count a failed PIN / 2FA attempt (caller holds the row lock). Returns the remaining attempts."""
-    user_pin.failed_attempts += 1
-    remaining = max(settings.max_attempts - user_pin.failed_attempts, 0)
+def _register_failure(user_pin, settings, field='failed_attempts'):
+    """
+    Count a failed PIN (``failed_attempts``) or 2FA (``failed_2fa``) attempt - separately, so that a right PIN does
+    not clear the wrong codes (caller holds the row lock). Returns the remaining attempts.
+    """
+    setattr(user_pin, field, getattr(user_pin, field) + 1)
+    remaining = max(settings.max_attempts - getattr(user_pin, field), 0)
     if remaining == 0:
         user_pin.locked_until = timezone.now() + timedelta(minutes=settings.lockout_minutes)
         user_pin.failed_attempts = 0
+        user_pin.failed_2fa = 0
     user_pin.save()
     return remaining
 
@@ -524,7 +529,7 @@ def set_access(user, access, actor, request=None):
 
 
 def clear_lockout(user, actor, request=None):
-    UserPin.objects.filter(user=user).update(failed_attempts=0, locked_until=None)
+    UserPin.objects.filter(user=user).update(failed_attempts=0, failed_2fa=0, locked_until=None)
     log_event(PinEventAction.LOCKOUT_CLEARED, user=user, actor=actor, request=request)
 
 
@@ -601,6 +606,9 @@ def confirm_totp_enrollment(request, code):
     codes = totp.generate_backup_codes()
     with transaction.atomic():
         user_pin, _created = UserPin.objects.select_for_update().get_or_create(user=request.user)
+        if user_pin.has_2fa:  # replacing a running 2FA goes through turning it off (PIN + 2FA)
+            request.session.pop(ENROLL_SESSION_KEY, None)
+            raise ValidationError(_('Two-factor authentication is already on.'), code='exists')
         user_pin.totp_secret = crypto.encrypt(secret, _totp_aad(user_pin))
         user_pin.totp_enabled = timezone.now()
         user_pin.totp_last_step = step
@@ -632,18 +640,18 @@ def verify_second_factor(user, code, request=None, scope='2fa'):
         step = totp.match_step(secret, code)
         if step is not None and step > user_pin.totp_last_step:
             user_pin.totp_last_step = step
-            user_pin.failed_attempts = 0
+            user_pin.failed_2fa = 0
             user_pin.save()
             return VerifyResult(VerifyStatus.OK)
         digest = totp.hash_backup_code(code)
         if len(totp.normalize_backup_code(code)) == 20 and digest in user_pin.backup_codes:
             user_pin.backup_codes = [d for d in user_pin.backup_codes if d != digest]
-            user_pin.failed_attempts = 0
+            user_pin.failed_2fa = 0
             user_pin.save()
             used_backup = True
         else:
             used_backup = False
-            remaining = _register_failure(user_pin, settings)
+            remaining = _register_failure(user_pin, settings, 'failed_2fa')
     if used_backup:
         log_event(PinEventAction.BACKUP_CODE_USED, user=user, request=request, scope=scope,
                   detail=f'{len(user_pin.backup_codes)} backup codes left')
@@ -738,8 +746,10 @@ def backup_codes_left(user):
 
 
 def _clear_totp(user):
+    # the version goes up: sessions that confirmed 2FA with the removed secret are not honoured any more
     UserPin.objects.filter(user=user).update(
         totp_secret='', totp_enabled=None, totp_last_step=0, backup_codes=[], backup_codes_encrypted='',
+        version=F('version') + 1,
     )
 
 
@@ -855,7 +865,8 @@ def has_step_up(request, level='full'):
     if step_up_needs_2fa(level) and not data.get('fa2'):
         return False
     user_pin = _get_pin(user)
-    return bool(user_pin and user_pin.version == data.get('v') and not user_pin.suspended and is_allowed(user))
+    return bool(user_pin and user_pin.version == data.get('v') and not user_pin.suspended and is_allowed(user)
+                and not pin_expired(user))
 
 
 def step_up_seconds_left(request, level='full'):
@@ -953,7 +964,12 @@ def send_domain_code(domain_obj, address, actor, request=None):
     """Send a verification code to ``address`` which must be in the domain."""
     settings = get_settings()
     address = (address or '').strip()
-    if not address.lower().endswith('@' + domain_obj.domain):
+    try:
+        from django.core.validators import validate_email
+        validate_email(address)
+    except ValidationError:
+        raise ValidationError(_('Enter one valid e-mail address.'), code='address')
+    if address.rsplit('@', 1)[1].lower() != domain_obj.domain:
         raise ValidationError(_('The address must end with @{domain}.').format(domain=domain_obj.domain),
                               code='address')
     if not email_configured(settings):
@@ -1189,7 +1205,7 @@ def request_reset(user, kind, actor, request=None):
     UserPin.objects.filter(pk=user_pin.pk).update(
         pending_reset=kind, pending_reset_by=getattr(actor, 'username', '') or '', pending_reset_expires=expires,
         # a forgotten PIN usually ends in a lockout; the user must be able to confirm
-        failed_attempts=0, locked_until=None,
+        failed_attempts=0, failed_2fa=0, locked_until=None,
     )
     log_event(PinEventAction.RESET_REQUESTED, user=user, actor=actor, request=request,
               detail=f'{kind}, valid until {expires.isoformat()}')
@@ -1255,7 +1271,7 @@ def complete_2fa_reset(user, pin, request=None):
     by = user_pin.pending_reset_by
     UserPin.objects.filter(pk=user_pin.pk).update(
         totp_secret='', totp_enabled=None, totp_last_step=0, backup_codes=[], backup_codes_encrypted='',
-        pending_reset='', pending_reset_by='', pending_reset_expires=None,
+        version=F('version') + 1, pending_reset='', pending_reset_by='', pending_reset_expires=None,
     )
     log_event(PinEventAction.RESET_COMPLETED, user=user, actor=user, request=request,
               detail=f'2FA reset started by {by}, confirmed with PIN')

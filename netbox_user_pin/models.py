@@ -319,6 +319,7 @@ class UserPin(models.Model):
     recovery_sent = models.DateTimeField(null=True, blank=True)
     expiry_warned = models.DateTimeField(null=True, blank=True)
     failed_attempts = models.PositiveSmallIntegerField(default=0)
+    failed_2fa = models.PositiveSmallIntegerField(default=0)
     locked_until = models.DateTimeField(null=True, blank=True)
     changed = models.DateTimeField(null=True, blank=True)
     last_verified = models.DateTimeField(null=True, blank=True)

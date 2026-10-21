@@ -166,6 +166,13 @@ def vote(req, user, approve, pin, otp=None, reason=None, request=None):
             req.save(update_fields=['reason'])
         ApprovalVote.objects.create(request=req, user=user, username=user.username, approve=approve,
                                     ip_address=_ip(request))
+        if approve:
+            approvals = set(req.votes.filter(approve=True).values_list('user_id', flat=True))
+            ready = len(approvals) >= REQUIRED_CONFIRMATIONS and req.requested_by_id in approvals
+            if ready:  # the executor runs under the lock: a second confirmation arriving now finds the request closed
+                service.log_event(PinEventAction.APPROVAL_CONFIRMED, actor=user, request=request, detail=f'#{req.pk}')
+                _execute(req, request=request)
+                return req
     if not approve:
         req.status = ApprovalStatus.REJECTED
         req.finished = timezone.now()
@@ -175,18 +182,17 @@ def vote(req, user, approve, pin, otp=None, reason=None, request=None):
                 _('{user} rejected: {summary}').format(user=user, summary=req.summary))
         return req
     service.log_event(PinEventAction.APPROVAL_CONFIRMED, actor=user, request=request, detail=f'#{req.pk}')
-    approvals = set(req.votes.filter(approve=True).values_list('user_id', flat=True))
-    if len(approvals) >= REQUIRED_CONFIRMATIONS and req.requested_by_id in approvals:
-        _execute(req, request=request)
     return req
 
 
 def cancel(req, user, request=None):
-    if not req.is_open or not (user.pk == req.requested_by_id or user.is_superuser):
-        raise ValidationError(_('You cannot cancel this request.'))
-    req.status = ApprovalStatus.CANCELLED
-    req.finished = timezone.now()
-    req.save(update_fields=['status', 'finished'])
+    with transaction.atomic():
+        req = ApprovalRequest.objects.select_for_update().get(pk=req.pk)
+        if not req.is_open or not (user.pk == req.requested_by_id or user.is_superuser):
+            raise ValidationError(_('You cannot cancel this request.'))
+        req.status = ApprovalStatus.CANCELLED
+        req.finished = timezone.now()
+        req.save(update_fields=['status', 'finished'])
     service.log_event(PinEventAction.APPROVAL_CANCELLED, actor=user, request=request, detail=f'#{req.pk}')
 
 
@@ -197,14 +203,18 @@ def break_glass(req, user, reason, pin, otp=None, request=None):
     if not (reason or '').strip():
         raise ValidationError(_('A reason is required.'), code='reason')
     _verify(user, pin, otp, request)
-    req.break_glass = True
-    req.reason = f'BREAK-GLASS: {reason.strip()}'[:500]
-    req.save(update_fields=['break_glass', 'reason'])
-    ApprovalVote.objects.get_or_create(request=req, user=user, defaults={
-        'username': user.username, 'approve': True, 'ip_address': _ip(request)})
-    service.log_event(PinEventAction.BREAK_GLASS, actor=user, request=request,
-                      detail=f'#{req.pk} {req.summary} – reason: {reason.strip()}')
-    _execute(req, request=request)
+    with transaction.atomic():
+        req = ApprovalRequest.objects.select_for_update().get(pk=req.pk)
+        if req.status != ApprovalStatus.PENDING:
+            raise ValidationError(_('The request is no longer open.'))
+        req.break_glass = True
+        req.reason = f'BREAK-GLASS: {reason.strip()}'[:500]
+        req.save(update_fields=['break_glass', 'reason'])
+        ApprovalVote.objects.get_or_create(request=req, user=user, defaults={
+            'username': user.username, 'approve': True, 'ip_address': _ip(request)})
+        service.log_event(PinEventAction.BREAK_GLASS, actor=user, request=request,
+                          detail=f'#{req.pk} {req.summary} – reason: {reason.strip()}')
+        _execute(req, request=request)
     admins = [u for u in eligible_approvers(department=req.department) if u.pk != user.pk]
     _notify(req, admins, _('BREAK-GLASS: {user} executed alone: {summary}\nReason: {reason}').format(
         user=user, summary=req.summary, reason=reason.strip()))
@@ -218,7 +228,8 @@ def break_glass(req, user, reason, pin, otp=None, request=None):
 def _execute(req, request=None):
     actor = req.requested_by
     try:
-        result = EXECUTORS[req.action](req.payload, actor, request)
+        with transaction.atomic():  # a failing executor leaves nothing half done
+            result = EXECUTORS[req.action](req.payload, actor, request)
     except Exception as exc:
         logger.exception('Four-eyes request #%s failed', req.pk)
         req.status, req.result = ApprovalStatus.FAILED, str(exc)
@@ -291,7 +302,15 @@ def _settings(payload, actor, request):
         old = getattr(settings, name)
         setattr(settings, name, value)
         changes.append(f'{name}: changed' if 'password' in name else f'{name}: {old!r} -> {value!r}')
-    four_eyes_before = PinSettings.load().four_eyes
+    current = PinSettings.load()
+    four_eyes_before = current.four_eyes
+    if 'four_eyes' in payload['changes'] and not settings.four_eyes and four_eyes_before \
+            and Department.objects.exists():
+        raise ValidationError(_('Four-eyes approval cannot be switched off while a department exists.'))
+    if 'areas_enabled' in payload['changes'] and not settings.areas_enabled and current.areas_enabled:
+        from .models import ProtectedArea
+        if ProtectedArea.objects.filter(plugin=False, enabled=True, owners__isnull=False).exists():
+            raise ValidationError(_('The protection cannot be switched off while areas with owners are active.'))
     settings.full_clean()
     settings.save()
     service.log_event(PinEventAction.SETTINGS_CHANGED, actor=actor, request=request, detail='\n'.join(changes))
