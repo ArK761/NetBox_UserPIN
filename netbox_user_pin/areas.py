@@ -375,11 +375,158 @@ def row_filter(user, area, app_label, model, action='view'):
     for grant in active_grants(user, area, target):
         if action not in grant.profile.rights:
             continue
-        lookups = (grant.profile.filters or {}).get(f'{app_label}.{model}')
-        if not lookups:
+        spec = (grant.profile.filters or {}).get(f'{app_label}.{model}')
+        if not spec:
             return Q()  # one profile without a filter for this type shows everything of it
-        combined = Q(**lookups) if combined is None else combined | Q(**lookups)
+        query = _spec_q(spec)
+        combined = query if combined is None else combined | query
     return combined
+
+
+#
+# Row conditions of a group: [{"field": "role", "op": "eq", "value": "3"}, ...] - all of them hold
+# (the older form of a private entry is a dict of Django lookups)
+#
+
+ROW_OPS = {  # op: (lookup, negated)
+    'eq': ('exact', False), 'ne': ('exact', True),
+    'contains': ('icontains', False), 'ncontains': ('icontains', True),
+    'startswith': ('istartswith', False),
+    'in': ('in', False), 'nin': ('in', True),
+}
+
+
+def row_op_labels():
+    return {'eq': _('is'), 'ne': _('is not'), 'contains': _('contains'), 'ncontains': _('does not contain'),
+            'startswith': _('starts with'), 'in': _('is one of'), 'nin': _('is not one of')}
+
+
+def _spec_q(spec):
+    if isinstance(spec, dict):
+        return Q(**spec)
+    query = Q()
+    for condition in spec:
+        lookup, negated = ROW_OPS[condition['op']]
+        part = Q(**{f"{condition['field']}__{lookup}": condition['value']})
+        query &= ~part if negated else part
+    return query
+
+
+def filter_fields(target):
+    """[{key, label, kind, choices}]: the fields a row condition may use (choices for relations and choice fields)."""
+    from django.db import models as dj
+    app_label, _dot, model_name = target.partition('.')
+    model = apps.get_model(app_label, model_name)
+    result = []
+    for field in model._meta.concrete_fields:
+        if field.primary_key or field.name in ('custom_field_data', 'created', 'last_updated'):
+            continue
+        choices = None
+        if field.is_relation and field.many_to_one:
+            kind = 'relation'
+            choices = [(str(o.pk), str(o)) for o in field.related_model._default_manager.all()[:500]]
+        elif getattr(field, 'choices', None):
+            kind = 'choice'
+            choices = [(str(v), str(label)) for v, label in field.flatchoices]
+        elif isinstance(field, (dj.IntegerField, dj.FloatField, dj.DecimalField)):
+            kind = 'number'
+        elif isinstance(field, dj.BooleanField):
+            kind, choices = 'bool', [('True', str(_('yes'))), ('False', str(_('no')))]
+        else:
+            kind = 'text'
+        result.append({'key': field.name, 'label': str(getattr(field, 'verbose_name', field.name)).capitalize(),
+                       'kind': kind, 'choices': choices})
+    return sorted(result, key=lambda f: f['label'].lower())
+
+
+def _clean_condition(target, field, op, values):
+    """The condition as it is stored, or a ValidationError."""
+    from django.core.exceptions import FieldError
+    meta = next((f for f in filter_fields(target) if f['key'] == field), None)
+    if meta is None or op not in ROW_OPS:
+        raise ValidationError(_('Choose the field and the condition.'))
+    values = [v.strip() for v in values if v and v.strip()]
+    if not values:
+        raise ValidationError(_('Write or choose the value.'))
+    multi = op in ('in', 'nin')
+    if not multi:
+        values = values[:1]
+    app_label, _dot, model_name = target.partition('.')
+    model = apps.get_model(app_label, model_name)
+    model_field = model._meta.get_field(field)
+    lookup, _negated = ROW_OPS[op]
+
+    def convert(text):
+        if model_field.is_relation:
+            return model_field.target_field.to_python(text)
+        if lookup in ('icontains', 'istartswith'):
+            return text
+        return model_field.to_python(text)
+
+    try:
+        converted = [convert(v) for v in values]
+        value = converted if multi else converted[0]
+        condition = {'field': field, 'op': op, 'value': [str(v) for v in value] if multi else str(value)}
+        model._default_manager.filter(**{f'{field}__{lookup}': value}).query  # noqa: B018
+    except (ValidationError, FieldError, ValueError, TypeError) as exc:
+        raise ValidationError(_('The condition is not valid: %(error)s') % {'error': exc})
+    return condition
+
+
+def condition_text(target, condition):
+    """'Role is Switch' for the page."""
+    meta = next((f for f in filter_fields(target) if f['key'] == condition['field']), None)
+    label = meta['label'] if meta else condition['field']
+    names = dict(meta['choices']) if meta and meta['choices'] else {}
+    value = condition['value']
+    shown = ', '.join(names.get(str(v), str(v)) for v in value) if isinstance(value, list) else names.get(
+        str(value), str(value))
+    return f"{label} {row_op_labels().get(condition['op'], condition['op'])} {shown}"
+
+
+def group_conditions(group):
+    """[(index, text)] of the row conditions of a group (for its object type)."""
+    spec = (group.filters or {}).get(group.target) or []
+    if isinstance(spec, dict):
+        return [(i, f'{k} = {v}') for i, (k, v) in enumerate(spec.items())]
+    return [(i, condition_text(group.target, c)) for i, c in enumerate(spec)]
+
+
+def add_group_condition(group, actor, field, op, values, request=None):
+    area = group.area
+    if not _may_grant(actor, area) or group.private or not group.target:
+        raise PermissionDenied
+    condition = _clean_condition(group.target, field, op, values)
+    filters = dict(group.filters or {})
+    current = filters.get(group.target) or []
+    if isinstance(current, dict):
+        current = []
+    filters[group.target] = list(current) + [condition]
+    group.filters = filters
+    group.save()
+    _log(PinEventAction.AREA_CHANGED, area, actor, request=request,
+         detail=f'group {group.name} rows: {condition_text(group.target, condition)}')
+    clear_cache()
+    return condition
+
+
+def remove_group_condition(group, actor, index, request=None):
+    area = group.area
+    if not _may_grant(actor, area) or group.private:
+        raise PermissionDenied
+    filters = dict(group.filters or {})
+    current = filters.get(group.target) or []
+    if isinstance(current, list) and 0 <= index < len(current):
+        removed = current.pop(index)
+        if current:
+            filters[group.target] = current
+        else:
+            filters.pop(group.target, None)
+        group.filters = filters
+        group.save()
+        _log(PinEventAction.AREA_CHANGED, area, actor, request=request,
+             detail=f'group {group.name} rows removed: {condition_text(group.target, removed)}')
+        clear_cache()
 
 
 def parse_filters(text, area):
@@ -417,8 +564,13 @@ def parse_filters(text, area):
 
 
 def format_filters(filters):
-    return '\n'.join(f'{target}: ' + ' & '.join(f'{k}={v}' for k, v in lookups.items())
-                     for target, lookups in (filters or {}).items())
+    lines = []
+    for target, spec in (filters or {}).items():
+        if isinstance(spec, dict):
+            lines.append(f'{target}: ' + ' & '.join(f'{k}={v}' for k, v in spec.items()))
+        else:
+            lines.append(f'{target}: ' + ' & '.join(condition_text(target, c) for c in spec))
+    return '\n'.join(lines)
 
 
 def _ensure_pin_allowed(user, actor, request=None):

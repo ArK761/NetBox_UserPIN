@@ -1153,3 +1153,68 @@ class DeniedOverviewTest(AreaTestCase):
         self.assertIn('Ask the administrator', html)
         self.assertIn('Show DCIM &gt; Device role', html)  # offered in the request
         self.assertLess(html.index('What you are allowed'), html.index('Access denied'))  # the overview is on top
+
+
+class RowConditionsTest(AreaTestCase):
+    def setUp(self):
+        super().setUp()
+        from dcim.models import Device, DeviceRole, DeviceType, Manufacturer, Site
+        site = Site.objects.create(name='S1', slug='s1')
+        maker = Manufacturer.objects.create(name='M1', slug='m1')
+        dtype = DeviceType.objects.create(manufacturer=maker, model='T1', slug='t1')
+        self.role1 = DeviceRole.objects.create(name='Switch', slug='switch', color='ff0000')
+        self.role2 = DeviceRole.objects.create(name='Router', slug='router', color='00ff00')
+        self.Device = Device
+        Device.objects.create(name='AGG_01', site=site, device_type=dtype, role=self.role1)
+        Device.objects.create(name='AGG_02', site=site, device_type=dtype, role=self.role2)
+        Device.objects.create(name='PRINTER_1', site=site, device_type=dtype, role=self.role1)
+        self.area = self.make_area(targets=('dcim.device',))
+        self.group = areas.create_group(self.area, 'dcim.device', 'Technici', ['view'], self.owner1)
+        self.user = User.objects.create_user('usera', 'a@example.com')
+        areas.add_member(self.group, self.user, None, self.owner1)
+
+    def names(self):
+        areas.clear_cache()
+        user = User.objects.get(pk=self.user.pk)
+        query = areas.row_filter(user, self.area, 'dcim', 'device')
+        return sorted(self.Device.objects.filter(query).values_list('name', flat=True))
+
+    def test_conditions_is_is_not_contains_starts_with_is_one_of(self):
+        self.assertEqual(self.names(), ['AGG_01', 'AGG_02', 'PRINTER_1'])  # no condition: everything
+        areas.add_group_condition(self.group, self.owner1, 'role', 'eq', [str(self.role1.pk)])
+        self.assertEqual(self.names(), ['AGG_01', 'PRINTER_1'])
+        areas.add_group_condition(self.group, self.owner1, 'name', 'startswith', ['printer'])  # all must hold
+        self.assertEqual(self.names(), ['PRINTER_1'])
+        areas.remove_group_condition(self.group, self.owner1, 0)
+        areas.remove_group_condition(self.group, self.owner1, 0)
+        self.assertEqual(self.names(), ['AGG_01', 'AGG_02', 'PRINTER_1'])
+        areas.add_group_condition(self.group, self.owner1, 'role', 'ne', [str(self.role1.pk)])  # must not equal
+        self.assertEqual(self.names(), ['AGG_02'])
+        areas.remove_group_condition(self.group, self.owner1, 0)
+        areas.add_group_condition(self.group, self.owner1, 'name', 'ncontains', ['AGG'])
+        self.assertEqual(self.names(), ['PRINTER_1'])
+        areas.remove_group_condition(self.group, self.owner1, 0)
+        areas.add_group_condition(self.group, self.owner1, 'role', 'in', [str(self.role1.pk), str(self.role2.pk)])
+        self.assertEqual(self.names(), ['AGG_01', 'AGG_02', 'PRINTER_1'])
+        areas.remove_group_condition(self.group, self.owner1, 0)
+        areas.add_group_condition(self.group, self.owner1, 'role', 'nin', [str(self.role1.pk), str(self.role2.pk)])
+        self.assertEqual(self.names(), [])
+
+    def test_invalid_conditions_and_permissions(self):
+        for field, op, values in (('nonsense', 'eq', ['x']), ('name', 'nonsense', ['x']), ('name', 'eq', []),
+                                  ('role', 'eq', ['not a number'])):
+            with self.assertRaises(ValidationError):
+                areas.add_group_condition(self.group, self.owner1, field, op, values)
+        with self.assertRaises(PermissionDenied):
+            areas.add_group_condition(self.group, self.user, 'name', 'eq', ['x'])
+
+    def test_the_page_lists_adds_and_removes_conditions(self):
+        admin_login(self.client, self.owner1)
+        url = reverse('plugins:netbox_user_pin:group', kwargs={'pk': self.area.pk, 'gid': self.group.pk})
+        response = self.client.post(url, {'action': 'rule-add', 'field': 'role', 'op': 'ne', 'values': [self.role1.pk]})
+        self.assertEqual(response.status_code, 302, response.content[:300])
+        html = self.client.get(url).content.decode()
+        self.assertIn('Role is not Switch', html)
+        self.assertIn('pin-filter-fields', html)
+        self.client.post(url, {'action': 'rule-delete', 'index': 0})
+        self.assertNotIn('Role is not Switch', self.client.get(url).content.decode())

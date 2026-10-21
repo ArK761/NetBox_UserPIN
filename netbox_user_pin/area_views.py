@@ -666,6 +666,8 @@ class GroupView(AreaViewMixin, View):
             'rights_set': set(group.rights),
             'tabs': [dict(t, allowed=group.tabs is None or t['name'] in group.tabs) for t in tabs if not t['plugin']],
             'plugin_tabs': [t for t in tabs if t['plugin']], 'rows': rows,
+            'conditions': areas.group_conditions(group), 'filter_fields': areas.filter_fields(target),
+            'ops': list(areas.row_op_labels().items()),
             'can_manage': areas.can_manage(request.user, area) or areas._may_grant(request.user, area),
             'settings': service.get_settings(),
         })
@@ -698,6 +700,24 @@ class GroupView(AreaViewMixin, View):
                     areas.add_member(group, user, None, request.user, request=request)
                 if chosen:
                     messages.success(request, _('Added to the group.'))
+            elif action == 'rule-add':
+                op = request.POST.get('op', '')
+                values = request.POST.getlist('values') or [request.POST.get('value_text', '')]
+                if op in ('in', 'nin') and len(values) == 1:
+                    values = values[0].split(',')
+                areas.add_group_condition(group, request.user, request.POST.get('field', ''), op, values,
+                                          request=request)
+                messages.success(request, _('The condition was added.'))
+                if {'add', 'change'} & set(group.rights):
+                    messages.warning(request, _('Mind that a record which does not meet the conditions disappears '
+                                                'for the group right after it is saved.'))
+            elif action == 'rule-delete':
+                try:
+                    index = int(request.POST.get('index', ''))
+                except ValueError:
+                    index = -1
+                areas.remove_group_condition(group, request.user, index, request=request)
+                messages.success(request, _('The condition was removed.'))
             elif action == 'revoke':
                 areas.revoke_grant(get_object_or_404(AreaGrant, pk=request.POST.get('pk'), profile=group),
                                    request.user, request=request)

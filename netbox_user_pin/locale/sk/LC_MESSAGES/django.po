@@ -5873,6 +5873,82 @@ msgstr ""
 msgid "Show %(blocked)s - the value of the field %(field)s of %(type)s"
 msgstr "Zobraziť %(blocked)s – hodnotu poľa %(field)s v objekte %(type)s"
 
+msgid "is"
+msgstr "je"
+
+msgid "is not"
+msgstr "nie je"
+
+msgid "contains"
+msgstr "obsahuje"
+
+msgid "does not contain"
+msgstr "neobsahuje"
+
+msgid "starts with"
+msgstr "začína na"
+
+msgid "is one of"
+msgstr "je jedno z"
+
+msgid "is not one of"
+msgstr "nie je jedno z"
+
+msgid "Choose the field and the condition."
+msgstr "Vyber pole a podmienku."
+
+msgid "Write or choose the value."
+msgstr "Napíš alebo vyber hodnotu."
+
+msgid "The condition is not valid: %(error)s"
+msgstr "Podmienka nie je platná: %(error)s"
+
+msgid "yes"
+msgstr "áno"
+
+msgid "no"
+msgstr "nie"
+
+msgid "The condition was added."
+msgstr "Podmienka bola pridaná."
+
+msgid "The condition was removed."
+msgstr "Podmienka bola odstránená."
+
+msgid ""
+"Mind that a record which does not meet the conditions disappears for the "
+"group right after it is saved."
+msgstr ""
+"Pozor: záznam, ktorý nespĺňa podmienky, skupine hneď po uložení zmizne."
+
+msgid "Rows"
+msgstr "Riadky"
+
+msgid ""
+"Which records of this object type the group sees. Without a condition it "
+"sees all of them. When there are several conditions, all of them must hold."
+msgstr ""
+"Ktoré záznamy tohto typu objektu skupina vidí. Bez podmienky vidí všetky. "
+"Keď je podmienok viac, musia platiť všetky."
+
+msgid "Remove the condition"
+msgstr "Odstrániť podmienku"
+
+msgid "No condition: the group sees all records."
+msgstr "Žiadna podmienka: skupina vidí všetky záznamy."
+
+msgid "— field —"
+msgstr "— pole —"
+
+msgid "value"
+msgstr "hodnota"
+
+msgid "Several values: separate them with a comma."
+msgstr "Viac hodnôt: oddeľ ich čiarkou."
+
+msgid "Add condition"
+msgstr "Pridať podmienku"
+
 #~ msgid ""
 #~ "There is no other administrator or delegate with PIN and 2FA who could "
 #~ "confirm."

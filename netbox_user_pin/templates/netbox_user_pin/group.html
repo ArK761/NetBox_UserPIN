@@ -45,6 +45,7 @@
   </div>
 </div>
 
+{% include 'netbox_user_pin/inc/group_rows.html' %}
 <details class="card mt-3" id="pin-fields-box">
   <summary class="card-header" style="cursor: pointer"><h2 class="card-title mb-0 d-inline"><i class="mdi mdi-form-textbox"></i> {% trans "Fields" %}</h2> <span class="text-secondary small ms-2">{% trans "Click to set which fields the group sees or changes." %}</span></summary>
   <form method="post">{% csrf_token %}<input type="hidden" name="action" value="fields">
