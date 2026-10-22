@@ -14,6 +14,7 @@ import time
 from django.apps import apps
 from django.conf import settings as django_settings
 from django.core.cache import cache
+from django.db.models import Q
 from django.http import JsonResponse
 from django.shortcuts import redirect, render
 from django.utils.functional import SimpleLazyObject
@@ -72,6 +73,8 @@ def arm_user(user):
         decided = _plugin_perm(user, perm)
         if decided is not None:
             return decided
+        if perm.partition('.')[2].startswith('view_') and _select_perm(perm):
+            return True  # the one request that serves the drop-down of a relation field
         if perm == 'netbox_user_pin.change_pinsettings' and not roles.is_core(user):
             return False  # settings of the PIN: CORE only, whatever NetBox permission somebody gave himself
         verdict = areas.check_perm(user, perm)
@@ -283,6 +286,8 @@ class AreaGuardMiddleware:
         if area is None:  # "deny everything not allowed" reaches what no area covers
             if not areas.default_deny_blocks(user, app_label, model_name, package):
                 return None
+            if _select_exception(request, user, api, target, view_kwargs):
+                return None
             return denied_response(request, None, right=right, target=ask, tab_label=tab[1] if tab else None)
         if areas.can(user, area, right, rights_target):
             if tab and not tab[2] and not areas.tab_allowed(user, area, target, tab[0]):
@@ -302,8 +307,49 @@ class AreaGuardMiddleware:
                 if (response := pin_gate(request, scope=f'area-{area.key}')) is not None:
                     return response
             return None
+        if _select_exception(request, user, api, target, view_kwargs):
+            return None
         _throttled_log(user, area, right, request)
         return denied_response(request, area, right, ask, tab_label=tab[1] if tab else None)
+
+
+def _select_exception(request, user, api, target, view_kwargs):
+    """
+    The drop-down of a relation field the user may write asks the API for the objects to pick from (``brief``): that
+    one request is served, narrowed by the text of the field rule - the pages of the type stay closed.
+    """
+    if not (api and request.method == 'GET' and target and not (view_kwargs or {}).get('pk')):
+        return False
+    if not request.GET.get('brief') or request.GET.get('fields') or request.GET.get('include'):
+        return False
+    from . import fieldrules
+    scope = fieldrules.select_scope(user)
+    if target not in scope:
+        return False
+    request._userpin_select = (target, scope[target])
+    return True
+
+
+def _select_perm(perm):
+    app_label, _dot, codename = perm.partition('.')
+    try:
+        from netbox.context import current_request
+        flag = getattr(current_request.get(), '_userpin_select', None)
+    except Exception:  # noqa: BLE001
+        return False
+    if not flag:
+        return False
+    model_name = flag[0].partition('.')[2]
+    return flag[0].partition('.')[0] == app_label and codename == f'view_{model_name}'
+
+
+def _select_flag(meta):
+    try:
+        from netbox.context import current_request
+        flag = getattr(current_request.get(), '_userpin_select', None)
+    except Exception:  # noqa: BLE001
+        return None
+    return flag if flag and flag[0] == f'{meta.app_label}.{meta.model_name}' else None
 
 
 def _child_denied(request, user, cls, tab=None):
@@ -379,6 +425,16 @@ def install():
             if _token_request():
                 return original(self, user, action)
             meta = self.model._meta
+            if (flag := _select_flag(meta)) is not None:  # the drop-down of a relation field: see _select_exception
+                if not flag[1]:
+                    return self
+                field = areas._name_field(self.model)
+                if field is None:
+                    return self.none()
+                query = Q()
+                for text in flag[1]:
+                    query |= Q(**{f'{field}__icontains': text})
+                return self.filter(query)
             area = areas.area_for(meta.app_label, meta.model_name, package=meta.app_label)
             if area is None:
                 if areas.default_deny_blocks(user, meta.app_label, meta.model_name, meta.app_label):

@@ -6002,6 +6002,18 @@ msgid ""
 "You do not administer any protected area. Here is what you are allowed."
 msgstr "Nespravujete žiadnu chránenú oblasť. Tu je to, čo máte povolené."
 
+msgid "may pick only names containing (optional)"
+msgstr "môže vybrať len názvy obsahujúce (voliteľné)"
+
+msgid ""
+"Picks %(type)s: with \"Read and write\" the user may choose its objects in "
+"this field (only those whose name contains the text, if given) - the pages "
+"of %(type)s stay closed."
+msgstr ""
+"Výber z %(type)s: pri „Čítať a zapisovať“ môže používateľ v tomto poli "
+"vybrať jeho objekty (len tie, ktorých názov obsahuje text, ak je zadaný) - "
+"stránky %(type)s zostávajú zatvorené."
+
 #~ msgid ""
 #~ "There is no other administrator or delegate with PIN and 2FA who could "
 #~ "confirm."

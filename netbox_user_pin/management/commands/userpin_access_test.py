@@ -130,6 +130,7 @@ class Command(BaseCommand):
         finally:
             client.logout()
 
+        self._drop_downs(user)
         if options['all']:
             self._everything(user, options['writes'])
 
@@ -150,6 +151,38 @@ class Command(BaseCommand):
                      'netbox_user_pin.view_userpin', 'netbox_user_pin.view_pinsettings'):
             self.stdout.write(f'{perm:36} {user.has_perm(perm)}')
         self.stdout.write('\nPAGE verdicts: OPEN = shown, DENIED = the "what you are allowed / send a request" page.')
+
+    def _drop_downs(self, user):
+        """What the user may PICK in the relation fields he may write: the drop-down is served, the pages stay closed."""
+        from django.apps import apps
+        from django.urls import reverse
+        from netbox_user_pin import fieldrules
+        from utilities.views import get_viewname
+        self.stdout.write('\n== What the user may PICK in relation fields (drop-downs of fields he may write) ==')
+        scope = fieldrules.select_scope(user)
+        if not scope:
+            self.stdout.write('(nothing: no relation field is writable for him)')
+            return
+        django_settings.ALLOWED_HOSTS = ['*']
+        client = Client(HTTP_HOST='localhost', raise_request_exception=False)
+        client.force_login(user)
+        try:
+            for label, texts in sorted(scope.items()):
+                model = apps.get_model(label)
+                try:
+                    api = reverse(get_viewname(model, action='list', rest_api=True))
+                    page = reverse(get_viewname(model, action='list'))
+                except Exception:  # noqa: BLE001
+                    self.stdout.write(f'{label:28} (no list address)')
+                    continue
+                response = client.get(f'{api}?brief=true&limit=1', HTTP_ACCEPT='application/json')
+                count = response.json().get('count', '?') if response.status_code == 200 else response.status_code
+                closed = _verdict(client.get(page))
+                rule = 'all' if texts is None else 'only names containing ' + ' / '.join(texts)
+                self.stdout.write(f'{label:28} drop-down: {rule:34} gives {count} of {model.objects.count()}'
+                                  f'  | pages of the type: {closed}')
+        finally:
+            client.logout()
 
     def _everything(self, user, writes):
         """

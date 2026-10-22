@@ -1279,6 +1279,42 @@ class RowConditionsTest(AreaTestCase):
         query = areas.row_filter(user, self.area, 'dcim', 'device')
         return sorted(self.Device.objects.filter(query).values_list('name', flat=True))
 
+    def test_picking_in_a_relation_field_opens_only_the_drop_down(self):
+        from dcim.models import DeviceRole, Site
+        keeper = User.objects.create_superuser('keeper2', 'k2@example.com', 'x')
+        service.set_pin(keeper, GOOD_PIN)
+        enable_2fa(keeper)
+        areas.add_keeper(keeper, self.master)  # the first keeper switches "deny everything not allowed" on
+        DeviceRole.objects.create(name='Printer role', slug='printer-role', color='ff0000')
+        Site.objects.create(name='S2', slug='s2')
+        areas.update_group(self.group, self.owner1, name='Technici', rights=['view', 'change'])
+        areas.save_field_rules(self.area, self.group, 'dcim.device', {'role': ('write', 'Print')}, self.owner1)
+        areas.clear_cache()
+        self.login(self.user)
+        api = {'HTTP_ACCEPT': 'application/json'}
+        response = self.client.get('/api/dcim/device-roles/?brief=true', **api)
+        self.assertEqual(response.status_code, 200)
+        names = [r['name'] for r in response.json()['results']]
+        self.assertEqual(names, ['Printer role'])  # only what the rule allows to pick (Switch and Router are not)
+        self.assertEqual(self.client.get('/api/dcim/device-roles/', **api).status_code, 403)  # not a list of the type
+        self.assertEqual(self.client.get('/api/dcim/device-roles/?brief=true&fields=slug', **api).status_code, 403)
+        self.assertEqual(self.client.get('/dcim/device-roles/').status_code, 403)  # its pages stay closed
+        sites = self.client.get('/api/dcim/sites/?brief=true', **api)  # a relation without a text: all of the type
+        self.assertEqual((sites.status_code, sites.json()['count']), (200, Site.objects.count()))
+        self.assertEqual(self.client.get('/api/ipam/vlans/?brief=true', **api).status_code, 403)  # not a field of his
+        from io import StringIO
+
+        from django.core.management import call_command
+        out = StringIO()
+        call_command('userpin_access_test', self.user.username, stdout=out)
+        report = out.getvalue()
+        self.assertIn('What the user may PICK', report)
+        self.assertRegex(report, r'dcim.devicerole\s+drop-down: only names containing Print\s+gives 1 of 3')
+        # a group that only reads picks nothing
+        areas.update_group(self.group, self.owner1, name='Technici', rights=['view'])
+        areas.clear_cache()
+        self.assertEqual(self.client.get('/api/dcim/device-roles/?brief=true', **api).status_code, 403)
+
     def test_changelog_hides_rows_of_objects_the_user_may_not_view(self):
         from core.models import ObjectChange
         outsider = User.objects.create_user('outsider', 'x@example.com')

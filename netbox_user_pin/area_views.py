@@ -664,11 +664,15 @@ class GroupView(AreaViewMixin, View):
         target = group.target
         app_label, _dot, model = target.partition('.')
         rules = {r.field: r for r in AreaFieldRule.objects.filter(area=area, profile=group, target=target)}
+        from django.apps import apps as django_apps
+        model_class = django_apps.get_model(app_label, model)
         rows = []
         for key, label, kind in fieldrules.fields_of(app_label, model):
             rule = rules.get(key)
+            related = fieldrules.related_label(model_class, key)
             rows.append({'key': key, 'label': label, 'kind': kind, 'mode': rule.mode if rule else 'default',
-                         'contains': rule.contains if rule else ''})
+                         'contains': rule.contains if rule else '',
+                         'related': _target_label(related) if related else ''})
         tabs = areas.tabs_of(target)
         conditions = areas.group_conditions(group)
         filter_fields = areas.filter_fields(target)

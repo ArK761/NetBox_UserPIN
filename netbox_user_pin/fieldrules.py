@@ -89,6 +89,64 @@ def compute_policy(user, area, app_label, model):
     return FieldPolicy(default, modes, contains)
 
 
+def related_label(model, key):
+    """'app.model' of the objects a relation field (a model field or ``cf:<name>``) points at, or None."""
+    try:
+        if key.startswith('cf:'):
+            from extras.models import CustomField
+            cf = CustomField.objects.filter(name=key[3:], type__in=('object', 'multiobject')).first()
+            ct = cf.related_object_type if cf else None
+            return f'{ct.app_label}.{ct.model}' if ct else None
+        field = model._meta.get_field(key)
+    except Exception:  # noqa: BLE001 - no such field
+        return None
+    related = getattr(field, 'related_model', None)
+    if getattr(field, 'is_relation', False) and related is not None and not field.auto_created:
+        return f'{related._meta.app_label}.{related._meta.model_name}'
+    return None
+
+
+def select_scope(user):
+    """
+    {'ipam.vlan': None | [texts]}: the objects the user may PICK in the relation fields he may write - all of the type
+    (None) or only those whose name contains one of the texts of the field rule. Picking does not open the type: its
+    pages stay closed, only the drop-down of the field is served.
+    """
+    from django.apps import apps
+    from .models import AreaGrant
+    scope = {}
+    if not getattr(user, 'is_authenticated', False):
+        return scope
+    entries = []  # (area, target, rights)
+    for grant in AreaGrant.objects.filter(user=user, revoked__isnull=True).select_related('area', 'profile'):
+        if grant.is_active and grant.target and grant.area in areas.active_areas():
+            entries.append((grant.area, grant.target, set(grant.profile.rights)))
+    for area in areas.active_areas():
+        if areas.is_owner(user, area):
+            entries += [(area, t, set(areas.GENERIC_RIGHTS)) for t in areas.area_models(area)]
+    for area, target, rights in entries:
+        if not {'add', 'change'} & rights:
+            continue
+        app_label, _dot, name = target.partition('.')
+        try:
+            model = apps.get_model(app_label, name)
+        except LookupError:
+            continue
+        policy = compute_policy(user, area, app_label, name)
+        for key, _label, _kind in fields_of(app_label, name):
+            related = related_label(model, key)
+            if not related:
+                continue
+            mode = policy.mode(key) if policy else AreaFieldMode.WRITE
+            if mode != AreaFieldMode.WRITE:
+                continue
+            texts = policy.texts(key) if policy else None
+            if related in scope and scope[related] is None:
+                continue
+            scope[related] = None if not texts else sorted(set(scope.get(related) or []) | set(texts))
+    return scope
+
+
 def current_policy(app_label, model):
     """The policy for the user of the current request, or None (no area, no rules, not logged in)."""
     try:
@@ -251,6 +309,20 @@ def _hook_detail():
     _once(ObjectView, 'get_object', get_object)
 
 
+def _must_include(texts):
+    from django.core.exceptions import ValidationError
+
+    def validator(value, texts=texts):
+        if value in (None, '', []):
+            return
+        items = value if isinstance(value, (list, tuple)) or (hasattr(value, '__iter__') and not isinstance(
+            value, str) and not hasattr(value, 'pk')) else [value]
+        if any(not matches(item, texts) for item in items):
+            raise ValidationError(gettext('Only values containing "%(text)s" are allowed.'),
+                                  params={'text': ' / '.join(texts)})
+    return validator
+
+
 def _hook_forms():
     from django import forms
     from django.core.exceptions import ValidationError
@@ -310,6 +382,8 @@ def _hook_forms():
                 elif mode == AreaFieldMode.READ:
                     self.fields[name].disabled = True
                     self.fields[name].required = False
+                elif (texts := policy.texts(name)) and hasattr(self.fields[name], 'queryset'):
+                    self.fields[name].validators = list(self.fields[name].validators) + [_must_include(texts)]
         return wrapper
 
     from netbox.forms.bulk_edit import NetBoxModelBulkEditForm
