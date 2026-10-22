@@ -921,8 +921,15 @@ class TabsTest(AreaTestCase):
         areas.set_grant_tabs(grant, ['interfaces'], self.owner1)
         areas.clear_cache()
         self.login(self.normal)
+        from dcim.models import Interface
+        Interface.objects.create(device=self.device, name='eth-visible', type='1000base-t')
         self.assertEqual(self.client.get(self.main).status_code, 200)
-        self.assertEqual(self.client.get(self.interfaces).status_code, 403)  # interfaces are in no area: denied
+        response = self.client.get(self.interfaces)  # the allowed tab is the permission: its rows of this device show
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'eth-visible')
+        areas.set_grant_tabs(grant, [], self.owner1)
+        areas.clear_cache()
+        self.assertEqual(self.client.get(self.interfaces).status_code, 403)  # tab not allowed: denied
 
     def test_generic_tabs_changelog_journal_contacts_are_closed_too(self):
         area = self.make_area(targets=('dcim.device', 'dcim.interface'))

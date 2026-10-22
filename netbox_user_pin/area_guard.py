@@ -279,7 +279,7 @@ class AreaGuardMiddleware:
             if tab and not tab[2] and not areas.tab_allowed(user, area, target, tab[0]):
                 _throttled_log(user, area, right, request)
                 return denied_response(request, area, right, ask, tab_label=tab[1])
-            if (response := _child_denied(request, user, cls)) is not None:
+            if (response := _child_denied(request, user, cls, tab)) is not None:
                 return response
             # whoever holds access unlocks the PIN to enter (not before the owners exist, and the REST API has no
             # unlock step)
@@ -297,14 +297,21 @@ class AreaGuardMiddleware:
         return denied_response(request, area, right, ask, tab_label=tab[1] if tab else None)
 
 
-def _child_denied(request, user, cls):
-    """A page that lists objects of another type (a device's interfaces) also needs the right on that type."""
+def _child_denied(request, user, cls, tab=None):
+    """
+    A page that lists objects of another type (a device's interfaces) also needs the right on that type - unless it is
+    a tab of the object that the group allows: the tab (Interfaces) is then the permission, the rows are those of
+    this object.
+    """
     child = getattr(cls, 'child_model', None) if cls is not None else None
     meta = getattr(child, '_meta', None)
     if meta is None:
         return None
     child_target = f'{meta.app_label}.{meta.model_name}'
     child_area = areas.area_for(meta.app_label, meta.model_name, package=meta.app_label)
+    if child_area is None and tab and not tab[2]:
+        request._userpin_children = child_target  # restrict() lets this type through for this request
+        return None
     if child_area is not None:
         if areas.can(user, child_area, 'view', child_target):
             return None
@@ -313,6 +320,16 @@ def _child_denied(request, user, cls):
     if areas.default_deny_blocks(user, meta.app_label, meta.model_name, meta.app_label):
         return denied_response(request, None, right='view', target=child_target)
     return None
+
+
+def _child_of_allowed_tab(meta):
+    """Is this type the list of a tab of an object that the current request was allowed to open (Device › Interfaces)?"""
+    try:
+        from netbox.context import current_request
+        request = current_request.get()
+    except Exception:  # noqa: BLE001
+        return False
+    return getattr(request, '_userpin_children', None) == f'{meta.app_label}.{meta.model_name}'
 
 
 def install():
@@ -339,7 +356,9 @@ def install():
             area = areas.area_for(meta.app_label, meta.model_name, package=meta.app_label)
             if area is None:
                 if areas.default_deny_blocks(user, meta.app_label, meta.model_name, meta.app_label):
-                    return self.none()  # GraphQL, search, widgets, selectors ... also obey "deny everything not allowed"
+                    # the rows of an allowed tab (Device › Interfaces) are shown whatever NetBox permissions say; the
+                    # page narrows them to the object
+                    return self if _child_of_allowed_tab(meta) else self.none()  # GraphQL, search, widgets, selectors ... also obey "deny everything not allowed"
                 result = original(self, user, action)
                 hidden = areas.unseen_objects(user, meta.app_label, meta.model_name)
                 if hidden is not None:
