@@ -648,6 +648,20 @@ class DefaultDenyTest(AreaTestCase):
         response = self.client.get(reverse('plugins:netbox_user_pin:areas'))
         self.assertRedirects(response, reverse('plugins:netbox_user_pin:my_access'), fetch_redirect_response=False)
 
+    def test_the_server_test_command_reports_what_a_user_gets(self):
+        from io import StringIO
+
+        from django.core.management import call_command
+        self.add_keeper()
+        areas.clear_cache()
+        out = StringIO()
+        call_command('userpin_access_test', 'master', stdout=out)
+        text = out.getvalue()
+        self.assertIn('Users (admin)', text)
+        self.assertIn('DENIED', text)
+        self.assertIn('users.token', text)
+        self.assertRegex(text, r'Change password\s+/user/password/\s+OPEN')
+
     def test_owner_cannot_take_sensitive_or_foreign_types_and_master_cannot_manage_with_keepers(self):
         area = self.make_area(targets=('dcim.device',))
         other = self.make_area(targets=('ipam',), owners=False)
