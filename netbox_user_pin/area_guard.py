@@ -31,7 +31,7 @@ logger = logging.getLogger('netbox_user_pin')
 SYSTEM_PATHS = ('/core/background-', '/core/system', '/core/plugins', '/api/core/background-', '/api/core/system',
                 '/api/plugins/installed-plugins', '/api/plugins/catalog',
                 # the own profile and preferences: the only thing left open is changing the password
-                '/user/profile', '/user/preferences', '/user/notifications', '/user/bookmarks', '/user/subscriptions')
+                '/user/profile', '/user/preferences', '/user/notifications', '/user/bookmarks', '/user/subscriptions', '/user/api-tokens')
 
 
 def _plugin_perm(user, perm):

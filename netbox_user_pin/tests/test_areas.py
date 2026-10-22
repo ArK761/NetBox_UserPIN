@@ -692,6 +692,7 @@ class DefaultDenyTest(AreaTestCase):
         self.assertEqual(self.client.get('/user/password/').status_code, 200)  # the one thing that always works
         self.assertEqual(self.client.get('/user/preferences/').status_code, 403)
         self.assertEqual(self.client.get('/user/profile/').status_code, 403)
+        self.assertEqual(self.client.get('/user/api-tokens/').status_code, 403)
         self.assertEqual(self.client.get('/user/preferences/').status_code, 403)
         self.assertEqual(self.client.get('/user/profile/').status_code, 403)
 
