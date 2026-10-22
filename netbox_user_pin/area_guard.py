@@ -198,7 +198,9 @@ def denied_response(request, area, right='view', target=None, tab_label=None):
     wants_json = request.path_info.startswith('/api/') or 'application/json' in request.headers.get('Accept', '')
     if area is None:
         if wants_json:
-            return JsonResponse({'detail': 'Denied: nothing allows this and everything else is denied.'}, status=403)
+            response = JsonResponse({'detail': 'Denied: nothing allows this and everything else is denied.'}, status=403)
+            response['X-UserPIN'] = 'denied'
+            return response
         with translation.override(service.get_settings().language or 'en'):
             response = render(request, 'netbox_user_pin/area_denied.html', {
                 'area': None, 'deny': True, 'keepers': areas.keepers(), 'next': request.get_full_path(),
@@ -208,9 +210,13 @@ def denied_response(request, area, right='view', target=None, tab_label=None):
                 'overview': (overview := _overview(user, target)), 'scope_hint': _scope_hint(overview, target),
             }, status=403)
             response.render() if hasattr(response, 'render') else None
+        response['X-UserPIN'] = 'denied'
         return response
     if wants_json:
-        return JsonResponse({'detail': f'Access to the protected area "{area.name}" requires a PIN grant.'}, status=403)
+        response = JsonResponse({'detail': f'Access to the protected area "{area.name}" requires a PIN grant.'},
+                                status=403)
+        response['X-UserPIN'] = 'denied'
+        return response
     pending = (AreaRequest.objects.filter(area=area, user=user, target=target or '',
                                           status=AreaRequestStatus.PENDING).first()
                if getattr(user, 'is_authenticated', False) else None)
@@ -224,6 +230,7 @@ def denied_response(request, area, right='view', target=None, tab_label=None):
             'scope_hint': _scope_hint(overview, target),
         }, status=403)
         response.render() if hasattr(response, 'render') else None
+    response['X-UserPIN'] = 'denied'
     return response
 
 

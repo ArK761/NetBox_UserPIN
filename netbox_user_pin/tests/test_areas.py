@@ -662,6 +662,21 @@ class DefaultDenyTest(AreaTestCase):
         self.assertIn('users.token', text)
         self.assertRegex(text, r'Change password\s+/user/password/\s+OPEN')
 
+    def test_the_server_test_command_walks_every_page(self):
+        from io import StringIO
+
+        from django.core.management import call_command
+        self.add_keeper()
+        areas.clear_cache()
+        users_before = User.objects.count()
+        out = StringIO()
+        call_command('userpin_access_test', 'master', '--all', '--writes', stdout=out)
+        text = out.getvalue()
+        self.assertIn('EVERY object type', text)
+        self.assertIn('WHAT THE USER CAN DO', text)
+        self.assertIn('Object types:', text)
+        self.assertEqual(User.objects.count(), users_before)  # nothing was saved
+
     def test_owner_cannot_take_sensitive_or_foreign_types_and_master_cannot_manage_with_keepers(self):
         area = self.make_area(targets=('dcim.device',))
         other = self.make_area(targets=('ipam',), owners=False)

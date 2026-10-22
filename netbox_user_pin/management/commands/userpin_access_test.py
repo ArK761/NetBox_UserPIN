@@ -3,9 +3,12 @@ Test of the protection from the server shell: what a user really gets, without c
 
     ./manage.py userpin_access_test XXX [--url /dcim/devices/864/interfaces/ ...]
 """
+import re
+
 from django.conf import settings as django_settings
 from django.core.management.base import BaseCommand, CommandError
 from django.test import Client
+from django.urls import URLPattern, URLResolver, get_resolver
 
 from netbox_user_pin import areas
 
@@ -59,12 +62,45 @@ def _verdict(response):
     return f'HTTP {code}'
 
 
+SKIP_ROUTES = ('logout', 'login', 'media', 'static', '__debug__', 'admin/', 'api/docs', 'api/schema', 'graphql', 'oauth',
+               'social', 'webhook', 'plugins/user-pin/')
+PARAM = re.compile(r'<(?:\w+:)?(\w+)>')
+
+
+def walk(patterns, prefix='', defaults=None):
+    """Every route of the project: (route, callback, default kwargs)."""
+    for pattern in patterns:
+        route = str(pattern.pattern)
+        if re.search(r'[\^$()\\]', route):  # a regular expression, not a plain route
+            continue
+        if isinstance(pattern, URLResolver):
+            yield from walk(pattern.url_patterns, prefix + route, {**(defaults or {}), **pattern.default_kwargs})
+        elif isinstance(pattern, URLPattern):
+            yield prefix + route, pattern.callback, {**(defaults or {}), **pattern.default_args}
+
+
+def _model_of(callback, kwargs):
+    model = kwargs.get('model')
+    if hasattr(model, '_meta'):
+        return model
+    cls = getattr(callback, 'view_class', None) or getattr(callback, 'cls', None)
+    queryset = getattr(cls, 'queryset', None)
+    if queryset is not None:
+        return queryset.model
+    model = getattr(cls, 'model', None)
+    return model if hasattr(model, '_meta') else None
+
+
 class Command(BaseCommand):
     help = 'Show what a user gets from the pages, the REST API (browser) and the lists, to test the protection.'
 
     def add_arguments(self, parser):
         parser.add_argument('username')
         parser.add_argument('--url', action='append', default=[], help='one more URL to try (repeatable)')
+        parser.add_argument('--writes', action='store_true', help='with --all: also try an add, a change and a delete '
+                                                                 'of every object type (rolled back at once)')
+        parser.add_argument('--all', action='store_true', help='try EVERY page of NetBox (lists, details with all their '
+                                                              'tabs, edit pages, the REST API): takes a few minutes')
 
     def handle(self, *args, **options):
         from django.apps import apps
@@ -94,6 +130,9 @@ class Command(BaseCommand):
         finally:
             client.logout()
 
+        if options['all']:
+            self._everything(user, options['writes'])
+
         self.stdout.write('\n== Rows the user gets in lists, search, GraphQL, widgets: visible / all ==')
         for target in MODELS:
             try:
@@ -111,3 +150,125 @@ class Command(BaseCommand):
                      'netbox_user_pin.view_userpin', 'netbox_user_pin.view_pinsettings'):
             self.stdout.write(f'{perm:36} {user.has_perm(perm)}')
         self.stdout.write('\nPAGE verdicts: OPEN = shown, DENIED = the "what you are allowed / send a request" page.')
+
+    def _everything(self, user, writes):
+        """
+        Every object type of this NetBox, step by step: its list, a real object (one the user may see, else any), the
+        tabs of that object, and - with ``--writes`` - an add, a change and a delete, all of them inside a transaction
+        that is rolled back at once (nothing is saved, no webhook is sent).
+        """
+        from collections import defaultdict
+
+        from django.db import connection, transaction
+        django_settings.ALLOWED_HOSTS = ['*']
+        client = Client(HTTP_HOST='localhost', raise_request_exception=False)
+        client.force_login(user)
+        table = defaultdict(dict)  # model label -> {column: text}
+        problems = []
+        pks = {}
+        routes = [r for r in sorted(walk(get_resolver().url_patterns), key=lambda r: r[0])
+                  if not any(part in r[0] for part in SKIP_ROUTES)]
+        self.stdout.write(f'\n== EVERY object type ({len(routes)} routes; {"with" if writes else "without"} '
+                          f'fictitious writes, rolled back) ==')
+
+        def pk_of(model):
+            if model not in pks:
+                queryset = model._default_manager.all()
+                mine = queryset.restrict(user, 'view').first() if hasattr(queryset, 'restrict') else None
+                obj = mine or queryset.first()
+                pks[model] = obj.pk if obj is not None else None
+            return pks[model]
+
+        def call(method, url, api):
+            extra = {'HTTP_ACCEPT': 'application/json' if api else 'text/html'}
+            if method == 'GET':
+                return client.get(url, **extra)
+            with transaction.atomic():  # nothing of this stays
+                if method == 'POST':
+                    response = client.post(url, {} if not api else '{}', content_type='application/json' if api else
+                                           'application/x-www-form-urlencoded', **extra)
+                elif method == 'PATCH':
+                    response = client.patch(url, '{}', content_type='application/json', **extra)
+                else:
+                    response = client.delete(url, **extra)
+                transaction.set_rollback(True)
+            return response
+
+        def verdict(response):
+            if response.headers.get('X-UserPIN') == 'denied':
+                return 'no'
+            if response.status_code == 403:
+                return 'no(NetBox)'
+            if response.status_code in (401, 404, 405):
+                return None
+            if response.status_code >= 500:
+                return 'ERR'
+            return 'ok'
+
+        try:
+            for route, callback, kwargs in routes:
+                params = set(PARAM.findall(route))
+                if params - {'pk'}:
+                    continue
+                model = _model_of(callback, kwargs)
+                if model is None:
+                    continue
+                label = f'{model._meta.app_label}.{model._meta.model_name}'
+                url = '/' + route
+                if params:
+                    if pk_of(model) is None:
+                        continue
+                    url = url.replace('<int:pk>', str(pk_of(model)))
+                if '<' in url:
+                    continue
+                api = url.startswith('/api/')
+                last = route.rstrip('/').rsplit('/', 1)[-1]
+                steps = []  # (column, method)
+                if api:
+                    if not params:
+                        steps = [('API list', 'GET')] + ([('API add', 'POST')] if writes else [])
+                    elif last == '<int:pk>':
+                        steps = [('API read', 'GET')] + ([('API change', 'PATCH'), ('API delete', 'DELETE')]
+                                                         if writes else [])
+                else:
+                    if not params:
+                        if last == 'add':
+                            steps = [('add', 'POST')] if writes else []
+                        elif last in ('edit', 'delete', 'import', 'rename'):
+                            steps = [('bulk ' + last, 'POST')] if writes else []
+                        else:
+                            steps = [('list', 'GET')]
+                    elif last == '<int:pk>':
+                        steps = [('detail', 'GET')]
+                    elif last == 'edit':
+                        steps = [('change', 'POST')] if writes else [('change page', 'GET')]
+                    elif last == 'delete':
+                        steps = [('delete', 'POST')] if writes else []
+                    else:
+                        steps = [('tab ' + last, 'GET')]
+                for column, method in steps:
+                    try:
+                        response = call(method, url, api)
+                    except Exception as exc:  # noqa: BLE001
+                        problems.append(f'{method} {url}: {type(exc).__name__}')
+                        continue
+                    result = verdict(response)
+                    if result == 'ERR':
+                        problems.append(f'{method} {url}: HTTP {response.status_code}')
+                    if result:
+                        table[label][column] = result
+        finally:
+            client.logout()
+
+        opened = {label: cols for label, cols in table.items() if any(v in ('ok', 'ERR') for v in cols.values())}
+        self.stdout.write(f'Object types: {len(table)}; with something open: {len(opened)}; '
+                          f'fully denied: {len(table) - len(opened)}')
+        self.stdout.write('\nWHAT THE USER CAN DO (ok = allowed, no = the "no access" page; only types with something open):')
+        for label in sorted(opened):
+            ok = [f'{c}' for c, v in sorted(opened[label].items()) if v == 'ok']
+            no = [f'{c}' for c, v in sorted(opened[label].items()) if v.startswith('no')]
+            self.stdout.write(f'\n  {label}\n     OPEN:   {", ".join(ok) or "-"}\n     DENIED: {", ".join(no) or "-"}')
+        if problems:
+            self.stdout.write('\nFailed to draw / server error (past the guard; may be only this shell):')
+            for line in problems[:60]:
+                self.stdout.write(f'  {line}')
