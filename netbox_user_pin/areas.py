@@ -56,17 +56,9 @@ EVENT_TYPE = 'netbox_user_pin_area_request'
 
 _registry = {}
 _cache = {'at': 0.0, 'areas': None, 'deny': False, 'keepers': frozenset()}
-# Never refused by the default deny: what every logged-in user needs to work with their own account in NetBox.
-DEFAULT_DENY_EXEMPT = frozenset({
-    'extras.bookmark', 'extras.notification', 'extras.notificationgroup', 'extras.subscription', 'extras.dashboard',
-    'users.userconfig', 'users.token', 'core.objecttype',
-})
-# ... and for each of them the field of its owner: outside of the protected areas everybody (a superuser included,
-# the protection keepers excepted) sees and changes only their own rows of these types.
-OWN_ROWS = {
-    'extras.bookmark': 'user', 'extras.notification': 'user', 'extras.subscription': 'user',
-    'extras.dashboard': 'user', 'users.userconfig': 'user', 'users.token': 'user',
-}
+# Never refused by the default deny: technical data NetBox needs to draw its forms. Nothing else - the user may do what
+# a group allows him, and change his password (a view without objects, never refused).
+DEFAULT_DENY_EXEMPT = frozenset({'core.objecttype'})
 
 
 # The types that point at an object of another type: what is in a protected area is not told by them either.
@@ -87,14 +79,6 @@ def unseen_objects(user, app_label, model):
             app, _dot, name = target.partition('.')
             hidden |= Q(**{f'{field}__app_label': app, **({f'{field}__model': name} if name else {})})
     return hidden if hidden else None
-
-
-def own_rows_only(user, app_label, model):
-    """The field by which the rows of this type are narrowed to the user's own ones, or None."""
-    field = OWN_ROWS.get(f'{app_label}.{model}')
-    if field and default_deny_active() and not is_keeper(user):
-        return field
-    return None
 
 
 #

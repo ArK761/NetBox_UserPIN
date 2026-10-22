@@ -662,17 +662,20 @@ class DefaultDenyTest(AreaTestCase):
         areas.add_target(other, 'users.user', self.keeper)  # the keeper sets up what has no owner yet
         areas.delete_area(other, self.keeper)
 
-    @override_settings(API_TOKEN_PEPPERS={1: 'x' * 50})
-    def test_own_rows_only_outside_areas(self):
+    def test_nothing_but_the_password_is_left_open_and_scripts_with_a_token_are_not_touched(self):
+        from django.test import RequestFactory
+        from netbox_user_pin import area_guard
         from users.models import Token
-        Token.objects.create(user=self.master, description='mine')
-        Token.objects.create(user=self.plain, description='theirs')
-        self.assertEqual(Token.objects.restrict(self.master, 'view').count(), Token.objects.count())  # no keeper
         self.add_keeper()
         areas.clear_cache()
-        self.assertEqual(list(Token.objects.restrict(self.master, 'view').values_list('user__username', flat=True)),
-                         ['master'])
-        self.assertEqual(Token.objects.restrict(self.keeper, 'view').count(), Token.objects.count())
+        self.assertEqual(Token.objects.restrict(self.master, 'view').count(), 0)  # tokens: a group that allows them
+        factory = RequestFactory()
+        self.assertTrue(area_guard._is_token_request(factory.get('/api/dcim/devices/', HTTP_AUTHORIZATION='Token abc')))
+        self.assertTrue(area_guard._is_token_request(factory.get('/graphql/', HTTP_AUTHORIZATION='Bearer nbt_x.y')))
+        self.assertFalse(area_guard._is_token_request(factory.get('/api/dcim/devices/')))  # a browser session
+        self.assertFalse(area_guard._is_token_request(factory.get('/dcim/devices/', HTTP_AUTHORIZATION='Token abc')))
+        self.login(self.master, unlock=False)
+        self.assertEqual(self.client.get('/user/password/').status_code, 200)  # the one thing that always works
 
     def test_keeper_needs_pin_and_2fa(self):
         with self.assertRaises(ValidationError):

@@ -234,7 +234,7 @@ class AreaGuardMiddleware:
         return self.get_response(request)
 
     def process_view(self, request, view_func, view_args, view_kwargs):
-        if not areas.protection_on():
+        if not areas.protection_on() or _is_token_request(request):
             return None
         cls = getattr(view_func, 'view_class', None) or getattr(view_func, 'cls', None)
         model = _model_of(cls) if cls is not None else None
@@ -322,6 +322,21 @@ def _child_denied(request, user, cls, tab=None):
     return None
 
 
+def _is_token_request(request):
+    """A script calling the API or GraphQL with a token: whoever holds the key is not a person at a screen."""
+    if request is None or not request.path_info.startswith(('/api/', '/graphql/')):
+        return False
+    return request.headers.get('Authorization', '').split(' ', 1)[0].lower() in ('token', 'bearer')
+
+
+def _token_request():
+    try:
+        from netbox.context import current_request
+        return _is_token_request(current_request.get())
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def _child_of_allowed_tab(meta):
     """Is this type the list of a tab of an object that the current request was allowed to open (Device › Interfaces)?"""
     try:
@@ -352,6 +367,8 @@ def install():
         original = RestrictedQuerySet.restrict
 
         def restrict(self, user, action='view'):
+            if _token_request():
+                return original(self, user, action)
             meta = self.model._meta
             area = areas.area_for(meta.app_label, meta.model_name, package=meta.app_label)
             if area is None:
@@ -363,9 +380,6 @@ def install():
                 hidden = areas.unseen_objects(user, meta.app_label, meta.model_name)
                 if hidden is not None:
                     result = result.exclude(hidden)
-                field = areas.own_rows_only(user, meta.app_label, meta.model_name)
-                if field and getattr(user, 'is_authenticated', False):
-                    return result.filter(**{field: user})
                 return result
             if action not in areas.rights_available(area):  # sync, render_config, run ... need the right to change
                 action = 'change'
@@ -384,8 +398,8 @@ def install():
         def wrap(method):
             def authenticate(self, request):
                 result = method(self, request)
-                if result and areas.active_areas():
-                    arm_user(result[0])
+                if result and areas.active_areas() and not isinstance(self, TokenAuthentication):
+                    arm_user(result[0])  # a token (a script) is NetBox's own business; a browser session is not
                 return result
             authenticate._userpin = True
             return authenticate

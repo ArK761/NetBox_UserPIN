@@ -296,8 +296,9 @@ user            asks for access with a reason (+ what exactly) → owners grant 
   except the **protection keepers**. It is switched on by hand and only when a keeper exists. A keeper needs a PIN
   and 2FA, is exempt from the deny (NetBox's own permissions apply to him), cannot turn 2FA off and cannot leave
   alone – another keeper has to take over; the last keeper cannot be removed. Login, the own profile, bookmarks,
-  notifications and the user's own preferences stay open - but only the user's **own** tokens, bookmarks, notifications
-  and preferences (others' are not shown to anybody but a keeper). The deny reaches every path: lists, details, the
+  notifications and the user's own preferences stay open - but only the user's **own** bookmarks, notifications
+  and preferences (others' are not shown to anybody but a keeper). API tokens are no exception: only a group that
+  allows `users.token` (or a keeper) sees or creates them. The deny reaches every path: lists, details, the
   REST API, GraphQL, global search, dashboard widgets, menus and buttons (a superuser who is no keeper sees none of
   Users, Groups, Permissions, Jobs, background tasks ...). The change log, journal and attachments never show rows of
   objects a user may not view. Server emergency: `manage.py userpin_default_deny --off`.
