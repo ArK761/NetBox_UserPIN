@@ -25,8 +25,11 @@ PAGES = [
     ('Background tasks', '/core/background-queues/'),
     ('Config history', '/core/config-revisions/'),
     ('Change log', '/core/changelog/'),
-    ('Bookmarks', '/account/bookmarks/'),
+    ('Bookmarks', '/user/bookmarks/'),
+    ('Notifications', '/user/notifications/'),
+    ('Own profile', '/user/profile/'),
     ('Preferences', '/user/preferences/'),
+    ('Own API tokens', '/user/api-tokens/'),
     ('Change password', '/user/password/'),
     ('API: devices (browser session)', '/api/dcim/devices/'),
     ('API: users (browser session)', '/api/users/users/'),
@@ -82,8 +85,12 @@ class Command(BaseCommand):
         client.force_login(user)
         try:
             for label, url in PAGES + [('(yours)', u) for u in options['url']]:
-                response = client.get(url, HTTP_ACCEPT='application/json' if url.startswith('/api/') else 'text/html')
-                self.stdout.write(f'{label:34} {url:34} {_verdict(response)}')
+                try:
+                    response = client.get(url, HTTP_ACCEPT='application/json' if url.startswith('/api/') else 'text/html')
+                    verdict = _verdict(response)
+                except Exception as exc:  # noqa: BLE001 - the guard refuses with a response, so this got past it
+                    verdict = f'OPEN (the page itself failed to draw in this shell: {type(exc).__name__})'
+                self.stdout.write(f'{label:34} {url:34} {verdict}')
         finally:
             client.logout()
 

@@ -29,7 +29,9 @@ logger = logging.getLogger('netbox_user_pin')
 # Pages and API paths of NetBox without any object type behind them (background tasks, system information, the
 # plugin catalogue): NetBox lets every superuser in, so "deny everything not allowed" refuses them here.
 SYSTEM_PATHS = ('/core/background-', '/core/system', '/core/plugins', '/api/core/background-', '/api/core/system',
-                '/api/plugins/installed-plugins', '/api/plugins/catalog')
+                '/api/plugins/installed-plugins', '/api/plugins/catalog',
+                # the own profile and preferences: the only thing left open is changing the password
+                '/user/profile', '/user/preferences', '/user/notifications', '/user/bookmarks', '/user/subscriptions')
 
 
 def _plugin_perm(user, perm):

@@ -690,6 +690,10 @@ class DefaultDenyTest(AreaTestCase):
         self.assertFalse(area_guard._is_token_request(factory.get('/dcim/devices/', HTTP_AUTHORIZATION='Token abc')))
         self.login(self.master, unlock=False)
         self.assertEqual(self.client.get('/user/password/').status_code, 200)  # the one thing that always works
+        self.assertEqual(self.client.get('/user/preferences/').status_code, 403)
+        self.assertEqual(self.client.get('/user/profile/').status_code, 403)
+        self.assertEqual(self.client.get('/user/preferences/').status_code, 403)
+        self.assertEqual(self.client.get('/user/profile/').status_code, 403)
 
     def test_keeper_needs_pin_and_2fa(self):
         with self.assertRaises(ValidationError):
@@ -729,8 +733,8 @@ class DefaultDenyTest(AreaTestCase):
         response = self.client.get('/dcim/sites/')
         self.assertContains(response, 'Access denied', status_code=403)
         self.assertEqual(self.client.get('/api/dcim/sites/', HTTP_ACCEPT='application/json').status_code, 403)
-        self.assertEqual(self.client.get('/user/profile/').status_code, 200)  # own account stays open
-        self.assertEqual(self.client.get('/user/notifications/').status_code, 200)
+        self.assertEqual(self.client.get('/user/profile/').status_code, 403)  # only the password change stays open
+        self.assertEqual(self.client.get('/user/notifications/').status_code, 403)
         self.login(self.keeper)
         self.assertEqual(self.client.get('/dcim/sites/').status_code, 200)  # exempt
         self.client.logout()
