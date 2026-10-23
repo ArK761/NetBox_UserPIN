@@ -1,0 +1,14 @@
+{% load i18n %}
+<div class="card">
+  <h2 class="card-header">{% trans "Members" %}</h2>
+  <div class="card-body">
+    <div class="mb-3">{% for g in members %}<span class="badge text-bg-blue me-1 mb-1 fs-6">{{ g.user.username }}{% if g.user_id in wide_members %} <i class="mdi mdi-alert text-warning" title="{% trans 'This user has another access without a row condition, so he sees all the records.' %}"></i>{% endif %}{% if can_manage %}
+      <form method="post" class="d-inline">{% csrf_token %}<input type="hidden" name="action" value="revoke"><input type="hidden" name="pk" value="{{ g.pk }}"><button type="submit" class="btn btn-link btn-sm p-0 text-white" title="{% trans 'Remove from the group' %}">×</button></form>{% endif %}</span>{% empty %}<span class="text-secondary">{% trans "No members." %}</span>{% endfor %}</div>
+    {% if can_manage %}
+    <form method="post" class="d-flex flex-column gap-2">{% csrf_token %}<input type="hidden" name="action" value="member-add">
+      {% include 'netbox_user_pin/inc/user_multiselect.html' with choices=user_choices uid='m' %}
+      <div><button class="btn btn-primary" type="submit"><i class="mdi mdi-account-plus"></i> {% trans "Add users to the group" %}</button></div>
+    </form>
+    {% endif %}
+  </div>
+</div>

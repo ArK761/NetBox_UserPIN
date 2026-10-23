@@ -1,0 +1,35 @@
+{% load i18n %}
+{# What the group does with each field: by rights / hidden / read only / read and write; for a field that points at other objects also what it may pick #}
+<details id="pin-fields-box">
+  <summary class="fw-bold" style="cursor: pointer"><i class="mdi mdi-form-textbox"></i> {% trans "Fields" %} <span class="text-secondary small fw-normal ms-2">{% trans "Click to set which fields the group sees or changes." %}</span></summary>
+  <form method="post" class="mt-2">{% csrf_token %}<input type="hidden" name="action" value="fields">
+    <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
+      <input type="search" class="form-control w-auto" style="min-width: 16rem" id="pin-field-search" placeholder="{% trans 'Search a field…' %}">
+      <strong class="ms-2">{% trans "Set all shown fields:" %}</strong>
+      <button type="button" class="btn btn-sm btn-outline-secondary pin-bulk" data-mode="default">{% trans "By rights" %}</button>
+      <button type="button" class="btn btn-sm btn-outline-danger pin-bulk" data-mode="hidden">{% trans "Hidden" %}</button>
+      <button type="button" class="btn btn-sm btn-outline-warning pin-bulk" data-mode="read">{% trans "Read only" %}</button>
+      <button type="button" class="btn btn-sm btn-outline-success pin-bulk" data-mode="write">{% trans "Read and write" %}</button>
+    </div>
+    <div class="list-group" id="pin-fields">
+      {% for row in rows %}
+      <div class="list-group-item pin-field-row d-flex flex-wrap align-items-center gap-3">
+        <div style="min-width: 14rem; flex: 1 1 14rem"><strong>{{ row.label }}</strong> {% if row.kind == 'custom' %}<span class="badge text-bg-cyan">{% trans "custom field" %}</span>{% endif %}<div><code class="small text-secondary">{{ row.key }}</code></div></div>
+        <div class="btn-group btn-group-sm" role="group">
+          <input type="radio" class="btn-check pin-mode" name="mode__{{ row.key }}" id="m{{ forloop.counter }}-d" value="default" autocomplete="off" {% if row.mode == 'default' %}checked{% endif %}><label class="btn btn-outline-secondary" for="m{{ forloop.counter }}-d">{% trans "By rights" %}</label>
+          <input type="radio" class="btn-check pin-mode" name="mode__{{ row.key }}" id="m{{ forloop.counter }}-h" value="hidden" autocomplete="off" {% if row.mode == 'hidden' %}checked{% endif %}><label class="btn btn-outline-danger" for="m{{ forloop.counter }}-h">{% trans "Hidden" %}</label>
+          <input type="radio" class="btn-check pin-mode" name="mode__{{ row.key }}" id="m{{ forloop.counter }}-r" value="read" autocomplete="off" {% if row.mode == 'read' %}checked{% endif %}><label class="btn btn-outline-warning" for="m{{ forloop.counter }}-r">{% trans "Read only" %}</label>
+          <input type="radio" class="btn-check pin-mode" name="mode__{{ row.key }}" id="m{{ forloop.counter }}-w" value="write" autocomplete="off" {% if row.mode == 'write' %}checked{% endif %}><label class="btn btn-outline-success" for="m{{ forloop.counter }}-w">{% trans "Read and write" %}</label>
+        </div>
+        {% if row.kind == 'custom' or row.related %}
+        <span class="pin-extra d-inline-flex align-items-center gap-1">
+          <input type="text" class="form-control form-control-sm" style="width: 16rem" name="contains__{{ row.key }}" value="{{ row.contains }}" maxlength="200" placeholder="{% if row.related %}{% trans 'may pick only names containing (optional)' %}{% else %}{% trans 'values must include (optional)' %}{% endif %}">
+          {% if row.related %}<i class="mdi mdi-information-outline text-secondary" title="{% blocktrans with type=row.related %}Picks {{ type }}: with "Read and write" the user may choose its objects in this field (only those whose name contains the text, if given) - the pages of {{ type }} stay closed.{% endblocktrans %}"></i>{% endif %}
+        </span>
+        {% endif %}
+      </div>
+      {% empty %}<div class="list-group-item text-secondary">{% trans "No fields." %}</div>{% endfor %}
+    </div>
+    {% if can_manage %}<div class="text-end mt-2"><button class="btn btn-primary" type="submit">{% trans "Save fields" %}</button></div>{% endif %}
+  </form>
+</details>

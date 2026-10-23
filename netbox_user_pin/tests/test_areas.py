@@ -1108,7 +1108,7 @@ class GroupsTest(AreaTestCase):
         self.assertEqual(response['Location'], group_url)  # straight into the group
         html = self.client.get(group_url).content.decode()
         self.assertIn('Technici', html)
-        self.assertIn('name="tab__interfaces"', html)
+        self.assertIn('name="tabv__interfaces"', html)
         self.assertIn('name="mode__description"', html)
         self.assertIn('pin-bulk', html)
         # inside the group: rights, tabs, fields and users
@@ -1279,6 +1279,42 @@ class RowConditionsTest(AreaTestCase):
         query = areas.row_filter(user, self.area, 'dcim', 'device')
         return sorted(self.Device.objects.filter(query).values_list('name', flat=True))
 
+    def test_values_of_one_condition_are_alternatives_and_the_group_page_sets_the_access(self):
+        from dcim.models import Device
+        site = Device.objects.first().site
+        Device.objects.create(name='CORE_X', site=site, device_type=Device.objects.first().device_type,
+                              role=self.role1)
+        areas.add_group_condition(self.group, self.owner1, 'name', 'contains', ['agg'])
+        areas.add_group_condition(self.group, self.owner1, 'name', 'contains', ['core'])  # one more value, not a rule
+        self.group.refresh_from_db()
+        self.assertEqual(len(self.group.filters['dcim.device']), 1)
+        self.assertEqual(self.group.filters['dcim.device'][0]['value'], ['agg', 'core'])
+        self.assertEqual(self.names(), ['AGG_01', 'AGG_02', 'CORE_X'])  # agg OR core
+        self.assertIn('agg / core', areas.format_filters(self.group.filters))
+        areas.add_group_condition(self.group, self.owner1, 'role', 'eq', [str(self.role1.pk)])  # another one: AND
+        self.assertEqual(self.names(), ['AGG_01', 'CORE_X'])
+        # the page of the group: access level, delete, tabs, chips
+        admin_login(self.client, self.owner1)
+        url = reverse('plugins:netbox_user_pin:group', kwargs={'pk': self.area.pk, 'gid': self.group.pk})
+        html = self.client.get(url).content.decode()
+        for marker in ('name="access"', 'name="tabv__interfaces"', 'pin-rule-form', 'name="mode__name"',
+                       'agg / core'):
+            self.assertIn(marker, html)
+        self.client.post(url, {'action': 'rights', 'name': 'Technici', 'access': 'write', 'delete': 'on'})
+        self.group.refresh_from_db()
+        self.assertEqual(self.group.rights, ['view', 'add', 'change', 'delete'])
+        self.client.post(url, {'action': 'rights', 'name': 'Technici', 'access': 'read', 'tabv__interfaces': 'yes',
+                               'tabv__journal': 'no'})
+        self.group.refresh_from_db()
+        self.assertEqual((self.group.rights, self.group.tabs), (['view'], ['interfaces']))
+        self.client.post(url, {'action': 'rights', 'name': 'Technici', 'access': 'none'})
+        self.group.refresh_from_db()
+        self.assertEqual(self.group.rights, [])
+        html = self.client.get(url).content.decode()
+        self.assertNotIn('id="pin-rule-form"', html)  # a group that sees nothing has nothing more to set
+        areas.clear_cache()
+        self.assertFalse(areas.can(User.objects.get(pk=self.user.pk), self.area, 'view', 'dcim.device'))
+
     def test_picking_in_a_relation_field_opens_only_the_drop_down(self):
         from dcim.models import DeviceRole, Site
         keeper = User.objects.create_superuser('keeper2', 'k2@example.com', 'x')
@@ -1310,6 +1346,23 @@ class RowConditionsTest(AreaTestCase):
         report = out.getvalue()
         self.assertIn('What the user may PICK', report)
         self.assertRegex(report, r'dcim.devicerole\s+drop-down: only names containing Print\s+gives 1 of 3')
+        # the values of a select custom field he may write fill its drop-down; of one he only reads they do not
+        from core.models import ObjectType
+        from dcim.models import Device
+        from extras.models import CustomField, CustomFieldChoiceSet
+        writable = CustomFieldChoiceSet.objects.create(name='CS-write', extra_choices=[['a', 'A'], ['b', 'B']])
+        readonly = CustomFieldChoiceSet.objects.create(name='CS-read', extra_choices=[['x', 'X']])
+        for name, choice_set in (('pw', writable), ('ro', readonly)):
+            field = CustomField.objects.create(name=name, type='select', choice_set=choice_set)
+            field.object_types.set([ObjectType.objects.get_for_model(Device)])
+        areas.save_field_rules(self.area, self.group, 'dcim.device', {'role': ('write', 'Print'), 'cf:ro': ('read', '')},
+                               self.owner1)
+        areas.clear_cache()
+        values = self.client.get(f'/api/extras/custom-field-choice-sets/{writable.pk}/choices/', **api)
+        self.assertEqual(values.status_code, 200)
+        self.assertEqual(self.client.get(f'/api/extras/custom-field-choice-sets/{readonly.pk}/choices/', **api).status_code,
+                         403)
+        self.assertEqual(self.client.get(f'/api/extras/custom-field-choice-sets/{writable.pk}/', **api).status_code, 403)
         # a group that only reads picks nothing
         areas.update_group(self.group, self.owner1, name='Technici', rights=['view'])
         areas.clear_cache()
@@ -1400,11 +1453,11 @@ class RowConditionsTest(AreaTestCase):
         admin_login(self.client, self.owner1)
         url = reverse('plugins:netbox_user_pin:group', kwargs={'pk': self.area.pk, 'gid': self.group.pk})
         html = self.client.get(url).content.decode()
-        self.assertIn('pin-rule-panel', html)  # the condition is added with the field, in the list of fields
-        self.assertIn('data-field="role"', html)
+        self.assertIn('id="pin-rule-form"', html)  # one place for the conditions of the records
+        self.assertIn('id="pin-rule-field"', html)
         response = self.client.post(url, {'action': 'rule-add', 'field': 'role', 'op': 'ne', 'values': [self.role1.pk]})
         self.assertEqual(response.status_code, 302, response.content[:300])
-        self.assertTrue(response['Location'].endswith('#pin-fields-box'))
+        self.assertTrue(response['Location'].endswith('#pin-rule-form'))
         html = self.client.get(url).content.decode()
         self.assertIn('Role is not Switch', html)
         self.assertIn('pin-filter-fields', html)

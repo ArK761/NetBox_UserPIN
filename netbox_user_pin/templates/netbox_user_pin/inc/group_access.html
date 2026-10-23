@@ -1,0 +1,33 @@
+{% load i18n %}
+{# The access of the group to this object type: nothing / read / read and write (+ delete); the tabs of the page #}
+<form method="post">{% csrf_token %}<input type="hidden" name="action" value="rights">
+  <div class="row g-3">
+    <div class="col-12 col-lg-6">
+      <label class="form-label fw-bold">{% trans "Name of the group" %}</label>
+      <input class="form-control mb-3" name="name" value="{{ group.name }}" maxlength="100" {% if not can_manage %}readonly{% endif %}>
+      <div class="fw-bold mb-1">{% trans "Access" %}</div>
+      <div class="btn-group" role="group">
+        <input type="radio" class="btn-check" name="access" id="acc-none" value="none" autocomplete="off" {% if level == 'none' %}checked{% endif %} {% if not can_manage %}disabled{% endif %}><label class="btn btn-outline-danger" for="acc-none">{% trans "Sees nothing" %}</label>
+        <input type="radio" class="btn-check" name="access" id="acc-read" value="read" autocomplete="off" {% if level == 'read' %}checked{% endif %} {% if not can_manage %}disabled{% endif %}><label class="btn btn-outline-warning" for="acc-read">{% trans "Read only" %}</label>
+        <input type="radio" class="btn-check" name="access" id="acc-write" value="write" autocomplete="off" {% if level == 'write' %}checked{% endif %} {% if not can_manage %}disabled{% endif %}><label class="btn btn-outline-success" for="acc-write">{% trans "Read and write" %}</label>
+      </div>
+      <div class="form-check mt-2"><input class="form-check-input" type="checkbox" name="delete" id="acc-delete" {% if can_delete %}checked{% endif %} {% if not can_manage %}disabled{% endif %}><label class="form-check-label" for="acc-delete">{% trans "May delete" %}</label></div>
+      {% for value, label in extra_rights %}<div class="form-check"><input class="form-check-input" type="checkbox" name="rights" value="{{ value }}" id="r-{{ value }}" {% if value in rights_set %}checked{% endif %} {% if not can_manage %}disabled{% endif %}><label class="form-check-label" for="r-{{ value }}">{{ label }}</label></div>{% endfor %}
+      <div class="form-text">{% trans "Whoever may write may read as well." %}</div>
+    </div>
+    <div class="col-12 col-lg-6">
+      <div class="fw-bold mb-1">{% trans "Tabs of the page" %} <span class="text-secondary fw-normal small">({% trans "the main page is always allowed" %})</span></div>
+      {% for t in tabs %}
+      <div class="d-flex align-items-center justify-content-between border-bottom py-1">
+        <span>{{ t.label }}</span>
+        <div class="btn-group btn-group-sm" role="group">
+          <input type="radio" class="btn-check" name="tabv__{{ t.name }}" id="tv-{{ t.name }}-n" value="no" autocomplete="off" {% if not t.allowed %}checked{% endif %} {% if not can_manage %}disabled{% endif %}><label class="btn btn-outline-danger" for="tv-{{ t.name }}-n">{% trans "Hidden" %}</label>
+          <input type="radio" class="btn-check" name="tabv__{{ t.name }}" id="tv-{{ t.name }}-y" value="yes" autocomplete="off" {% if t.allowed %}checked{% endif %} {% if not can_manage %}disabled{% endif %}><label class="btn btn-outline-success" for="tv-{{ t.name }}-y">{% trans "Visible" %}</label>
+        </div>
+      </div>
+      {% endfor %}
+      {% if plugin_tabs %}<div class="small text-secondary mt-2"><i class="mdi mdi-puzzle-outline"></i> {% trans "Tabs of plugins follow the area of that plugin:" %} {% for t in plugin_tabs %}{{ t.label }}{% if not forloop.last %}, {% endif %}{% endfor %}</div>{% endif %}
+    </div>
+  </div>
+  {% if can_manage %}<div class="mt-3"><button class="btn btn-primary" type="submit">{% trans "Save access" %}</button></div>{% endif %}
+</form>

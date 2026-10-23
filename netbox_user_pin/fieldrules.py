@@ -106,17 +106,12 @@ def related_label(model, key):
     return None
 
 
-def select_scope(user):
-    """
-    {'ipam.vlan': None | [texts]}: the objects the user may PICK in the relation fields he may write - all of the type
-    (None) or only those whose name contains one of the texts of the field rule. Picking does not open the type: its
-    pages stay closed, only the drop-down of the field is served.
-    """
+def _writable_fields(user):
+    """(model, key, policy, texts): every field the user may write, in the types he holds a right to change."""
     from django.apps import apps
     from .models import AreaGrant
-    scope = {}
     if not getattr(user, 'is_authenticated', False):
-        return scope
+        return
     entries = []  # (area, target, rights)
     for grant in AreaGrant.objects.filter(user=user, revoked__isnull=True).select_related('area', 'profile'):
         if grant.is_active and grant.target and grant.area in areas.active_areas():
@@ -134,17 +129,37 @@ def select_scope(user):
             continue
         policy = compute_policy(user, area, app_label, name)
         for key, _label, _kind in fields_of(app_label, name):
-            related = related_label(model, key)
-            if not related:
-                continue
-            mode = policy.mode(key) if policy else AreaFieldMode.WRITE
-            if mode != AreaFieldMode.WRITE:
-                continue
-            texts = policy.texts(key) if policy else None
-            if related in scope and scope[related] is None:
-                continue
-            scope[related] = None if not texts else sorted(set(scope.get(related) or []) | set(texts))
+            if (policy.mode(key) if policy else AreaFieldMode.WRITE) == AreaFieldMode.WRITE:
+                yield model, key, (policy.texts(key) if policy else None)
+
+
+def select_scope(user):
+    """
+    {'ipam.vlan': None | [texts]}: the objects the user may PICK in the relation fields he may write - all of the type
+    (None) or only those whose name contains one of the texts of the field rule. Picking does not open the type: its
+    pages stay closed, only the drop-down of the field is served.
+    """
+    scope = {}
+    for model, key, texts in _writable_fields(user):
+        related = related_label(model, key)
+        if not related or (related in scope and scope[related] is None):
+            continue
+        scope[related] = None if not texts else sorted(set(scope.get(related) or []) | set(texts))
     return scope
+
+
+def choice_set_ids(user):
+    """The ids of the choice sets of the select custom fields the user may write: their values fill the drop-down."""
+    ids = set()
+    try:
+        from extras.models import CustomField
+        names = {key[3:] for _model, key, _texts in _writable_fields(user) if key.startswith('cf:')}
+        if names:
+            ids = set(CustomField.objects.filter(name__in=names, type__in=('select', 'multiselect'),
+                                                 choice_set__isnull=False).values_list('choice_set_id', flat=True))
+    except Exception:  # noqa: BLE001
+        logger.exception('Cannot list the choice sets of the writable fields')
+    return ids
 
 
 def current_policy(app_label, model):

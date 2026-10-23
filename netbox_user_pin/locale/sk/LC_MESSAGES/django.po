@@ -6014,6 +6014,40 @@ msgstr ""
 "vybrať jeho objekty (len tie, ktorých názov obsahuje text, ak je zadaný) - "
 "stránky %(type)s zostávajú zatvorené."
 
+msgid "Main menu and the page of the object"
+msgstr "Hlavné menu a stránka objektu"
+
+msgid "Sees nothing"
+msgstr "Nevidí"
+
+msgid "May delete"
+msgstr "Smie mazať"
+
+msgid "Whoever may write may read as well."
+msgstr "Kto smie zapisovať, smie aj čítať."
+
+msgid "Tabs of the page"
+msgstr "Záložky stránky"
+
+msgid "the main page is always allowed"
+msgstr "hlavná stránka je vždy povolená"
+
+msgid "Save access"
+msgstr "Uložiť prístup"
+
+msgid "Records the group sees"
+msgstr "Záznamy, ktoré skupina vidí"
+
+msgid ""
+"Without a condition it sees all records. Several values of one condition are"
+" alternatives (agg or core); several conditions must all hold."
+msgstr ""
+"Bez podmienky vidí všetky záznamy. Viac hodnôt jednej podmienky sú "
+"alternatívy (agg alebo core); viac podmienok musí platiť naraz."
+
+msgid "type a value and press Enter"
+msgstr "napíš hodnotu a stlač Enter"
+
 #~ msgid ""
 #~ "There is no other administrator or delegate with PIN and 2FA who could "
 #~ "confirm."

@@ -160,8 +160,9 @@ class Command(BaseCommand):
         from utilities.views import get_viewname
         self.stdout.write('\n== What the user may PICK in relation fields (drop-downs of fields he may write) ==')
         scope = fieldrules.select_scope(user)
-        if not scope:
-            self.stdout.write('(nothing: no relation field is writable for him)')
+        sets = sorted(fieldrules.choice_set_ids(user))
+        if not scope and not sets:
+            self.stdout.write('(nothing: no relation or select field is writable for him)')
             return
         django_settings.ALLOWED_HOSTS = ['*']
         client = Client(HTTP_HOST='localhost', raise_request_exception=False)
@@ -181,6 +182,10 @@ class Command(BaseCommand):
                 rule = 'all' if texts is None else 'only names containing ' + ' / '.join(texts)
                 self.stdout.write(f'{label:28} drop-down: {rule:34} gives {count} of {model.objects.count()}'
                                   f'  | pages of the type: {closed}')
+            for pk in sets:
+                response = client.get(f'/api/extras/custom-field-choice-sets/{pk}/choices/', HTTP_ACCEPT='application/json')
+                count = response.json().get('count', '?') if response.status_code == 200 else response.status_code
+                self.stdout.write(f'choice set {pk:<16} values of a select field he may write      gives {count}')
         finally:
             client.logout()
 

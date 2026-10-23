@@ -686,6 +686,10 @@ class GroupView(AreaViewMixin, View):
             'wide_members': self._wide_members(area, group),
             'rights': [(r, areas.right_label(area, r)) for r in areas.rights_available(area)],
             'rights_set': set(group.rights),
+            'level': 'none' if not group.rights else ('write' if {'add', 'change'} & set(group.rights) else 'read'),
+            'can_delete': 'delete' in group.rights,
+            'extra_rights': [(r, areas.right_label(area, r)) for r in areas.rights_available(area)
+                             if r not in areas.GENERIC_RIGHTS],
             'tabs': [dict(t, allowed=group.tabs is None or t['name'] in group.tabs) for t in tabs if not t['plugin']],
             'plugin_tabs': [t for t in tabs if t['plugin']], 'rows': rows,
             'conditions': [(i, text) for i, text, _field in conditions], 'filter_fields': filter_fields,
@@ -714,10 +718,18 @@ class GroupView(AreaViewMixin, View):
         action = request.POST.get('action')
         try:
             if action == 'rights':
+                rights = request.POST.getlist('rights')
+                if 'access' in request.POST:  # the access level of the node: nothing / read / read and write (+ delete)
+                    level = request.POST.get('access')
+                    extra = [r for r in rights if r not in areas.GENERIC_RIGHTS]
+                    rights = {'none': [], 'read': ['view'], 'write': ['view', 'add', 'change']}.get(level, ['view'])
+                    if level != 'none':
+                        rights = rights + (['delete'] if request.POST.get('delete') else []) + extra
                 areas.update_group(group, request.user, name=request.POST.get('name', group.name),
-                                   rights=request.POST.getlist('rights'), request=request)
-                areas.set_group_tabs(group, [k[5:] for k in request.POST if k.startswith('tab__')], request.user,
-                                     request=request)
+                                   rights=rights, request=request, allow_empty='access' in request.POST)
+                chosen = [k[5:] for k in request.POST if k.startswith('tab__')]
+                chosen += [k[6:] for k, v in request.POST.items() if k.startswith('tabv__') and v == 'yes']
+                areas.set_group_tabs(group, chosen, request.user, request=request)
                 messages.success(request, _('Saved.'))
             elif action == 'fields':
                 app_label, _dot, model = group.target.partition('.')
@@ -763,5 +775,5 @@ class GroupView(AreaViewMixin, View):
                 raise PermissionDenied
         except ValidationError as exc:
             _errors(request, exc)
-        anchor = '#pin-fields-box' if action in ('rule-add', 'rule-delete', 'fields') else ''
+        anchor = {'rule-add': '#pin-rule-form', 'rule-delete': '#pin-rule-form', 'fields': '#pin-fields-box'}.get(action, '')
         return redirect(reverse('plugins:netbox_user_pin:group', kwargs={'pk': area.pk, 'gid': group.pk}) + anchor)

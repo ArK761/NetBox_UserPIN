@@ -1,0 +1,20 @@
+{% load i18n %}
+{# Which records the group sees: conditions with values as chips (agg OR core); several conditions must all hold #}
+<div class="fw-bold mb-1"><i class="mdi mdi-filter-outline"></i> {% trans "Records the group sees" %}</div>
+<p class="text-secondary small mb-2">{% trans "Without a condition it sees all records. Several values of one condition are alternatives (agg or core); several conditions must all hold." %}</p>
+<div class="mb-2">
+  {% for index, text in conditions %}<span class="badge text-bg-blue fs-6 me-1 mb-1 pin-chip">{{ text }}{% if can_manage %} <button type="submit" form="rd-{{ index }}" class="btn btn-link btn-sm p-0 text-white" title="{% trans 'Remove the condition' %}">×</button>{% endif %}</span>
+  {% empty %}<span class="text-secondary">{% trans "No condition: the group sees all records." %}</span>{% endfor %}
+</div>
+{% if can_manage %}
+<form method="post" id="pin-rule-form" class="d-flex flex-wrap gap-2 align-items-start border rounded p-2">{% csrf_token %}<input type="hidden" name="action" value="rule-add">
+  <select name="field" id="pin-rule-field" class="form-select form-select-sm w-auto">{% for f in filter_fields %}<option value="{{ f.key }}">{{ f.label }}</option>{% endfor %}</select>
+  <select name="op" id="pin-rule-op" class="form-select form-select-sm w-auto">{% for key, label in ops %}<option value="{{ key }}">{{ label }}</option>{% endfor %}</select>
+  <div id="pin-rule-values" class="d-flex flex-wrap gap-1 align-items-center">
+    <span id="pin-rule-chips" class="d-inline-flex flex-wrap gap-1"></span>
+    <input type="text" id="pin-rule-text" class="form-control form-control-sm w-auto pin-chips-input" placeholder="{% trans 'type a value and press Enter' %}">
+    <select id="pin-rule-choice" class="form-select form-select-sm w-auto d-none" multiple size="6"></select>
+  </div>
+  <button type="submit" class="btn btn-sm btn-primary">{% trans "Add" %}</button>
+</form>
+{% endif %}

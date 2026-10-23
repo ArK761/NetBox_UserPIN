@@ -438,6 +438,10 @@ def _spec_q(spec):
                 part |= Q(**{f'{path}__iexact': value})
         elif condition.get('ci') and condition['op'] in ('eq', 'ne'):
             part = Q(**{f'{path}__iexact': condition['value']})
+        elif lookup in ('icontains', 'istartswith') and isinstance(condition['value'], list):
+            part = Q()  # "agg" or "core": the record qualifies when any of the values fits
+            for value in condition['value']:
+                part |= Q(**{f'{path}__{lookup}': value})
         else:
             part = Q(**{f"{path}__{lookup}": condition['value']})
         query &= ~part if negated else part
@@ -491,7 +495,7 @@ def _clean_condition(target, field, op, values):
     values = [v.strip() for v in values if v and v.strip()]
     if not values:
         raise ValidationError(_('Write or choose the value.'))
-    multi = op in ('in', 'nin')
+    multi = op in ('in', 'nin', 'contains', 'ncontains', 'startswith')
     if not multi:
         values = values[:1]
     app_label, _dot, model_name = target.partition('.')
@@ -525,7 +529,8 @@ def _clean_condition(target, field, op, values):
         condition = {'field': field, 'op': op, 'value': [str(v) for v in value] if multi else str(value), **extra}
         if not model_field.is_relation and model_field.get_internal_type() in ('CharField', 'TextField', 'SlugField'):
             condition['ci'] = True  # texts are compared without regard to the case
-        model._default_manager.filter(**{f"{extra.get('path') or field}__{extra.get('lookup') or lookup}": value}
+        probe = value[0] if isinstance(value, list) and (extra.get('lookup') or lookup) != 'in' else value
+        model._default_manager.filter(**{f"{extra.get('path') or field}__{extra.get('lookup') or lookup}": probe}
                                       ).query  # noqa: B018
     except (ValidationError, FieldError, ValueError, TypeError) as exc:
         raise ValidationError(_('The condition is not valid: %(error)s') % {'error': exc})
@@ -538,7 +543,8 @@ def condition_text(target, condition):
     label = meta['label'] if meta else condition['field']
     names = dict(meta['choices']) if meta and meta['choices'] else {}
     value = condition['value']
-    shown = ', '.join(names.get(str(v), str(v)) for v in value) if isinstance(value, list) else names.get(
+    glue = ', ' if condition['op'] in ('in', 'nin') else ' / '
+    shown = glue.join(names.get(str(v), str(v)) for v in value) if isinstance(value, list) else names.get(
         str(value), str(value))
     return f"{label} {row_op_labels().get(condition['op'], condition['op'])} {shown}"
 
@@ -560,7 +566,16 @@ def add_group_condition(group, actor, field, op, values, request=None):
     current = filters.get(group.target) or []
     if isinstance(current, dict):
         current = []
-    filters[group.target] = list(current) + [condition]
+    current = list(current)
+    same = next((c for c in current if c['field'] == condition['field'] and c['op'] == condition['op']
+                 and isinstance(c['value'], list) and isinstance(condition['value'], list)
+                 and c.get('path') == condition.get('path')), None)
+    if same is not None:  # one more value of the same condition: agg, and now core as well
+        same['value'] = list(dict.fromkeys(same['value'] + condition['value']))
+        condition = same
+    else:
+        current.append(condition)
+    filters[group.target] = current
     group.filters = filters
     group.save()
     _log(PinEventAction.AREA_CHANGED, area, actor, request=request,
@@ -1251,7 +1266,7 @@ def create_group(area, target, name, rights, actor, filters=None, request=None):
     return group
 
 
-def update_group(group, actor, name=None, rights=None, filters=None, request=None):
+def update_group(group, actor, name=None, rights=None, filters=None, request=None, allow_empty=False):
     area = group.area
     if not _may_grant(actor, area) or group.private:
         raise PermissionDenied
@@ -1264,12 +1279,12 @@ def update_group(group, actor, name=None, rights=None, filters=None, request=Non
             raise ValidationError(_('A group with this name exists.'))
         group.name = name
     if rights is not None:
-        group.rights = _clean_group_rights(area, rights)
+        group.rights = [] if (allow_empty and not rights) else _clean_group_rights(area, rights)
     if filters is not None:
         group.filters = filters
     group.save()
     _log(PinEventAction.AREA_CHANGED, area, actor, request=request,
-         detail=f'group {group.name} ({group.target}): {", ".join(group.rights)}')
+         detail=f'group {group.name} ({group.target}): {", ".join(group.rights) or "no access"}')
     clear_cache()
 
 

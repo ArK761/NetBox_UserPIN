@@ -318,11 +318,18 @@ def _select_exception(request, user, api, target, view_kwargs):
     The drop-down of a relation field the user may write asks the API for the objects to pick from (``brief``): that
     one request is served, narrowed by the text of the field rule - the pages of the type stay closed.
     """
-    if not (api and request.method == 'GET' and target and not (view_kwargs or {}).get('pk')):
-        return False
-    if not request.GET.get('brief') or request.GET.get('fields') or request.GET.get('include'):
+    if not (api and request.method == 'GET' and target):
         return False
     from . import fieldrules
+    pk = (view_kwargs or {}).get('pk')
+    if target == 'extras.customfieldchoiceset':  # the values of a select custom field he may write
+        if pk is None or not request.path_info.rstrip('/').endswith('/choices') or int(pk) not in \
+                fieldrules.choice_set_ids(user):
+            return False
+        request._userpin_select = (target, ('pk', [int(pk)]))
+        return True
+    if pk is not None or not request.GET.get('brief') or request.GET.get('fields') or request.GET.get('include'):
+        return False
     scope = fieldrules.select_scope(user)
     if target not in scope:
         return False
@@ -426,6 +433,8 @@ def install():
                 return original(self, user, action)
             meta = self.model._meta
             if (flag := _select_flag(meta)) is not None:  # the drop-down of a relation field: see _select_exception
+                if flag[1] and flag[1][0] == 'pk':
+                    return self.filter(pk__in=flag[1][1])
                 if not flag[1]:
                     return self
                 field = areas._name_field(self.model)
