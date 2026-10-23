@@ -1315,6 +1315,40 @@ class RowConditionsTest(AreaTestCase):
         areas.clear_cache()
         self.assertFalse(areas.can(User.objects.get(pk=self.user.pk), self.area, 'view', 'dcim.device'))
 
+    def test_saving_a_tenant_with_custom_fields_and_rules_does_not_fail(self):
+        from core.models import ObjectType
+        from dcim.models import DeviceType
+        from extras.models import CustomField, CustomFieldChoiceSet
+        from tenancy.models import Tenant
+        keeper = User.objects.create_superuser('keeper3', 'k3@example.com', 'x')
+        service.set_pin(keeper, GOOD_PIN)
+        enable_2fa(keeper)
+        areas.add_keeper(keeper, self.master)
+        area = areas.create_area('Tenants', ['tenancy.tenant'], [], keeper)
+        areas.add_owner(area, self.owner1, keeper)
+        group = areas.create_group(area, 'tenancy.tenant', 'Evidencia', ['view'], self.owner1)
+        areas.update_group(group, self.owner1, rights=['view', 'change'])
+        areas.add_member(group, self.user, None, self.owner1)
+        tenant_type = ObjectType.objects.get_for_model(Tenant)
+        choices = CustomFieldChoiceSet.objects.create(name='CS-t', extra_choices=[['a', 'A']])
+        for name, kind, extra in (('hw', 'object', {'related_object_type': ObjectType.objects.get_for_model(DeviceType)}),
+                                  ('pw', 'select', {'choice_set': choices}), ('sn', 'text', {})):
+            field = CustomField.objects.create(name=name, type=kind, **extra)
+            field.object_types.set([tenant_type])
+        areas.save_field_rules(area, group, 'tenancy.tenant', {'cf:hw': ('write', 'Print'), 'cf:sn': ('read', ''),
+                                                               'group': ('write', 'Z')}, self.owner1)
+        areas.clear_cache()
+        tenant = Tenant.objects.create(name='T1', slug='t1')
+        self.login(self.user)
+        self.client.raise_request_exception = True
+        page = self.client.get(f'/tenancy/tenants/{tenant.pk}/edit/')
+        self.assertEqual(page.status_code, 200)
+        response = self.client.post(f'/tenancy/tenants/{tenant.pk}/edit/', {'name': 'T1', 'slug': 't1',
+                                                                              'cf_pw': 'a'})
+        self.assertIn(response.status_code, (200, 302))
+        response = self.client.post(f'/tenancy/tenants/{tenant.pk}/edit/', {})
+        self.assertIn(response.status_code, (200, 302))
+
     def test_picking_in_a_relation_field_opens_only_the_drop_down(self):
         from dcim.models import DeviceRole, Site
         keeper = User.objects.create_superuser('keeper2', 'k2@example.com', 'x')
