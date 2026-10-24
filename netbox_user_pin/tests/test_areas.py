@@ -1279,6 +1279,36 @@ class RowConditionsTest(AreaTestCase):
         query = areas.row_filter(user, self.area, 'dcim', 'device')
         return sorted(self.Device.objects.filter(query).values_list('name', flat=True))
 
+    def test_two_is_conditions_of_one_field_are_alternatives_not_an_empty_set(self):
+        areas.add_group_condition(self.group, self.owner1, 'role', 'eq', [str(self.role1.pk)])
+        areas.add_group_condition(self.group, self.owner1, 'role', 'eq', [str(self.role2.pk)])  # Switch OR Router
+        self.group.refresh_from_db()
+        spec = self.group.filters['dcim.device']
+        self.assertEqual((len(spec), spec[0]['op']), (1, 'in'))
+        self.assertEqual(self.names(), ['AGG_01', 'AGG_02', 'PRINTER_1'])
+        areas.remove_group_condition(self.group, self.owner1, 0)
+        areas.add_group_condition(self.group, self.owner1, 'role', 'ne', [str(self.role1.pk)])
+        areas.add_group_condition(self.group, self.owner1, 'role', 'ne', [str(self.role2.pk)])  # neither of them
+        self.group.refresh_from_db()
+        self.assertEqual((len(self.group.filters['dcim.device']), self.group.filters['dcim.device'][0]['op']),
+                         (1, 'nin'))
+        self.assertEqual(self.names(), [])
+
+    def test_migration_repairs_conditions_saved_as_two(self):
+        import importlib
+
+        from django.apps import apps as django_apps
+        self.group.filters = {'dcim.device': [
+            {'op': 'eq', 'field': 'role', 'value': str(self.role1.pk)},
+            {'op': 'eq', 'field': 'role', 'value': str(self.role2.pk)},
+            {'op': 'contains', 'field': 'name', 'value': 'agg'}]}
+        self.group.save()
+        self.assertEqual(self.names(), [])  # the situation of the user: two "is" conditions see nothing
+        importlib.import_module('netbox_user_pin.migrations.0024_merge_same_field_conditions').merge(django_apps, None)
+        self.group.refresh_from_db()
+        self.assertEqual(len(self.group.filters['dcim.device']), 2)
+        self.assertEqual(self.names(), ['AGG_01', 'AGG_02'])  # (Switch or Router) and name contains agg
+
     def test_values_of_one_condition_are_alternatives_and_the_group_page_sets_the_access(self):
         from dcim.models import Device
         site = Device.objects.first().site

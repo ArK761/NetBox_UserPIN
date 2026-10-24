@@ -571,9 +571,34 @@ def add_group_condition(group, actor, field, op, values, request=None):
     if isinstance(current, dict):
         current = []
     current = list(current)
-    same = next((c for c in current if c['field'] == condition['field'] and c['op'] == condition['op']
-                 and isinstance(c['value'], list) and isinstance(condition['value'], list)
-                 and c.get('path') == condition.get('path')), None)
+    # a second "is X" on the same field means "is X or Y", and "is not X" then "is not Y" means neither of them
+    merge = {'eq': 'in', 'ne': 'nin'}
+
+    def as_many(cond):
+        cond = {**cond, 'op': merge[cond['op']], 'value': [cond['value']]}
+        if cond.get('lookup') == 'iexact':  # a name compared as text: "any of these names, whatever the case"
+            cond.pop('lookup')
+            cond['ci'] = True
+        return cond
+
+    def same_field(other):
+        return other['field'] == condition['field'] and other.get('path') == condition.get('path')
+
+    same = None
+    if condition['op'] in merge:
+        for index, existing in enumerate(current):
+            if same_field(existing) and existing['op'] == condition['op'] and \
+                    not isinstance(existing['value'], list):
+                current[index] = same = as_many(existing)  # "is X" and now "is Y": one condition for both
+                condition = as_many(condition)
+                break
+            if same_field(existing) and existing['op'] == merge[condition['op']] and \
+                    isinstance(existing['value'], list):
+                same, condition = existing, as_many(condition)
+                break
+    if same is None and condition['op'] in ('contains', 'ncontains', 'startswith', 'in', 'nin'):
+        same = next((c for c in current if same_field(c) and c['op'] == condition['op']
+                     and isinstance(c['value'], list) and isinstance(condition['value'], list)), None)
     if same is not None:  # one more value of the same condition: agg, and now core as well
         same['value'] = list(dict.fromkeys(same['value'] + condition['value']))
         condition = same

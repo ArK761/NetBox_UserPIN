@@ -1,6 +1,6 @@
 from netbox.plugins import PluginConfig
 
-__version__ = '0.31.0'
+__version__ = '0.31.1'
 
 
 class UserPinConfig(PluginConfig):
