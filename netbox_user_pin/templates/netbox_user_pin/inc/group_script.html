@@ -31,47 +31,49 @@
   var box = document.getElementById('pin-fields-box');
   if (box && location.hash === '#pin-fields-box') { box.open = true; }
 
-  // the condition on the records: values are chips (agg, core ...)
-  var meta = document.getElementById('pin-filter-fields'), form = document.getElementById('pin-rule-form');
-  if (!meta || !form) { return; }
+  // the conditions on the records (allowed and denied): values are chips (agg, core ...)
+  var meta = document.getElementById('pin-filter-fields');
+  if (!meta) { return; }
   var byKey = {};
   JSON.parse(meta.textContent).forEach(function (f) { byKey[f.key] = f; });
-  var field = document.getElementById('pin-rule-field'), op = document.getElementById('pin-rule-op'),
-      text = document.getElementById('pin-rule-text'), choice = document.getElementById('pin-rule-choice'),
-      chips = document.getElementById('pin-rule-chips');
-  function addChip(value) {
-    value = value.trim();
-    if (!value) { return; }
-    var multi = ['contains', 'ncontains', 'startswith', 'in', 'nin'].indexOf(op.value) >= 0;
-    if (!multi) { chips.innerHTML = ''; }
-    var seen = Array.prototype.some.call(chips.querySelectorAll('input'), function (i) { return i.value.toLowerCase() === value.toLowerCase(); });
-    if (seen) { return; }
-    var chip = document.createElement('span'), input = document.createElement('input'), remove = document.createElement('button');
-    chip.className = 'badge text-bg-secondary pin-chip fs-6';
-    input.type = 'hidden'; input.name = 'values'; input.value = value;
-    remove.type = 'button'; remove.className = 'btn btn-link btn-sm p-0 text-white'; remove.textContent = '×';
-    remove.addEventListener('click', function () { chip.remove(); });
-    chip.appendChild(document.createTextNode(value + ' ')); chip.appendChild(input); chip.appendChild(remove);
-    chips.appendChild(chip);
-  }
-  function refresh() {
-    var info = byKey[field.value], free = ['contains', 'ncontains', 'startswith'].indexOf(op.value) >= 0,
-        multi = ['in', 'nin'].indexOf(op.value) >= 0;
-    chips.innerHTML = '';
-    if (info && info.choices && !free) {
-      choice.innerHTML = '';
-      info.choices.forEach(function (c) { var o = document.createElement('option'); o.value = c[0]; o.text = c[1]; choice.appendChild(o); });
-      choice.name = 'values'; choice.multiple = multi; choice.size = multi ? 6 : 1;
-      choice.classList.remove('d-none'); choice.disabled = false; text.classList.add('d-none');
-    } else {
-      choice.classList.add('d-none'); choice.disabled = true; choice.removeAttribute('name'); text.classList.remove('d-none');
+  document.querySelectorAll('.pin-rule-form').forEach(function (form) {
+    var field = form.querySelector('.pin-rule-field'), op = form.querySelector('.pin-rule-op'),
+        text = form.querySelector('.pin-rule-text'), choice = form.querySelector('.pin-rule-choice'),
+        chips = form.querySelector('.pin-rule-chips');
+    function addChip(value) {
+      value = value.trim();
+      if (!value) { return; }
+      var multi = ['contains', 'ncontains', 'startswith', 'in', 'nin', 'eq', 'ne'].indexOf(op.value) >= 0;
+      if (!multi) { chips.innerHTML = ''; }
+      var seen = Array.prototype.some.call(chips.querySelectorAll('input'), function (i) { return i.value.toLowerCase() === value.toLowerCase(); });
+      if (seen) { return; }
+      var chip = document.createElement('span'), input = document.createElement('input'), remove = document.createElement('button');
+      chip.className = 'badge text-bg-secondary pin-chip fs-6';
+      input.type = 'hidden'; input.name = 'values'; input.value = value;
+      remove.type = 'button'; remove.className = 'btn btn-link btn-sm p-0 text-white'; remove.textContent = '×';
+      remove.addEventListener('click', function () { chip.remove(); });
+      chip.appendChild(document.createTextNode(value + ' ')); chip.appendChild(input); chip.appendChild(remove);
+      chips.appendChild(chip);
     }
-  }
-  text.addEventListener('keydown', function (event) {
-    if (event.key === 'Enter' || event.key === ',') { event.preventDefault(); addChip(text.value); text.value = ''; }
+    function refresh() {
+      var info = byKey[field.value], free = ['contains', 'ncontains', 'startswith'].indexOf(op.value) >= 0,
+          multi = ['in', 'nin', 'eq', 'ne'].indexOf(op.value) >= 0;
+      chips.innerHTML = '';
+      if (info && info.choices && !free) {
+        choice.innerHTML = '';
+        info.choices.forEach(function (c) { var o = document.createElement('option'); o.value = c[0]; o.text = c[1]; choice.appendChild(o); });
+        choice.name = 'values'; choice.multiple = multi; choice.size = multi ? 6 : 1;
+        choice.classList.remove('d-none'); choice.disabled = false; text.classList.add('d-none');
+      } else {
+        choice.classList.add('d-none'); choice.disabled = true; choice.removeAttribute('name'); text.classList.remove('d-none');
+      }
+    }
+    text.addEventListener('keydown', function (event) {
+      if (event.key === 'Enter' || event.key === ',') { event.preventDefault(); addChip(text.value); text.value = ''; }
+    });
+    form.addEventListener('submit', function () { if (text.value.trim()) { addChip(text.value); text.value = ''; } });
+    field.addEventListener('change', refresh); op.addEventListener('change', refresh);
+    refresh();
   });
-  form.addEventListener('submit', function () { if (text.value.trim()) { addChip(text.value); text.value = ''; } });
-  field.addEventListener('change', refresh); op.addEventListener('change', refresh);
-  refresh();
 })();
 </script>

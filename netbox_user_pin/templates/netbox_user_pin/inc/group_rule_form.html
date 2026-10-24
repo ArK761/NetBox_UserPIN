@@ -1,0 +1,11 @@
+{% load i18n %}
+<form method="post" class="d-flex flex-wrap gap-2 align-items-start border rounded p-2 pin-rule-form" data-kind="{{ kind }}" id="pin-rule-form-{{ fid }}">{% csrf_token %}<input type="hidden" name="action" value="rule-add"><input type="hidden" name="kind" value="{{ kind }}">
+  <select name="field" class="form-select form-select-sm w-auto pin-rule-field">{% for f in filter_fields %}<option value="{{ f.key }}">{{ f.label }}</option>{% endfor %}</select>
+  <select name="op" class="form-select form-select-sm w-auto pin-rule-op">{% for key, label in ops %}<option value="{{ key }}">{{ label }}</option>{% endfor %}</select>
+  <div class="d-flex flex-wrap gap-1 align-items-center">
+    <span class="pin-rule-chips d-inline-flex flex-wrap gap-1"></span>
+    <input type="text" class="form-control form-control-sm w-auto pin-chips-input pin-rule-text" placeholder="{% trans 'type a value and press Enter' %}">
+    <select class="form-select form-select-sm w-auto d-none pin-rule-choice" multiple size="6"></select>
+  </div>
+  <button type="submit" class="btn btn-sm btn-primary">{% trans "Add" %}</button>
+</form>

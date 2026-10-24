@@ -68,10 +68,12 @@ def compute_policy(user, area, app_label, model):
         defaults = {g.pk: _grant_default(g.profile.rights) for g in grants}
         default = max(defaults.values(), key=RANK.get)
         for field in {r.field for r in rules if r.profile_id is not None}:
-            best, texts, unlimited = None, [], False
+            best, texts, unlimited, explicit = None, [], False, []
             for grant in grants:
                 rule = by_profile.get(grant.profile_id, {}).get(field)
                 mode = AreaFieldMode(rule.mode) if rule else defaults[grant.pk]
+                if rule:
+                    explicit.append(mode)
                 if best is None or RANK[mode] > RANK[best]:
                     best = mode
                 if mode != AreaFieldMode.HIDDEN:
@@ -79,6 +81,11 @@ def compute_policy(user, area, app_label, model):
                         texts.append(rule.contains)
                     else:
                         unlimited = True
+            # a rule of any source that hides the field or makes it read only wins over a write of another source
+            if AreaFieldMode.HIDDEN in explicit:
+                best = AreaFieldMode.HIDDEN
+            elif AreaFieldMode.READ in explicit and best == AreaFieldMode.WRITE:
+                best = AreaFieldMode.READ
             if best != default:
                 modes[field] = best
             if texts and not unlimited:

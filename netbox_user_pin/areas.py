@@ -261,10 +261,13 @@ def rights_of(user, area, target=None):
         return set(rights_available(area))
     if _bootstrap(user, area):
         return set(rights_available(area))  # bootstrap: no owners yet, the master keeps access
-    rights = set()
+    rights, denied = set(), set()
     for grant in active_grants(user, area, target):
         rights.update(grant.profile.rights)
-    return rights
+        denied.update(grant.profile.denied or [])
+    if 'view' in denied:
+        return set()  # who may not read may not do anything with it
+    return rights - denied
 
 
 def can(user, area, right='view', target=None):
@@ -398,16 +401,37 @@ def row_filter(user, area, app_label, model, action='view'):
         return None
     if _unrestricted(user, area):
         return Q()
-    combined = None
+    allowed, everything, denied = [], False, []
     for grant in active_grants(user, area, target):
-        if action not in grant.profile.rights:
+        profile = grant.profile
+        deny_spec = (profile.deny_filters or {}).get(target)
+        if isinstance(deny_spec, list):  # a Deny of any source applies whatever the other sources allow
+            denied += [_spec_q([c]) for c in deny_spec]
+        if action not in profile.rights:
             continue
-        spec = (grant.profile.filters or {}).get(f'{app_label}.{model}')
-        if not spec:
-            return Q()  # one profile without a filter for this type shows everything of it
-        query = _spec_q(spec)
-        combined = query if combined is None else combined | query
-    return combined
+        spec = (profile.filters or {}).get(target)
+        if profile.records == 'unset':
+            continue  # not configured: no records, never "all of them by accident"
+        if profile.records == 'filtered':
+            if not spec:
+                continue  # a filter without a condition is "nothing"
+            allowed.append(_spec_q(spec))
+        else:
+            everything = True
+    if not (everything or allowed):
+        return None
+    query = Q() if everything else _any_q(allowed)
+    if denied:
+        query = query & ~_any_q(denied)
+    return query
+
+
+def _any_q(queries):
+    """One of the conditions (``Q() | Q(x)`` would drop the empty one, so the first one starts it)."""
+    result = queries[0]
+    for query in queries[1:]:
+        result = result | query
+    return result
 
 
 #
@@ -553,6 +577,42 @@ def condition_text(target, condition):
     return f"{label} {row_op_labels().get(condition['op'], condition['op'])} {shown}"
 
 
+def group_deny_conditions(group):
+    """[(index, text, field)] of the conditions of the records a group never shows."""
+    spec = (group.deny_filters or {}).get(group.target) or []
+    return [(i, condition_text(group.target, c), c['field']) for i, c in enumerate(spec) if isinstance(c, dict)]
+
+
+def set_group_records(group, actor, state, request=None):
+    """Which records the group sees: ``unset`` (none yet), ``all`` (chosen by the owner) or ``filtered``."""
+    if not _may_grant(actor, group.area) or group.private:
+        raise PermissionDenied
+    if state not in ('unset', 'all', 'filtered'):
+        raise ValidationError(_('Unknown choice.'))
+    group.records = state
+    group.save()
+    _log(PinEventAction.AREA_CHANGED, group.area, actor, request=request, detail=f'group {group.name} records: {state}')
+    clear_cache()
+
+
+def _condition_values(condition):
+    """The values by which a condition lets (or hides) records, lower-cased, for the test of a conflict."""
+    if condition['op'] not in ('eq', 'in', 'contains', 'startswith'):
+        return set()
+    value = condition['value']
+    return {str(v).lower() for v in (value if isinstance(value, list) else [value])}
+
+
+def _conflict(new, others):
+    """A value cannot be both allowed and denied: the same value of the same field in the other list."""
+    mine = _condition_values(new)
+    for other in others:
+        if isinstance(other, dict) and other.get('field') == new['field'] and other.get('path') == new.get('path') \
+                and (mine & _condition_values(other)):
+            return sorted(mine & _condition_values(other))[0]
+    return None
+
+
 def group_conditions(group):
     """[(index, text, field)] of the row conditions of a group (for its object type)."""
     spec = (group.filters or {}).get(group.target) or []
@@ -561,12 +621,17 @@ def group_conditions(group):
     return [(i, condition_text(group.target, c), c['field']) for i, c in enumerate(spec)]
 
 
-def add_group_condition(group, actor, field, op, values, request=None):
+def add_group_condition(group, actor, field, op, values, request=None, deny=False):
     area = group.area
     if not _may_grant(actor, area) or group.private or not group.target:
         raise PermissionDenied
     condition = _clean_condition(group.target, field, op, values)
-    filters = dict(group.filters or {})
+    opposite = (group.filters if deny else group.deny_filters) or {}
+    clash = _conflict(condition, opposite.get(group.target) if isinstance(opposite.get(group.target), list) else [])
+    if clash is not None:
+        raise ValidationError(_('"%(value)s" is already in the list of %(list)s: a value cannot be both allowed and '
+                                'denied.') % {'value': clash, 'list': _('allowed') if deny else _('denied')})
+    filters = dict((group.deny_filters if deny else group.filters) or {})
     current = filters.get(group.target) or []
     if isinstance(current, dict):
         current = []
@@ -605,19 +670,23 @@ def add_group_condition(group, actor, field, op, values, request=None):
     else:
         current.append(condition)
     filters[group.target] = current
-    group.filters = filters
+    if deny:
+        group.deny_filters = filters
+    else:
+        group.filters = filters
+        group.records = 'filtered'  # a condition that is added is meant to narrow the records
     group.save()
     _log(PinEventAction.AREA_CHANGED, area, actor, request=request,
-         detail=f'group {group.name} rows: {condition_text(group.target, condition)}')
+         detail=f'group {group.name} rows {"DENIED" if deny else "allowed"}: {condition_text(group.target, condition)}')
     clear_cache()
     return condition
 
 
-def remove_group_condition(group, actor, index, request=None):
+def remove_group_condition(group, actor, index, request=None, deny=False):
     area = group.area
     if not _may_grant(actor, area) or group.private:
         raise PermissionDenied
-    filters = dict(group.filters or {})
+    filters = dict((group.deny_filters if deny else group.filters) or {})
     current = filters.get(group.target) or []
     if isinstance(current, list) and 0 <= index < len(current):
         removed = current.pop(index)
@@ -625,10 +694,14 @@ def remove_group_condition(group, actor, index, request=None):
             filters[group.target] = current
         else:
             filters.pop(group.target, None)
-        group.filters = filters
+        if deny:
+            group.deny_filters = filters
+        else:
+            group.filters = filters
         group.save()
         _log(PinEventAction.AREA_CHANGED, area, actor, request=request,
-             detail=f'group {group.name} rows removed: {condition_text(group.target, removed)}')
+             detail=f'group {group.name} rows {"denied" if deny else "allowed"} removed: '
+                    f'{condition_text(group.target, removed)}')
         clear_cache()
 
 
@@ -973,7 +1046,8 @@ def save_profile(area, name, rights, actor, profile=None, request=None, filters=
     if profile is None:
         if AreaProfile.objects.filter(area=area, name=name).exists():
             raise ValidationError(_('A profile with this name exists.'))
-        profile = AreaProfile.objects.create(area=area, name=name, rights=rights, filters=filters or {})
+        profile = AreaProfile.objects.create(area=area, name=name, rights=rights, filters=filters or {},
+                                             records='filtered' if filters else 'all')
     else:
         profile.name, profile.rights, profile.filters = name, rights, filters or {}
         profile.save()
@@ -1146,7 +1220,7 @@ def decide_request(req, actor, approve, profile=None, hours=None, request=None, 
             name = (group_name or '').strip() or (_('Reading') if wanted == ['view'] else _('Writing'))
             group = AreaProfile.objects.filter(area=area, name=name, target=req.target, private=False).first()
             if group is None:
-                group = create_group(area, req.target, name, wanted, actor, request=request)
+                group = create_group(area, req.target, name, wanted, actor, request=request, records='all')
         elif group.area_id != area.pk or group.target != req.target:
             raise ValidationError(_('Choose a group of this object type.'))
         grant = add_member(group, req.user, hours, actor, request=request, notify=False)
@@ -1189,7 +1263,7 @@ def grant_custom(area, user, target, rights, hours, actor, filters=None, request
         raise ValidationError(_('"%(target)s" is not protected by this area.') % {'target': target})
     profile = AreaProfile.objects.create(area=area, name=f'{user.username} · {target or "*"} · {uuid.uuid4().hex[:6]}',
                                          rights=rights, filters=filters or {}, private=True,
-                                         tabs=[] if target else None)
+                                         tabs=[] if target else None, records='filtered' if filters else 'all')
     try:
         return grant_access(area, user, profile, hours, actor, request=request, notify=notify, target=target)
     except Exception:
@@ -1211,6 +1285,7 @@ def update_grant(grant, rights, actor, filters=None, request=None):
     if not profile.private:
         raise ValidationError(_('Revoke this access and grant it again.'))
     profile.rights, profile.filters = rights, filters or {}
+    profile.records = 'filtered' if filters else 'all'
     profile.save()
     _log(PinEventAction.AREA_CHANGED, area, actor, user=grant.user, request=request,
          detail=f'{grant.target or "*"}: {", ".join(rights)}' + (f' | rows: {format_filters(filters)}' if filters else ''))
@@ -1277,7 +1352,7 @@ def _clean_group_rights(area, rights):
     return rights
 
 
-def create_group(area, target, name, rights, actor, filters=None, request=None):
+def create_group(area, target, name, rights, actor, filters=None, request=None, records='unset'):
     rights = rights or ['view']  # a new group reads; what else it may do is ticked inside the group
     if not _may_grant(actor, area):
         raise PermissionDenied
@@ -1289,13 +1364,14 @@ def create_group(area, target, name, rights, actor, filters=None, request=None):
     if AreaProfile.objects.filter(area=area, target=target, private=False, name__iexact=name).exists():
         raise ValidationError(_('A group with this name exists.'))
     group = AreaProfile.objects.create(area=area, name=name, rights=_clean_group_rights(area, rights),
-                                       filters=filters or {}, private=False, target=target, tabs=[])
+                                       filters=filters or {}, private=False, target=target, tabs=[],
+                                       records='filtered' if filters else records)
     _log(PinEventAction.AREA_CHANGED, area, actor, request=request,
          detail=f'group {name} ({target}): {", ".join(group.rights)}')
     return group
 
 
-def update_group(group, actor, name=None, rights=None, filters=None, request=None, allow_empty=False):
+def update_group(group, actor, name=None, rights=None, filters=None, request=None, allow_empty=False, denied=None):
     area = group.area
     if not _may_grant(actor, area) or group.private:
         raise PermissionDenied
@@ -1311,9 +1387,13 @@ def update_group(group, actor, name=None, rights=None, filters=None, request=Non
         group.rights = [] if (allow_empty and not rights) else _clean_group_rights(area, rights)
     if filters is not None:
         group.filters = filters
+    if denied is not None:
+        known = set(rights_available(area))
+        group.denied = [r for r in dict.fromkeys(denied) if r in known]
     group.save()
     _log(PinEventAction.AREA_CHANGED, area, actor, request=request,
-         detail=f'group {group.name} ({group.target}): {", ".join(group.rights) or "no access"}')
+         detail=f'group {group.name} ({group.target}): {", ".join(group.rights) or "no access"}'
+                + (f' | DENY: {", ".join(group.denied)}' if group.denied else ''))
     clear_cache()
 
 

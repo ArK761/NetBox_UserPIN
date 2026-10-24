@@ -1062,8 +1062,8 @@ class GroupsTest(AreaTestCase):
         self.user = User.objects.create_user('usera', 'a@example.com')
 
     def test_writing_brings_reading_a_user_is_in_one_group_and_leaving_the_last_means_no_access(self):
-        reading = areas.create_group(self.area, 'dcim.device', 'Reading', ['view'], self.owner1)
-        writing = areas.create_group(self.area, 'dcim.device', 'Writing', ['change'], self.owner1)
+        reading = areas.create_group(self.area, 'dcim.device', 'Reading', ['view'], self.owner1, records='all')
+        writing = areas.create_group(self.area, 'dcim.device', 'Writing', ['change'], self.owner1, records='all')
         self.assertEqual(writing.rights, ['view', 'change'])  # who writes reads
         areas.add_member(reading, self.user, None, self.owner1)
         self.assertTrue(areas.can(self.user, self.area, 'view', 'dcim.device'))
@@ -1230,7 +1230,7 @@ class DeniedOverviewTest(AreaTestCase):
         from dcim.models import Device, DeviceRole, DeviceType, Manufacturer, Site
         area = self.make_area(targets=('dcim.device',))
         user = User.objects.create_user('usera', 'a@example.com')
-        group = areas.create_group(area, 'dcim.device', 'Technici', ['view'], self.owner1)
+        group = areas.create_group(area, 'dcim.device', 'Technici', ['view'], self.owner1, records='all')
         areas.add_member(group, user, None, self.owner1)
         fields = {'name': ('hidden', ''), 'description': ('hidden', ''), 'comments': ('hidden', '')}
         areas.save_field_rules(area, group, 'dcim.device', {**fields, 'role': ('read', '')}, self.owner1)
@@ -1269,7 +1269,7 @@ class RowConditionsTest(AreaTestCase):
         Device.objects.create(name='AGG_02', site=site, device_type=dtype, role=self.role2)
         Device.objects.create(name='PRINTER_1', site=site, device_type=dtype, role=self.role1)
         self.area = self.make_area(targets=('dcim.device',))
-        self.group = areas.create_group(self.area, 'dcim.device', 'Technici', ['view'], self.owner1)
+        self.group = areas.create_group(self.area, 'dcim.device', 'Technici', ['view'], self.owner1, records='all')
         self.user = User.objects.create_user('usera', 'a@example.com')
         areas.add_member(self.group, self.user, None, self.owner1)
 
@@ -1277,7 +1277,41 @@ class RowConditionsTest(AreaTestCase):
         areas.clear_cache()
         user = User.objects.get(pk=self.user.pk)
         query = areas.row_filter(user, self.area, 'dcim', 'device')
+        if query is None:
+            return []
         return sorted(self.Device.objects.filter(query).values_list('name', flat=True))
+
+    def test_allowed_and_denied_records_never_conflict_and_a_deny_wins(self):
+        areas.add_group_condition(self.group, self.owner1, 'name', 'contains', ['agg'])
+        self.assertEqual(self.names(), ['AGG_01', 'AGG_02'])
+        with self.assertRaises(ValidationError):  # the same value cannot be allowed and denied
+            areas.add_group_condition(self.group, self.owner1, 'name', 'contains', ['AGG'], deny=True)
+        areas.add_group_condition(self.group, self.owner1, 'name', 'contains', ['_02'], deny=True)
+        self.assertEqual(self.names(), ['AGG_01'])  # the deny hides what the allowance lets in
+        with self.assertRaises(ValidationError):
+            areas.add_group_condition(self.group, self.owner1, 'name', 'contains', ['_02'])  # denied already
+        self.assertEqual([t for _i, t, _f in areas.group_deny_conditions(self.group)], ['Name contains _02'])
+        areas.set_group_records(self.group, self.owner1, 'all')
+        self.assertEqual(self.names(), ['AGG_01', 'PRINTER_1'])  # a deny works with "all records" as well
+        areas.remove_group_condition(self.group, self.owner1, 0, deny=True)
+        self.assertEqual(self.names(), ['AGG_01', 'AGG_02', 'PRINTER_1'])
+
+    def test_a_group_that_is_not_set_sees_no_record_and_a_deny_of_an_operation_wins(self):
+        fresh = areas.create_group(self.area, 'dcim.device', 'Nova', ['view'], self.owner1)  # no records chosen
+        other = User.objects.create_user('userz', 'z@example.com')
+        areas.add_member(fresh, other, None, self.owner1)
+        areas.clear_cache()
+        other = User.objects.get(pk=other.pk)
+        self.assertEqual((fresh.records, areas.row_filter(other, self.area, 'dcim', 'device')), ('unset', None))
+        areas.set_group_records(fresh, self.owner1, 'all')
+        areas.update_group(fresh, self.owner1, rights=['view', 'change', 'delete'], denied=['delete'])
+        areas.clear_cache()
+        self.assertEqual(areas.rights_of(other, self.area, 'dcim.device'), {'view', 'change'})  # the deny wins
+        self.assertIsNotNone(areas.row_filter(other, self.area, 'dcim', 'device'))
+        self.assertIsNone(areas.row_filter(other, self.area, 'dcim', 'device', 'delete'))
+        areas.update_group(fresh, self.owner1, denied=['view'])  # who may not read, may not do anything
+        areas.clear_cache()
+        self.assertEqual(areas.rights_of(other, self.area, 'dcim.device'), set())
 
     def test_two_is_conditions_of_one_field_are_alternatives_not_an_empty_set(self):
         areas.add_group_condition(self.group, self.owner1, 'role', 'eq', [str(self.role1.pk)])
@@ -1302,6 +1336,7 @@ class RowConditionsTest(AreaTestCase):
             {'op': 'eq', 'field': 'role', 'value': str(self.role1.pk)},
             {'op': 'eq', 'field': 'role', 'value': str(self.role2.pk)},
             {'op': 'contains', 'field': 'name', 'value': 'agg'}]}
+        self.group.records = 'filtered'
         self.group.save()
         self.assertEqual(self.names(), [])  # the situation of the user: two "is" conditions see nothing
         importlib.import_module('netbox_user_pin.migrations.0024_merge_same_field_conditions').merge(django_apps, None)
@@ -1327,7 +1362,7 @@ class RowConditionsTest(AreaTestCase):
         admin_login(self.client, self.owner1)
         url = reverse('plugins:netbox_user_pin:group', kwargs={'pk': self.area.pk, 'gid': self.group.pk})
         html = self.client.get(url).content.decode()
-        for marker in ('name="access"', 'name="tabv__interfaces"', 'pin-rule-form', 'name="mode__name"',
+        for marker in ('name="access"', 'name="tabv__interfaces"', 'pin-rule-form-allow', 'name="mode__name"',
                        'agg / core'):
             self.assertIn(marker, html)
         self.client.post(url, {'action': 'rights', 'name': 'Technici', 'access': 'write', 'delete': 'on'})
@@ -1341,7 +1376,7 @@ class RowConditionsTest(AreaTestCase):
         self.group.refresh_from_db()
         self.assertEqual(self.group.rights, [])
         html = self.client.get(url).content.decode()
-        self.assertNotIn('id="pin-rule-form"', html)  # a group that sees nothing has nothing more to set
+        self.assertNotIn('id="pin-rule-form-allow"', html)  # a group that sees nothing has nothing more to set
         areas.clear_cache()
         self.assertFalse(areas.can(User.objects.get(pk=self.user.pk), self.area, 'view', 'dcim.device'))
 
@@ -1356,7 +1391,7 @@ class RowConditionsTest(AreaTestCase):
         areas.add_keeper(keeper, self.master)
         area = areas.create_area('Tenants', ['tenancy.tenant'], [], keeper)
         areas.add_owner(area, self.owner1, keeper)
-        group = areas.create_group(area, 'tenancy.tenant', 'Evidencia', ['view'], self.owner1)
+        group = areas.create_group(area, 'tenancy.tenant', 'Evidencia', ['view'], self.owner1, records='all')
         areas.update_group(group, self.owner1, rights=['view', 'change'])
         areas.add_member(group, self.user, None, self.owner1)
         tenant_type = ObjectType.objects.get_for_model(Tenant)
@@ -1460,6 +1495,8 @@ class RowConditionsTest(AreaTestCase):
         self.assertEqual(self.names(), ['PRINTER_1'])
         areas.remove_group_condition(self.group, self.owner1, 0)
         areas.remove_group_condition(self.group, self.owner1, 0)
+        self.assertEqual(self.names(), [])  # a filter without a condition is nothing, never everything
+        areas.set_group_records(self.group, self.owner1, 'all')  # everything has to be chosen
         self.assertEqual(self.names(), ['AGG_01', 'AGG_02', 'PRINTER_1'])
         areas.add_group_condition(self.group, self.owner1, 'role', 'ne', [str(self.role1.pk)])  # must not equal
         self.assertEqual(self.names(), ['AGG_02'])
@@ -1514,11 +1551,12 @@ class RowConditionsTest(AreaTestCase):
             areas.add_group_condition(self.group, self.user, 'name', 'eq', ['x'])
 
     def test_the_page_lists_adds_and_removes_conditions(self):
+        areas.set_group_records(self.group, self.owner1, 'filtered')
         admin_login(self.client, self.owner1)
         url = reverse('plugins:netbox_user_pin:group', kwargs={'pk': self.area.pk, 'gid': self.group.pk})
         html = self.client.get(url).content.decode()
-        self.assertIn('id="pin-rule-form"', html)  # one place for the conditions of the records
-        self.assertIn('id="pin-rule-field"', html)
+        self.assertIn('id="pin-rule-form-allow"', html)  # one place for the conditions of the records
+        self.assertIn('id="pin-rule-form-deny"', html)
         response = self.client.post(url, {'action': 'rule-add', 'field': 'role', 'op': 'ne', 'values': [self.role1.pk]})
         self.assertEqual(response.status_code, 302, response.content[:300])
         self.assertTrue(response['Location'].endswith('#pin-rule-form'))
@@ -1572,7 +1610,7 @@ class HiddenFieldPathsTest(AreaTestCase):
         field = CustomField.objects.create(name='ro', type='text')
         field.object_types.set([ObjectType.objects.get_for_model(Device)])
         self.area = self.make_area(targets=('dcim.device',))
-        self.group = areas.create_group(self.area, 'dcim.device', 'Technici', ['view'], self.owner1)
+        self.group = areas.create_group(self.area, 'dcim.device', 'Technici', ['view'], self.owner1, records='all')
         areas.update_group(self.group, self.owner1, rights=['view', 'add', 'change', 'delete'])
         self.user = User.objects.create_user('usera', 'a@example.com')
         areas.add_member(self.group, self.user, None, self.owner1)
@@ -1627,7 +1665,7 @@ class HiddenFieldPathsTest(AreaTestCase):
         search_backend.cache([self.secret, self.other])
         self.assertEqual(len(search_backend.search('TOPSECRET', user=user)), 0)
         sees = User.objects.create_user('userc', 'c@example.com')  # a group without the hidden-field rule
-        other = areas.create_group(self.area, 'dcim.device', 'Vsetko', ['view'], self.owner1)
+        other = areas.create_group(self.area, 'dcim.device', 'Vsetko', ['view'], self.owner1, records='all')
         areas.add_member(other, sees, None, self.owner1)
         areas.clear_cache()
         self.assertGreaterEqual(len(search_backend.search('TOPSECRET', user=sees)), 1)
@@ -1652,3 +1690,16 @@ class HiddenFieldPathsTest(AreaTestCase):
         response = self.client.patch(url, {'description': 'x'}, content_type='application/json', **self.json)
         self.other.refresh_from_db()
         self.assertEqual(self.other.description, 'plain')  # the hidden field is not even a field of the API
+
+    def test_a_rule_that_hides_a_field_wins_over_a_write_of_another_source(self):
+        from netbox_user_pin import fieldrules
+        grant = areas.grant_custom(self.area, self.user, 'dcim.device', ['view', 'change'], None, self.owner1)
+        areas.save_field_rules(self.area, grant.profile, 'dcim.device', {'description': ('write', '')}, self.owner1)
+        areas.clear_cache()
+        policy = fieldrules.compute_policy(User.objects.get(pk=self.user.pk), self.area, 'dcim', 'device')
+        self.assertEqual(policy.mode('description'), 'hidden')  # the group hides it, the entry writes it: hidden
+        self.assertEqual(policy.mode('comments'), 'read')  # the group reads it, nobody writes it
+        areas.save_field_rules(self.area, grant.profile, 'dcim.device', {'comments': ('write', '')}, self.owner1)
+        areas.clear_cache()
+        policy = fieldrules.compute_policy(User.objects.get(pk=self.user.pk), self.area, 'dcim', 'device')
+        self.assertEqual(policy.mode('comments'), 'read')  # read only from one source is not overridden by a write

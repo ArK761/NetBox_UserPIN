@@ -63,11 +63,12 @@ class PolicyTest(FieldRulesCase):
         self.assertEqual(policy.mode('cf:secret_note'), AreaFieldMode.HIDDEN)
         self.assertEqual(policy.mode('name'), AreaFieldMode.WRITE)
 
-    def test_profiles_add_up_the_most_permissive_wins(self):
+    def test_profiles_add_up_but_an_explicit_hidden_wins(self):
         self.rule('cf:secret_note', 'hidden')
         areas.grant_access(self.area, self.appadmin, self.read, None, self.owner1)
         policy = fieldrules.compute_policy(self.appadmin, self.area, 'tenancy', 'tenant')
-        self.assertEqual(policy.mode('cf:secret_note'), AreaFieldMode.READ)  # Read has no rule: its default is read
+        # Read has no rule for the field (only its default, which is no denial): the explicit "hidden" wins
+        self.assertEqual(policy.mode('cf:secret_note'), AreaFieldMode.HIDDEN)
 
     def test_nobody_hides_from_everybody_even_the_owners(self):
         areas.save_field_rules(self.area, None, 'tenancy.tenant', {'cf:secret_note': ('hidden', '')}, self.owner1)

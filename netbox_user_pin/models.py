@@ -816,6 +816,14 @@ class AreaProfile(models.Model):
     tabs = models.JSONField(null=True, blank=True, default=None)
     # A group is a (not private) profile of one object type of the area: its members are the users granted through it.
     target = models.CharField(max_length=100, blank=True)
+    # Which records the profile shows: nothing (not configured yet), every record (chosen by an owner) or only those
+    # of ``filters``. A filter without any condition is "nothing", never "everything".
+    records = models.CharField(max_length=10, default='all',
+                               choices=[('unset', _('Not set')), ('all', _('All records')), ('filtered', _('By conditions'))])
+    # Records the profile never shows (per object type, a list of conditions: any of them hides the record).
+    deny_filters = models.JSONField(default=dict, blank=True)
+    # Operations explicitly forbidden to the members of the profile ('view', 'add', 'change', 'delete'): a Deny wins.
+    denied = models.JSONField(default=list, blank=True)
 
     class Meta:
         verbose_name = _('area profile')
