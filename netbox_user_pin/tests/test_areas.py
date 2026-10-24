@@ -1520,3 +1520,105 @@ class PluginMenuByRolesTest(AreaTestCase):
         master = User.objects.get(pk=self.master.pk)
         area_guard.arm_user(master)
         self.assertTrue(master.has_perm('netbox_user_pin.view_pinsettings'))
+
+
+class HiddenFieldPathsTest(AreaTestCase):
+    """Step 1: a hidden or read-only field is protected on every path, not only on the detail page."""
+
+    def setUp(self):
+        super().setUp()
+        from dcim.models import Device, DeviceRole, DeviceType, Manufacturer, Site
+        from extras.models import CustomField
+        from core.models import ObjectType
+        site = Site.objects.create(name='S1', slug='s1')
+        dtype = DeviceType.objects.create(manufacturer=Manufacturer.objects.create(name='M1', slug='m1'),
+                                          model='T1', slug='t1')
+        role = DeviceRole.objects.create(name='R1', slug='r1', color='ff0000')
+        self.Device = Device
+        self.secret = Device.objects.create(name='DEV_A', site=site, device_type=dtype, role=role,
+                                            description='TOPSECRET', comments='visible')
+        self.other = Device.objects.create(name='DEV_B', site=site, device_type=dtype, role=role,
+                                           description='plain')
+        field = CustomField.objects.create(name='ro', type='text')
+        field.object_types.set([ObjectType.objects.get_for_model(Device)])
+        self.area = self.make_area(targets=('dcim.device',))
+        self.group = areas.create_group(self.area, 'dcim.device', 'Technici', ['view'], self.owner1)
+        areas.update_group(self.group, self.owner1, rights=['view', 'add', 'change', 'delete'])
+        self.user = User.objects.create_user('usera', 'a@example.com')
+        areas.add_member(self.group, self.user, None, self.owner1)
+        areas.save_field_rules(self.area, self.group, 'dcim.device',
+                               {'description': ('hidden', ''), 'comments': ('read', ''), 'cf:ro': ('read', '')},
+                               self.owner1)
+        areas.clear_cache()
+        self.login(self.user)
+        self.json = {'HTTP_ACCEPT': 'application/json'}
+
+    def test_bulk_edit_form_has_neither_the_hidden_nor_the_read_only_field(self):
+        url = '/dcim/devices/edit/'
+        html = self.client.post(url, {'pk': [self.secret.pk, self.other.pk], '_edit': ''}).content.decode()
+        self.assertIn('name="status"', html)
+        self.assertNotIn('name="description"', html)  # hidden
+        self.assertNotIn('name="comments"', html)  # read only: nothing to set for many objects
+        self.assertNotIn('cf_ro', html)
+        self.client.post(url, {'pk': [self.secret.pk, self.other.pk], '_apply': '', 'description': 'HACKED',
+                               'comments': 'HACKED', 'cf_ro': 'HACKED'})
+        self.secret.refresh_from_db()
+        self.other.refresh_from_db()
+        self.assertEqual((self.secret.description, self.other.description), ('TOPSECRET', 'plain'))
+        self.assertNotEqual(self.secret.comments, 'HACKED')
+        self.assertNotIn('ro', self.secret.custom_field_data or {})
+
+    def test_exports_do_not_show_the_hidden_field(self):
+        self.assertEqual(self.client.get('/dcim/devices/?export=').status_code, 403)  # YAML: every field
+        self.assertEqual(self.client.get('/dcim/devices/?export=anything').status_code, 403)  # an export template
+        response = self.client.get('/dcim/devices/?export=table')
+        self.assertEqual(response.status_code, 200)
+        body = b''.join(response.streaming_content) if response.streaming else response.content
+        self.assertIn(b'DEV_A', body)
+        self.assertNotIn(b'TOPSECRET', body)
+
+    def test_lists_cannot_be_filtered_or_searched_by_a_hidden_field(self):
+        for query in ('description=TOPSECRET', 'description__ic=secret', 'q=TOPSECRET'):
+            html = self.client.get(f'/dcim/devices/?{query}').content.decode()
+            self.assertIn('DEV_A', html, query)
+            self.assertIn('DEV_B', html, query)  # the filter is ignored, so it tells nothing
+        self.assertNotIn('TOPSECRET', self.client.get('/dcim/devices/').content.decode())
+        api = self.client.get('/api/dcim/devices/?description=TOPSECRET', **self.json).json()
+        self.assertEqual(api['count'], 2)
+        self.assertNotIn('description', api['results'][0])
+
+    def test_changelog_and_search_do_not_tell_the_hidden_value(self):
+        from netbox.search.backends import search_backend
+        from netbox_user_pin import fieldrules
+        user = User.objects.get(pk=self.user.pk)
+        self.assertEqual(fieldrules.hidden_by_type(user), {'dcim.device': {'description'}})
+        hidden = areas.unseen_objects(user, 'core', 'objectchange')
+        self.assertIn('changed_object_type__model', str(hidden))
+        search_backend.cache([self.secret, self.other])
+        self.assertEqual(len(search_backend.search('TOPSECRET', user=user)), 0)
+        sees = User.objects.create_user('userc', 'c@example.com')  # a group without the hidden-field rule
+        other = areas.create_group(self.area, 'dcim.device', 'Vsetko', ['view'], self.owner1)
+        areas.add_member(other, sees, None, self.owner1)
+        areas.clear_cache()
+        self.assertGreaterEqual(len(search_backend.search('TOPSECRET', user=sees)), 1)
+
+    def test_graphql_in_the_browser_is_closed_while_a_field_is_hidden(self):
+        body = {'query': '{ __typename }'}
+        response = self.client.post('/graphql/', body, content_type='application/json')
+        self.assertEqual((response.status_code, response.headers.get('X-UserPIN')), (403, 'denied'))
+        scripted = self.client.post('/graphql/', body, content_type='application/json', HTTP_AUTHORIZATION='Token x')
+        self.assertNotEqual(scripted.headers.get('X-UserPIN'), 'denied')  # a script with a token is not ours to judge
+
+    def test_api_refuses_to_write_a_read_only_custom_field_and_a_text_rule(self):
+        url = f'/api/dcim/devices/{self.other.pk}/'
+        response = self.client.patch(url, {'custom_fields': {'ro': 'new'}}, content_type='application/json', **self.json)
+        self.assertEqual(response.status_code, 400, response.content[:300])
+        self.other.refresh_from_db()
+        self.assertNotIn('ro', self.other.custom_field_data or {})
+        response = self.client.patch(url, {'custom_fields': {'ro': None}}, content_type='application/json', **self.json)
+        self.assertEqual(response.status_code, 200, response.content[:300])  # echoing what is there is no change
+        response = self.client.patch(url, {'name': 'DEV_B2'}, content_type='application/json', **self.json)
+        self.assertEqual(response.status_code, 200)  # an allowed field is written
+        response = self.client.patch(url, {'description': 'x'}, content_type='application/json', **self.json)
+        self.other.refresh_from_db()
+        self.assertEqual(self.other.description, 'plain')  # the hidden field is not even a field of the API

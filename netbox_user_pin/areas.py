@@ -72,6 +72,10 @@ def unseen_objects(user, app_label, model):
     if not field or not active_areas():
         return None
     hidden = Q()
+    from . import fieldrules
+    for target in fieldrules.hidden_by_type(user):  # the old and new values would show the hidden fields
+        app, _dot, name = target.partition('.')
+        hidden |= Q(**{f'{field}__app_label': app, f'{field}__model': name})
     for area in active_areas():
         for target in targets_of(area):
             if can(user, area, 'view', target if '.' in target else None):

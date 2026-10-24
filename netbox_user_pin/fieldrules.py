@@ -162,6 +162,22 @@ def choice_set_ids(user):
     return ids
 
 
+def hidden_by_type(user):
+    """{'app.model': {field names}}: the fields hidden from the user, for every protected object type."""
+    result = {}
+    if not getattr(user, 'is_authenticated', False):
+        return result
+    for area in areas.active_areas():
+        for target in areas.targets_of(area):
+            if '.' not in target:
+                continue
+            app_label, _dot, name = target.partition('.')
+            policy = compute_policy(user, area, app_label, name)
+            if policy is not None and policy.hidden():
+                result[target] = {n[3:] if n.startswith('cf:') else n for n in policy.hidden()}
+    return result
+
+
 def current_policy(app_label, model):
     """The policy for the user of the current request, or None (no area, no rules, not logged in)."""
     try:
@@ -237,7 +253,7 @@ def fields_of(app_label, model_name):
 
 def install():
     """Install the hooks (once). Each one falls back to NetBox's own behaviour when no rule applies."""
-    for installer in (_hook_detail, _hook_forms, _hook_tables, _hook_api):
+    for installer in (_hook_detail, _hook_forms, _hook_tables, _hook_api, _hook_paths):
         try:
             installer()
         except ImportError as exc:
@@ -492,3 +508,113 @@ def _hook_api():
 
     _once(CustomFieldsDataField, '_get_custom_fields', get_custom_fields)
     _once(CustomFieldsDataField, 'to_representation', to_representation)
+
+
+def _hook_paths():
+    """The other ways to the values: bulk edit, exports, list filters, search, writing through the REST API."""
+    from django.core.exceptions import PermissionDenied
+    from django.db.models import Q
+    from django_filters import FilterSet
+    from netbox.forms.bulk_edit import NetBoxModelBulkEditForm
+    from netbox.views.generic import ObjectListView
+
+    # bulk edit: a field the group does not see or only reads is not in the form, so it cannot be set for many objects
+    def bulk_edit_init(original):
+        def wrapper(self, *args, **kwargs):
+            original(self, *args, **kwargs)
+            policy = policy_of_model(getattr(self, 'model', None))
+            if policy is None:
+                return
+            for name in list(self.fields):
+                if name in ('pk', 'changelog_message', 'background_job'):
+                    continue
+                key = 'tags' if name in ('add_tags', 'remove_tags') else (f'cf:{name[3:]}' if name.startswith('cf_')
+                                                                         else name)
+                if policy.mode(key) in (AreaFieldMode.HIDDEN, AreaFieldMode.READ):
+                    self.fields.pop(name)
+                    getattr(self, 'custom_fields', {}).pop(name, None)
+        return wrapper
+
+    _once(NetBoxModelBulkEditForm, '__init__', bulk_edit_init)
+
+    # exports: the table export has no hidden columns; the YAML and the export templates show every field
+    def list_get(original):
+        def wrapper(self, request, *args, **kwargs):
+            if 'export' in request.GET and request.GET['export'] != 'table':
+                policy = policy_of_model(self.queryset.model)
+                if policy is not None and policy.hidden():
+                    raise PermissionDenied('This export would show fields hidden from you.')
+            return original(self, request, *args, **kwargs)
+        return wrapper
+
+    _once(ObjectListView, 'get', list_get)
+
+    # list filters: a hidden field cannot be asked about (?description=secret) and the fulltext "q" reads them all
+    def filterset_init(original):
+        def wrapper(self, *args, **kwargs):
+            original(self, *args, **kwargs)
+            policy = policy_of_model(getattr(getattr(self, '_meta', None), 'model', None))
+            if policy is None or not policy.hidden():
+                return
+            hidden = policy.hidden()
+            bare = {n[3:] for n in hidden if n.startswith('cf:')}
+            for name in list(self.filters):
+                field = (getattr(self.filters[name], 'field_name', None) or name).split('__')[0]
+                if name == 'q' or field in hidden or (name.startswith('cf_') and name[3:].split('__')[0] in bare):
+                    self.filters.pop(name)
+        return wrapper
+
+    _once(FilterSet, '__init__', filterset_init)
+
+    # search: no hit on a hidden field
+    try:
+        from netbox.search.backends import CachedValueSearchBackend
+    except ImportError:
+        CachedValueSearchBackend = None
+    if CachedValueSearchBackend is not None:
+        def search(original):
+            def wrapper(self, value, user=None, *args, **kwargs):
+                result = original(self, value, user, *args, **kwargs)
+                hidden = hidden_by_type(user) if user is not None else {}
+                if not hidden:
+                    return result
+                if not hasattr(result, 'exclude'):  # the backend hands over a list of hits
+                    return [hit for hit in result if hit.field not in hidden.get(
+                        f'{hit.object_type.app_label}.{hit.object_type.model}', ())]
+                unwanted = Q()
+                for target, names in hidden.items():
+                    app_label, _dot, model = target.partition('.')
+                    unwanted |= Q(object_type__app_label=app_label, object_type__model=model, field__in=names)
+                return result.exclude(unwanted)
+            return wrapper
+
+        _once(CachedValueSearchBackend, 'search', search)
+
+    # REST API: a read-only custom field is not written, a field with a text rule takes only values with the text
+    from extras.api.customfields import CustomFieldsDataField
+    from rest_framework.exceptions import ValidationError as ApiValidationError
+
+    def to_internal_value(original):
+        def wrapper(self, data):
+            model = getattr(getattr(self.parent, 'Meta', None), 'model', None)
+            policy = policy_of_model(model)
+            if policy is not None and isinstance(data, dict):
+                instance = getattr(self.parent, 'instance', None)
+                current = getattr(instance, 'custom_field_data', None) or {}
+                errors = {}
+                for name, value in data.items():
+                    key = f'cf:{name}'
+                    mode = policy.mode(key)
+                    if mode in (AreaFieldMode.READ, AreaFieldMode.HIDDEN) and current.get(name) != value:
+                        errors[name] = gettext('This field is read only for you.')
+                    elif (texts := policy.texts(key)) and value not in (None, '', []) and not (
+                            matches(value, texts) if not isinstance(value, (list, tuple)) else
+                            all(matches(v, texts) for v in value)):
+                        errors[name] = gettext('Only values containing "%(text)s" are allowed.') % {
+                            'text': ' / '.join(texts)}
+                if errors:
+                    raise ApiValidationError(errors)
+            return original(self, data)
+        return wrapper
+
+    _once(CustomFieldsDataField, 'to_internal_value', to_internal_value)

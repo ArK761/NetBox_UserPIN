@@ -248,6 +248,8 @@ class AreaGuardMiddleware:
     def process_view(self, request, view_func, view_args, view_kwargs):
         if not areas.protection_on() or _is_token_request(request):
             return None
+        if request.path_info.startswith('/graphql') and _graphql_would_leak(request):
+            return denied_response(request, None, right='view', target=None)
         cls = getattr(view_func, 'view_class', None) or getattr(view_func, 'cls', None)
         model = _model_of(cls) if cls is not None else None
         if model is None:  # the views of the changelog, journal, contacts ... get the model from the URL
@@ -311,6 +313,15 @@ class AreaGuardMiddleware:
             return None
         _throttled_log(user, area, right, request)
         return denied_response(request, area, right, ask, tab_label=tab[1] if tab else None)
+
+
+def _graphql_would_leak(request):
+    """GraphQL draws every field of what it returns: not for a person at a screen while any field is hidden."""
+    user = request.user
+    if not getattr(user, 'is_authenticated', False) or areas.is_keeper(user):
+        return False
+    from .models import AreaFieldMode, AreaFieldRule
+    return AreaFieldRule.objects.filter(mode=AreaFieldMode.HIDDEN).exists()
 
 
 def _select_exception(request, user, api, target, view_kwargs):
