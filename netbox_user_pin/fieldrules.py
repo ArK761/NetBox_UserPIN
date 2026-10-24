@@ -72,7 +72,9 @@ def compute_policy(user, area, app_label, model):
             for grant in grants:
                 rule = by_profile.get(grant.profile_id, {}).get(field)
                 mode = AreaFieldMode(rule.mode) if rule else defaults[grant.pk]
-                if rule:
+                if rule and mode == AreaFieldMode.DEFAULT:
+                    mode = defaults[grant.pk]  # "by rights": the rule only carries its text
+                elif rule:
                     explicit.append(mode)
                 if best is None or RANK[mode] > RANK[best]:
                     best = mode
@@ -94,6 +96,16 @@ def compute_policy(user, area, app_label, model):
         modes[field] = AreaFieldMode.HIDDEN
         contains.pop(field, None)
     return FieldPolicy(default, modes, contains)
+
+
+import contextvars
+
+_IN_FORM = contextvars.ContextVar('userpin_in_form', default=0)
+
+
+def in_form():
+    """True while a form is being built or validated."""
+    return _IN_FORM.get() > 0
 
 
 def related_label(model, key):
@@ -361,6 +373,28 @@ def _must_include(texts):
     return validator
 
 
+class _GoneWidget:
+    """A widget that draws nothing (built on first use, so that Django's forms are imported lazily)."""
+    _cls = None
+
+    def __new__(cls):
+        if cls._cls is None:
+            from django import forms
+
+            class Gone(forms.Widget):
+                is_hidden = True
+                input_type = 'hidden'
+
+                def render(self, name, value, attrs=None, renderer=None):
+                    return ''
+
+                def value_from_datadict(self, data, files, name):
+                    return None
+
+            cls._cls = Gone
+        return cls._cls()
+
+
 def _hook_forms():
     from django import forms
     from django.core.exceptions import ValidationError
@@ -404,25 +438,60 @@ def _hook_forms():
             return field
         return wrapper
 
-    def model_form_init(original):
-        def wrapper(self, *args, **kwargs):
-            original(self, *args, **kwargs)
-            model = getattr(getattr(self, '_meta', None), 'model', None)
-            policy = policy_of_model(model)
-            if policy is None:
-                return
-            for name in list(self.fields):
-                if name.startswith('cf_'):
-                    continue  # custom fields are handled where they are built
-                mode = policy.mode(name)
-                if mode == AreaFieldMode.HIDDEN:
-                    self.fields.pop(name)
-                elif mode == AreaFieldMode.READ:
-                    self.fields[name].disabled = True
-                    self.fields[name].required = False
-                elif (texts := policy.texts(name)) and hasattr(self.fields[name], 'queryset'):
-                    self.fields[name].validators = list(self.fields[name].validators) + [_must_include(texts)]
-        return wrapper
+    def apply_form_policy(form):
+        """Hide the hidden fields and disable the read-only ones - when the form is complete, not inside its constructors
+        (NetBox's own mixins reach for fields such as ``tags`` after the base class has been initialised)."""
+        model = getattr(getattr(form, '_meta', None), 'model', None)
+        policy = policy_of_model(model)
+        if policy is None:
+            return
+        for name in list(form.fields):
+            if name.startswith('cf_'):
+                continue  # custom fields are handled where they are built
+            mode = policy.mode(name)
+            if mode == AreaFieldMode.HIDDEN:
+                # not removed: the templates of NetBox draw some fields by name (render_field form.description) and
+                # a missing one breaks the page. The field stays, switched off and drawn as nothing - its value is
+                # neither shown nor taken from the request (a disabled field keeps what the object has).
+                field = form.fields[name]
+                field.disabled, field.required, field.label, field.help_text = True, False, '', ''
+                field.widget = _GoneWidget()
+            elif mode == AreaFieldMode.READ:
+                form.fields[name].disabled = True
+                form.fields[name].required = False
+            elif (texts := policy.texts(name)) and hasattr(form.fields[name], 'queryset'):
+                form.fields[name].validators = list(form.fields[name].validators) + [_must_include(texts)]
+
+    from django.forms.forms import DeclarativeFieldsMetaclass
+    if not getattr(DeclarativeFieldsMetaclass, '_userpin', False):
+        def call(cls, *args, **kwargs):
+            token = _IN_FORM.set(_IN_FORM.get() + 1)
+            try:
+                form = type.__call__(cls, *args, **kwargs)
+            finally:
+                _IN_FORM.reset(token)
+            try:
+                apply_form_policy(form)
+            except Exception:  # noqa: BLE001 - a rule that cannot be applied must not break the page
+                logger.exception('Cannot apply the field rules to %s', cls.__name__)
+                raise
+            return form
+
+        DeclarativeFieldsMetaclass.__call__ = call
+        DeclarativeFieldsMetaclass._userpin = True
+
+        from django.forms.forms import BaseForm
+
+        def full_clean(original):
+            def wrapper(self):
+                token = _IN_FORM.set(_IN_FORM.get() + 1)
+                try:
+                    return original(self)
+                finally:
+                    _IN_FORM.reset(token)
+            return wrapper
+
+        _once(BaseForm, 'full_clean', full_clean)
 
     from netbox.forms.bulk_edit import NetBoxModelBulkEditForm
     from netbox.forms.bulk_import import NetBoxModelImportForm
@@ -433,7 +502,6 @@ def _hook_forms():
     for owner in (CustomFieldsMixin, NetBoxModelForm, NetBoxModelBulkEditForm, NetBoxModelImportForm):
         if '_get_form_field' in owner.__dict__:
             _once(owner, '_get_form_field', get_form_field)
-    _once(forms.models.BaseModelForm, '__init__', model_form_init)
 
 
 def _hook_tables():

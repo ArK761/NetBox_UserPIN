@@ -6048,6 +6048,55 @@ msgstr ""
 msgid "type a value and press Enter"
 msgstr "napíš hodnotu a stlač Enter"
 
+msgid "Deny (wins over any allowance)"
+msgstr "Zákaz (vyhráva nad každým povolením)"
+
+msgid "Not set (sees no record)"
+msgstr "Nenastavené (nevidí žiadny záznam)"
+
+msgid "All records"
+msgstr "Všetky záznamy"
+
+msgid "Only by conditions"
+msgstr "Len podľa podmienok"
+
+msgid ""
+"Nothing is set yet: the members see no record. Choose all records or add "
+"conditions."
+msgstr ""
+"Zatiaľ nič nie je nastavené: členovia nevidia žiadny záznam. Vyber všetky "
+"záznamy alebo pridaj podmienky."
+
+msgid ""
+"Several values of one condition are alternatives (agg or core); several "
+"conditions must all hold."
+msgstr ""
+"Viac hodnôt jednej podmienky sú alternatívy (agg alebo core); viac podmienok"
+" musí platiť naraz."
+
+msgid "No condition yet: the group sees no record."
+msgstr "Zatiaľ žiadna podmienka: skupina nevidí žiadny záznam."
+
+msgid ""
+"Records that fit any of these conditions are never shown, whatever else "
+"allows them."
+msgstr ""
+"Záznamy, ktoré vyhovujú čo i len jednej z týchto podmienok, sa nikdy "
+"neukážu, nech ich povoľuje čokoľvek."
+
+msgid "Nothing is denied."
+msgstr "Nič nie je zakázané."
+
+msgid "By conditions"
+msgstr "Podľa podmienok"
+
+msgid ""
+"\"%(value)s\" is already in the list of %(list)s: a value cannot be both "
+"allowed and denied."
+msgstr ""
+"„%(value)s“ je už v zozname %(list)s: hodnota nemôže byť zároveň povolená aj"
+" zakázaná."
+
 #~ msgid ""
 #~ "There is no other administrator or delegate with PIN and 2FA who could "
 #~ "confirm."

@@ -1601,14 +1601,18 @@ def save_field_rules(area, profile, target, rules, actor, request=None):
     changed = []
     for field, (mode, contains) in rules.items():
         existing = AreaFieldRule.objects.filter(area=area, profile=profile, target=target, field=field)
-        if mode in ('', 'default', None) or (profile is None and mode != AreaFieldMode.HIDDEN):
+        contains = (contains or '').strip()[:200]
+        if profile is None and mode != AreaFieldMode.HIDDEN:
+            mode = ''
+        if mode in ('', None):
+            mode = 'default'
+        if mode == 'default' and not contains:  # nothing of its own to remember: no rule at all
             if existing.delete()[0]:
                 changed.append(f'{field}: default')
             continue
         if mode not in AreaFieldMode.values:
             raise ValidationError(_('Unknown mode.'))
         rule = existing.first()
-        contains = (contains or '').strip()[:200]
         if rule is None:
             AreaFieldRule.objects.create(area=area, profile=profile, target=target, field=field, mode=mode,
                                          contains=contains)

@@ -1380,6 +1380,27 @@ class RowConditionsTest(AreaTestCase):
         areas.clear_cache()
         self.assertFalse(areas.can(User.objects.get(pk=self.user.pk), self.area, 'view', 'dcim.device'))
 
+    def test_hiding_tags_does_not_break_the_edit_page(self):
+        from tenancy.models import Tenant
+        keeper = User.objects.create_superuser('keeper4', 'k4@example.com', 'x')
+        service.set_pin(keeper, GOOD_PIN)
+        enable_2fa(keeper)
+        areas.add_keeper(keeper, self.master)
+        area = areas.create_area('Tenants', ['tenancy.tenant'], [], keeper)
+        areas.add_owner(area, self.owner1, keeper)
+        group = areas.create_group(area, 'tenancy.tenant', 'Evidencia', ['view'], self.owner1, records='all')
+        areas.update_group(group, self.owner1, rights=['view', 'change', 'add'])
+        areas.add_member(group, self.user, None, self.owner1)
+        tenant = Tenant.objects.create(name='T2', slug='t2')
+        self.login(self.user)
+        self.client.raise_request_exception = True
+        for hidden in ('tags', 'group', 'description', 'slug', 'comments'):
+            areas.save_field_rules(area, group, 'tenancy.tenant', {hidden: ('hidden', '')}, self.owner1)
+            areas.clear_cache()
+            for url in (f'/tenancy/tenants/{tenant.pk}/edit/', '/tenancy/tenants/add/', f'/tenancy/tenants/{tenant.pk}/'):
+                self.assertEqual(self.client.get(url).status_code, 200, (hidden, url))
+            areas.save_field_rules(area, group, 'tenancy.tenant', {hidden: ('default', '')}, self.owner1)
+
     def test_saving_a_tenant_with_custom_fields_and_rules_does_not_fail(self):
         from core.models import ObjectType
         from dcim.models import DeviceType
@@ -1413,6 +1434,24 @@ class RowConditionsTest(AreaTestCase):
         self.assertIn(response.status_code, (200, 302))
         response = self.client.post(f'/tenancy/tenants/{tenant.pk}/edit/', {})
         self.assertIn(response.status_code, (200, 302))
+        # choosing a value of a relation field: the one the rule allows is saved, another is refused - and neither is
+        # "not one of the available choices" because of the closed type
+        from dcim.models import Manufacturer
+        from tenancy.models import TenantGroup
+        zeta = TenantGroup.objects.create(name='Zeta', slug='zeta')
+        alfa = TenantGroup.objects.create(name='Alfa', slug='alfa')
+        maker = Manufacturer.objects.create(name='Mk', slug='mk')
+        printer = DeviceType.objects.create(manufacturer=maker, model='Printer 1', slug='printer-1')
+        router = DeviceType.objects.create(manufacturer=maker, model='Router 1', slug='router-1')
+        url = f'/tenancy/tenants/{tenant.pk}/edit/'
+        response = self.client.post(url, {'name': 'T1', 'slug': 't1', 'group': zeta.pk, 'cf_hw': printer.pk})
+        self.assertEqual(response.status_code, 302, str(response.context['form'].errors if response.context else ''))
+        tenant.refresh_from_db()
+        self.assertEqual((tenant.group_id, tenant.custom_field_data.get('hw')), (zeta.pk, printer.pk))
+        response = self.client.post(url, {'name': 'T1', 'slug': 't1', 'group': alfa.pk, 'cf_hw': router.pk})
+        self.assertEqual(response.status_code, 200)  # refused: the form is shown again with the errors
+        tenant.refresh_from_db()
+        self.assertEqual((tenant.group_id, tenant.custom_field_data.get('hw')), (zeta.pk, printer.pk))
 
     def test_picking_in_a_relation_field_opens_only_the_drop_down(self):
         from dcim.models import DeviceRole, Site
@@ -1703,3 +1742,56 @@ class HiddenFieldPathsTest(AreaTestCase):
         areas.clear_cache()
         policy = fieldrules.compute_policy(User.objects.get(pk=self.user.pk), self.area, 'dcim', 'device')
         self.assertEqual(policy.mode('comments'), 'read')  # read only from one source is not overridden by a write
+
+    def test_hiding_any_single_field_never_breaks_the_edit_page_of_a_device(self):
+        from netbox_user_pin import fieldrules
+        self.client.raise_request_exception = True
+        self.maxDiff = None
+        broken = []
+        for key, _label, kind in fieldrules.fields_of('dcim', 'device'):
+            if kind != 'field':
+                continue
+            areas.save_field_rules(self.area, self.group, 'dcim.device', {key: ('hidden', '')}, self.owner1)
+            areas.clear_cache()
+            for url in (f'/dcim/devices/{self.other.pk}/edit/', f'/dcim/devices/{self.other.pk}/', '/dcim/devices/'):
+                try:
+                    status = self.client.get(url).status_code
+                except Exception as exc:  # noqa: BLE001
+                    import traceback
+                    status = repr(exc)[:100] + ' @ ' + ' | '.join(traceback.format_exc().splitlines()[-7:-1])[:700]
+                if status != 200:
+                    broken.append((key, url, status))
+            areas.save_field_rules(self.area, self.group, 'dcim.device', {key: ('default', '')}, self.owner1)
+        self.assertEqual(broken, [])
+
+    def test_a_text_is_kept_whatever_the_mode_of_the_field_is(self):
+        from netbox_user_pin import fieldrules
+        from netbox_user_pin.models import AreaFieldRule
+        areas.save_field_rules(self.area, self.group, 'dcim.device', {'role': ('default', 'Print')}, self.owner1)
+        rule = AreaFieldRule.objects.get(profile=self.group, field='role')
+        self.assertEqual((rule.mode, rule.contains), ('default', 'Print'))  # "by rights" does not drop the text
+        areas.clear_cache()
+        policy = fieldrules.compute_policy(User.objects.get(pk=self.user.pk), self.area, 'dcim', 'device')
+        self.assertEqual((policy.mode('role'), policy.texts('role')), ('write', ['Print']))  # the rights decide
+        areas.save_field_rules(self.area, self.group, 'dcim.device', {'role': ('default', '')}, self.owner1)
+        self.assertFalse(AreaFieldRule.objects.filter(profile=self.group, field='role').exists())
+
+    def test_hiding_any_single_field_never_breaks_the_edit_page_of_a_device(self):
+        from netbox_user_pin import fieldrules
+        self.client.raise_request_exception = True
+        broken = []
+        for key, _label, kind in fieldrules.fields_of('dcim', 'device'):
+            if kind != 'field':
+                continue
+            areas.save_field_rules(self.area, self.group, 'dcim.device', {key: ('hidden', '')}, self.owner1)
+            areas.clear_cache()
+            for url in (f'/dcim/devices/{self.other.pk}/edit/', f'/dcim/devices/{self.other.pk}/', '/dcim/devices/'):
+                try:
+                    status = self.client.get(url).status_code
+                except Exception as exc:  # noqa: BLE001
+                    import traceback
+                    status = ' | '.join(traceback.format_exc().splitlines()[-9:])[:900]
+                if status != 200:
+                    broken.append((key, url, status))
+            areas.save_field_rules(self.area, self.group, 'dcim.device', {key: ('default', '')}, self.owner1)
+        self.assertEqual(broken, [], '\n'.join(map(str, broken)))

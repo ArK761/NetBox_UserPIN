@@ -251,6 +251,9 @@ class AreaGuardMiddleware:
         if request.path_info.startswith('/graphql') and _graphql_would_leak(request):
             return denied_response(request, None, right='view', target=None)
         cls = getattr(view_func, 'view_class', None) or getattr(view_func, 'cls', None)
+        if cls is not None and request.method in ('GET', 'POST') and not request.path_info.startswith('/api/') and \
+                any(word in cls.__name__ for word in ('Edit', 'Create', 'Import')):
+            request._userpin_edit = True  # the form fields may offer what the user may pick (see _form_pick)
         model = _model_of(cls) if cls is not None else None
         if model is None:  # the views of the changelog, journal, contacts ... get the model from the URL
             candidate = (view_kwargs or {}).get('model')
@@ -348,6 +351,30 @@ def _select_exception(request, user, api, target, view_kwargs):
     return True
 
 
+def _form_pick(user, meta):
+    """
+    While a form is built or validated, the objects the user may pick in its relation fields are served (narrowed by the
+    text of the rule): otherwise a chosen group or device type would be "not one of the available choices".
+    """
+    from . import fieldrules
+    try:
+        from netbox.context import current_request
+        request = current_request.get()
+    except Exception:  # noqa: BLE001
+        request = None
+    # NetBox narrows the querysets of the form fields (restrict_form_fields) after the form is built and before it is
+    # validated, so the edit views themselves are the window as well
+    if not (fieldrules.in_form() or getattr(request, '_userpin_edit', False)):
+        return None
+    cache = request.__dict__.setdefault('_userpin_scope', {}) if request is not None else {}
+    if user.pk not in cache:
+        cache[user.pk] = fieldrules.select_scope(user)
+    label = f'{meta.app_label}.{meta.model_name}'
+    if label not in cache[user.pk]:
+        return None
+    return (label, cache[user.pk][label])
+
+
 def _select_perm(perm):
     app_label, _dot, codename = perm.partition('.')
     try:
@@ -443,7 +470,7 @@ def install():
             if _token_request():
                 return original(self, user, action)
             meta = self.model._meta
-            if (flag := _select_flag(meta)) is not None:  # the drop-down of a relation field: see _select_exception
+            if (flag := _select_flag(meta) or _form_pick(user, meta)) is not None:  # a drop-down / a form field
                 if flag[1] and flag[1][0] == 'pk':
                     return self.filter(pk__in=flag[1][1])
                 if not flag[1]:

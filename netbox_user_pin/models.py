@@ -914,6 +914,7 @@ class PolicyKeeper(models.Model):
 
 
 class AreaFieldMode(models.TextChoices):
+    DEFAULT = 'default', _('By rights')  # no mode of its own: the rights decide; the rule only carries its settings
     HIDDEN = 'hidden', _('Hidden')
     READ = 'read', _('Read only')
     WRITE = 'write', _('Read and write')
