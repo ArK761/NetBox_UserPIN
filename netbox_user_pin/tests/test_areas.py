@@ -1878,7 +1878,7 @@ class VisibilityBTest(AreaTestCase):
         self.assertFalse(nobody.has_perm('netbox_user_pin.view_pintest'))
         self.assertFalse(nobody.has_perm('netbox_user_pin.view_areaspage'))
         self.login(self.nobody, unlock=False)
-        for url in ('/', '/dcim/sites/', '/dcim/devices/', '/ipam/prefixes/', '/search/', '/user/profile/'):
+        for url in ('/dcim/sites/', '/dcim/devices/', '/ipam/prefixes/', '/search/', '/user/profile/'):
             self.assertTrue(self.denied(self.client.get(url)), url)
         for url in ('/api/', '/api/status/', '/api/dcim/sites/'):
             self.assertTrue(self.denied(self.client.get(url, HTTP_ACCEPT='application/json')), url)
@@ -1927,3 +1927,74 @@ class VisibilityBTest(AreaTestCase):
         nobody = self.armed(self.nobody)
         self.assertEqual(list(Token.objects.restrict(nobody, 'view').values_list('description', flat=True)), ['mine'])
         self.assertEqual(Token.objects.restrict(self.armed(self.keeper), 'view').count(), 2)  # a keeper sees all
+
+    def test_menu_items_without_a_permission_or_for_superusers_are_hidden_in_b(self):
+        from netbox.navigation import MenuItem
+        self.assertFalse(area_guard._menu_item_allowed(MenuItem(link='home', link_text='X')))  # no permission
+        self.assertFalse(area_guard._menu_item_allowed(MenuItem(link='home', link_text='X', staff_only=True)))
+        self.assertTrue(area_guard._menu_item_allowed(MenuItem(link='home', link_text='X', permissions=['dcim.view_site'])))
+        self.assertTrue(area_guard._menu_item_allowed(MenuItem(link='plugins:netbox_user_pin:my_pin', link_text='My PIN')))
+
+    def test_the_menu_of_a_user_in_no_group_has_only_the_pin(self):
+        from django.test import RequestFactory
+        from netbox.context import current_request
+        from utilities.templatetags import navigation as navigation_tags
+        request = RequestFactory().get('/')
+        for user, expect_only_pin in ((self.nobody, True), (self.keeper, False)):
+            request.user = self.armed(user)
+            token = current_request.set(request)
+            try:
+                items = [item.link for menu in navigation_tags.get_menus() for group in menu.groups
+                         for item in group.items if request.user.has_perms(item.permissions)]
+            finally:
+                current_request.reset(token)
+            if expect_only_pin:
+                self.assertEqual(items, ['plugins:netbox_user_pin:my_pin'], items)
+            else:
+                self.assertGreater(len(items), 20)  # a keeper sees the whole menu
+
+    @staticmethod
+    def user_menu_of(html):
+        start = html.index('Open user menu')
+        return html[start:html.index('sidebar-menu', start)]
+
+    def test_the_pages_of_a_user_in_no_group_show_only_the_password_and_the_pin(self):
+        self.login(self.nobody, unlock=False)
+        html = self.client.get('/user/password/').content.decode()
+        menu = self.user_menu_of(html)
+        self.assertIn('href="/user/password/"', menu)
+        self.assertIn('href="/plugins/user-pin/"', menu)
+        self.assertIn('/logout/', menu)  # the way out stays
+        for gone in ('/user/profile/', '/user/bookmarks/', '/user/preferences/', '/user/subscriptions/',
+                     '/user/api-tokens/'):
+            self.assertNotIn(gone, menu, gone)
+        for gone in ('href="/user/bookmarks/"', 'href="/user/notifications/"', 'href="/user/subscriptions/"',
+                     'href="/user/preferences/"', 'href="/user/api-tokens/"', 'action="/search/"',
+                     'hx-get="/extras/notifications/"'):
+            self.assertNotIn(gone, html, gone)  # nor the tabs of the account pages, the bell, the search
+        areas.set_visibility(self.keeper, 'hidden', False, True)  # the own API key allowed: its menu item
+        menu = self.user_menu_of(self.client.get('/user/password/').content.decode())
+        self.assertIn('href="/user/api-tokens/"', menu)
+        self.assertNotIn('/user/profile/', menu)
+
+    def test_a_role_holder_keeps_the_bell_and_the_search_to_be_told_of_approvals(self):
+        self.login(self.owner1)
+        html = self.client.get('/dcim/devices/').content.decode()
+        self.assertIn('action="/search/"', html)
+        self.assertIn('hx-get="/extras/notifications/"', html)  # the bell
+        self.assertNotIn('/user/profile/', self.user_menu_of(html))  # the account links are shaped for all but a keeper
+
+    def test_the_home_page_of_a_user_in_no_group_leads_to_the_pin(self):
+        self.login(self.nobody, unlock=False)
+        response = self.client.get('/')
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response['Location'], '/plugins/user-pin/')
+
+    def test_the_new_texts_are_in_slovak(self):
+        from django.utils import translation
+        texts = ['Change the password', 'My API keys', 'What you can do here', 'What is not allowed',
+                 'Users may ask for access', 'Users may create their own API key', 'What the users see',
+                 'Choose A or B.', 'Not set (sees no record)', 'Deny (wins over any allowance)']
+        with translation.override('sk'):
+            for text in texts:
+                self.assertNotEqual(translation.gettext(text), text, text)

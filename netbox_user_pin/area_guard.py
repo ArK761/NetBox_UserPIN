@@ -9,6 +9,7 @@ Not covered: GraphQL and places that list objects of other types together (globa
 the change log). Keep that in mind when an area contains sensitive data.
 """
 import logging
+import re
 import time
 
 from django.apps import apps
@@ -256,13 +257,25 @@ class AreaGuardMiddleware:
 
     def __call__(self, request):
         arm(request)
-        return self.get_response(request)
+        response = self.get_response(request)
+        user = getattr(request, 'user', None)
+        if (_hides_menu_for(user) and not getattr(response, 'streaming', False)
+                and 'text/html' in response.get('Content-Type', '') and hasattr(response, 'content')):
+            try:
+                response.content = _shape_html(request, response.content.decode(response.charset)).encode(response.charset)
+                if response.has_header('Content-Length'):
+                    response['Content-Length'] = str(len(response.content))
+            except Exception:  # noqa: BLE001 - the page is more important than its shaping
+                logger.exception('Cannot shape the page for the PIN visibility B')
+        return response
 
     def process_view(self, request, view_func, view_args, view_kwargs):
         if not areas.protection_on() or _is_token_request(request):
             return None
         if request.path_info.startswith('/graphql') and _graphql_would_leak(request):
             return denied_response(request, None, right='view', target=None)
+        if request.path_info == '/' and request.method == 'GET' and areas.sees_nothing(request.user):
+            return redirect('plugins:netbox_user_pin:my_pin')  # nothing to see: what he may do is the PIN
         if areas.sees_nothing(request.user) and not _open_to_the_unlisted(request):
             return denied_response(request, None, right='view', target=None, only_password=True)
         cls = getattr(view_func, 'view_class', None) or getattr(view_func, 'cls', None)
@@ -438,6 +451,91 @@ def _child_denied(request, user, cls, tab=None):
     return None
 
 
+#
+# B: what is not allowed is not shown. "Not allowed" is the default, so what a later NetBox or a new plugin adds stays
+# hidden until it is allowed: nothing here lists plugins or pages by name.
+#
+
+def _hides_menu_for(user):
+    """B is on and the user is no keeper: the menus and the account pages show only what is allowed."""
+    return bool(getattr(user, 'is_authenticated', False) and areas.protection_on() and areas.default_deny_active()
+                and areas.hides_denied() and not areas.is_keeper(user))
+
+
+def _menu_item_allowed(item):
+    """
+    An item of the navigation menu in B. One with a permission stays (the permission is judged afterwards: for
+    protected types by the PIN); one without any permission, or only for superusers, is shown only when it belongs to
+    this plugin (its own pages decide by the roles).
+    """
+    if getattr(item, 'staff_only', False):
+        return False
+    if getattr(item, 'permissions', None):
+        return True
+    return str(getattr(item, 'link', '') or '').startswith('plugins:netbox_user_pin:')
+
+
+def _filtered_menus(menus):
+    from netbox.navigation import Menu, MenuGroup
+    result = []
+    for menu in menus:
+        groups = []
+        for group in menu.groups:
+            items = [item for item in group.items if _menu_item_allowed(item)]
+            if items:
+                groups.append(MenuGroup(label=group.label, items=items))
+        if groups:
+            result.append(Menu(label=menu.label, icon_class=menu.icon_class, groups=groups))
+    return result
+
+
+ACCOUNT_OPEN = ('/user/password',)  # what the account pages keep in B (and the API keys, when they are allowed)
+
+
+def _account_href_allowed(href):
+    return href.startswith(ACCOUNT_OPEN) or href.startswith('/plugins/user-pin/') or (
+        areas.own_tokens_allowed() and href.startswith('/user/api-tokens'))
+
+
+_USER_MENU = re.compile(
+    r'(<div class="dropdown-menu dropdown-menu-end dropdown-menu-arrow">)((?:(?!</div>).)*?href="[^"]*/logout/[^"]*".*?)'
+    r'(</div>)', re.S)
+_ANCHOR = re.compile(r'<a\b[^>]*href="([^"]*)"[^>]*>.*?</a>', re.S)
+_ACCOUNT_TAB = re.compile(r'<li class="nav-item">\s*<a class="nav-link[^"]*" href="(/user/[^"]*)">.*?</a>\s*</li>', re.S)
+_BELL = re.compile(r'<div class="dropdown">\s*<button class="nav-link fs-2 p-0".*?'
+                   r'<div class="dropdown-menu[^"]*notifications"></div>\s*</div>', re.S)
+_SEARCH = re.compile(r'<form action="[^"]*/search/"[^>]*>.*?</form>', re.S)
+
+
+def _shape_html(request, text):
+    """The user menu, the tabs of the account pages (and the bell and the search of one who has no role) in B."""
+    from django.urls import reverse
+    from django.utils.translation import gettext
+    user = request.user
+
+    def user_menu(match):
+        anchors = list(_ANCHOR.finditer(match.group(2)))
+        kept = [a.group(0) for a in anchors if _account_href_allowed(a.group(1))]
+        logout = next((a.group(0) for a in anchors if '/logout/' in a.group(1)), '')
+        kept = [a for a in kept if '/logout/' not in a]
+        with translation.override(service.get_settings().language or 'en'):
+            extra = [('/user/password/', 'mdi-lock-reset', gettext('Change the password')),
+                     (reverse('plugins:netbox_user_pin:my_pin'), 'mdi-dialpad', gettext('My PIN'))]
+            if areas.own_tokens_allowed():
+                extra.append(('/user/api-tokens/', 'mdi-key', gettext('My API keys')))
+        shown = {a.group(1) for a in anchors if _account_href_allowed(a.group(1))}
+        made = [f'<a href="{href}" class="dropdown-item"><i class="dropdown-item-icon mdi {icon}" aria-hidden="true">'
+                f'</i> {label}</a>' for href, icon, label in extra if href not in shown]
+        return (match.group(1) + ''.join(made + kept) + '<hr class="dropdown-divider" />' + logout + match.group(3))
+
+    text = _USER_MENU.sub(user_menu, text)  # the layout has the menu twice (small and large screens)
+    text = _ACCOUNT_TAB.sub(lambda m: m.group(0) if _account_href_allowed(m.group(1)) else '', text)
+    if not (roles.is_manager(user) or areas.administers_any(user)):  # no role: nothing to be told, nothing to search
+        text = _BELL.sub('', text)
+        text = _SEARCH.sub('', text)
+    return text
+
+
 # What a user who is in no group still has (B): the pages of this plugin (PIN, 2FA, unlock), the password, the login,
 # the files of the pages - and the own API keys, when the settings allow them.
 OPEN_TO_THE_UNLISTED = ('/plugins/user-pin/', '/login/', '/logout/', '/user/password', '/static/', '/media/',
@@ -559,6 +657,22 @@ def install():
 
         restrict._userpin = True
         RestrictedQuerySet.restrict = restrict
+
+    from utilities.templatetags import navigation as navigation_tags
+    if not getattr(navigation_tags.get_menus, '_userpin', False):
+        original_menus = navigation_tags.get_menus
+
+        def get_menus():
+            menus = original_menus()
+            try:
+                from netbox.context import current_request
+                user = getattr(current_request.get(), 'user', None)
+            except Exception:  # noqa: BLE001
+                user = None
+            return _filtered_menus(menus) if _hides_menu_for(user) else menus
+
+        get_menus._userpin = True
+        navigation_tags.get_menus = get_menus
 
     from utilities.views import ViewTab
     if not getattr(ViewTab.render, '_userpin', False):

@@ -6097,6 +6097,91 @@ msgstr ""
 "„%(value)s“ je už v zozname %(list)s: hodnota nemôže byť zároveň povolená aj"
 " zakázaná."
 
+msgid "Unknown choice."
+msgstr "Neznáma voľba."
+
+msgid "Choose A or B."
+msgstr "Vyber A alebo B."
+
+msgid "What is not allowed"
+msgstr "Čo nie je povolené"
+
+msgid "As the settings say (Protected areas page)"
+msgstr "Podľa nastavení (stránka Chránené oblasti)"
+
+msgid "A: shown, and blocked by the PIN notice (with a request)"
+msgstr "A: zobrazené a zablokované hláškou PIN (so žiadosťou)"
+
+msgid "B: hidden - the user sees only what his group allows"
+msgstr "B: skryté – používateľ vidí len to, čo povoľuje jeho skupina"
+
+msgid "Applies to the menu items and to the tabs of the objects of this area."
+msgstr "Platí pre položky menu a záložky objektov tejto oblasti."
+
+msgid "A: shown, and blocked by the PIN notice"
+msgstr "A: zobrazené a zablokované hláškou PIN"
+
+msgid ""
+"B: the user sees nothing he is not allowed (only the password and the PIN)"
+msgstr "B: používateľ nevidí nič, čo nemá povolené (len heslo a PIN)"
+
+msgid "The default for all protected areas; an area can choose its own."
+msgstr ""
+"Predvolené pre všetky chránené oblasti; oblasť si môže zvoliť vlastné."
+
+msgid ""
+"Off: nobody but the administrators can ask for access (there is no request "
+"page or button)."
+msgstr ""
+"Vypnuté: o prístup nemôže žiadať nikto okrem správcov (nie je stránka ani "
+"tlačidlo žiadosti)."
+
+msgid "What you can do here"
+msgstr "Čo tu môžete urobiť"
+
+msgid "Change the password"
+msgstr "Zmeniť heslo"
+
+msgid "My API keys"
+msgstr "Moje API kľúče"
+
+msgid "Users may ask for access"
+msgstr "Používatelia smú žiadať o prístup"
+
+msgid "Users may create their own API key"
+msgstr "Používatelia smú vytvoriť vlastný API kľúč"
+
+msgid "What the users see"
+msgstr "Čo používatelia vidia"
+
+msgid ""
+"the user sees everything, and the PIN blocks what is not allowed with a "
+"notice (and a request)."
+msgstr ""
+"používateľ vidí všetko a PIN blokuje to, čo nie je povolené, hláškou (a "
+"žiadosťou)."
+
+msgid ""
+"the user who is in no group sees nothing: only the change of the password "
+"and of the PIN. In a group he sees only what the group allows. No API in the"
+" browser."
+msgstr ""
+"používateľ, ktorý nie je v žiadnej skupine, nevidí nič: len zmenu hesla a "
+"PIN-u. V skupine vidí len to, čo skupina povoľuje. Žiadne API v prehliadači."
+
+msgid ""
+"A key works with the NetBox permissions of its user and the PIN does not "
+"judge it: a superuser with a key reads everything through a script. Allow it"
+" for users with narrow NetBox permissions."
+msgstr ""
+"Kľúč funguje s právami používateľa v NetBoxe a PIN ho neposudzuje: superuser"
+" s kľúčom prečíta všetko cez skript. Povoľ ho používateľom s úzkymi právami "
+"v NetBoxe."
+
+msgid "Each area can choose its own (Open the area → Settings of the area)."
+msgstr ""
+"Každá oblasť si môže zvoliť vlastné (Otvoriť oblasť → Nastavenia oblasti)."
+
 #~ msgid ""
 #~ "There is no other administrator or delegate with PIN and 2FA who could "
 #~ "confirm."
