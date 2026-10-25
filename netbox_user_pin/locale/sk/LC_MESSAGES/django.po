@@ -6182,6 +6182,15 @@ msgid "Each area can choose its own (Open the area → Settings of the area)."
 msgstr ""
 "Každá oblasť si môže zvoliť vlastné (Otvoriť oblasť → Nastavenia oblasti)."
 
+msgid "Nobody chosen"
+msgstr "Nikto nie je vybraný"
+
+msgid "chosen"
+msgstr "vybraných"
+
+msgid "click to choose"
+msgstr "klikni a vyber"
+
 #~ msgid ""
 #~ "There is no other administrator or delegate with PIN and 2FA who could "
 #~ "confirm."

@@ -1,10 +1,39 @@
 {% load i18n %}
-<div class="mb-2">
+{# Who to add: a collapsed drop-down with a search, so that a long list of users does not fill the page #}
+<div class="mb-2 pin-multiselect" id="{{ uid|default:'u' }}-box" data-none="{% trans 'Nobody chosen' %}" data-chosen="{% trans 'chosen' %}">
   <div class="fw-bold mb-1">{% trans "Choose who to add" %}</div>
-  <input type="search" class="form-control form-control-sm mb-1 pin-multi-search" placeholder="{% trans 'Search…' %}">
-  <div class="border rounded p-2 pin-multi" style="max-height: 14rem; overflow-y: auto">
-    {% for pk, label in choices %}<div class="form-check pin-multi-item"><input class="form-check-input" type="checkbox" name="users" value="{{ pk }}" id="{{ uid|default:'u' }}-{{ pk }}"><label class="form-check-label" for="{{ uid|default:'u' }}-{{ pk }}">{{ label }}</label></div>
-    {% empty %}<span class="text-secondary small">{% trans "Nobody to choose from." %}</span>{% endfor %}
-  </div>
+  <details class="border rounded">
+    <summary class="px-2 py-1" style="cursor: pointer"><span class="pin-multi-count">{% trans "Nobody chosen" %}</span> <span class="text-secondary small">– {% trans "click to choose" %}</span></summary>
+    <div class="p-2 border-top">
+      <input type="search" class="form-control form-control-sm mb-1 pin-multi-search" placeholder="{% trans 'Search…' %}">
+      <div class="border rounded p-2 pin-multi" style="max-height: 14rem; overflow-y: auto">
+        {% for pk, label in choices %}<div class="form-check pin-multi-item"><input class="form-check-input" type="checkbox" name="users" value="{{ pk }}" id="{{ uid|default:'u' }}-{{ pk }}" data-label="{{ label }}"><label class="form-check-label" for="{{ uid|default:'u' }}-{{ pk }}">{{ label }}</label></div>
+        {% empty %}<span class="text-secondary small">{% trans "Nobody to choose from." %}</span>{% endfor %}
+      </div>
+    </div>
+  </details>
+  <div class="mt-1 d-flex flex-wrap gap-1 pin-multi-chips"></div>
   <div class="form-text">{% trans "Tick one or more users." %}</div>
 </div>
+<script>
+(function () {
+  var box = document.getElementById('{{ uid|default:"u" }}-box');
+  if (!box) { return; }
+  var count = box.querySelector('.pin-multi-count'), chips = box.querySelector('.pin-multi-chips');
+  function refresh() {
+    var checked = box.querySelectorAll('input[name=users]:checked');
+    count.textContent = checked.length ? checked.length + ' ' + box.dataset.chosen : box.dataset.none;
+    chips.innerHTML = '';
+    checked.forEach(function (input) {
+      var chip = document.createElement('span'), remove = document.createElement('button');
+      chip.className = 'badge text-bg-blue fs-6';
+      remove.type = 'button'; remove.className = 'btn btn-link btn-sm p-0 text-white'; remove.textContent = '×';
+      remove.addEventListener('click', function () { input.checked = false; refresh(); });
+      chip.appendChild(document.createTextNode(input.dataset.label + ' ')); chip.appendChild(remove);
+      chips.appendChild(chip);
+    });
+  }
+  box.querySelectorAll('input[name=users]').forEach(function (input) { input.addEventListener('change', refresh); });
+  refresh();
+})();
+</script>

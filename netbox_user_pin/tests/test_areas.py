@@ -1371,6 +1371,8 @@ class RowConditionsTest(AreaTestCase):
         admin_login(self.client, self.owner1)
         url = reverse('plugins:netbox_user_pin:group', kwargs={'pk': self.area.pk, 'gid': self.group.pk})
         html = self.client.get(url).content.decode()
+        for marker in ('<details class="border rounded">', 'pin-multi-chips'):  # the users to add: a collapsed list
+            self.assertIn(marker, html)
         for marker in ('name="access"', 'name="tabv__interfaces"', 'pin-rule-form-allow', 'name="mode__name"',
                        'agg / core'):
             self.assertIn(marker, html)
