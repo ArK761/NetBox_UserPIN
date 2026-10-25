@@ -1804,3 +1804,31 @@ class HiddenFieldPathsTest(AreaTestCase):
                     broken.append((key, url, status))
             areas.save_field_rules(self.area, self.group, 'dcim.device', {key: ('default', '')}, self.owner1)
         self.assertEqual(broken, [], '\n'.join(map(str, broken)))
+
+    def test_an_area_may_hide_what_is_not_allowed_instead_of_showing_a_door(self):
+        member = User.objects.create_user('member_su', 'msu@example.com', is_superuser=True)  # NetBox shows every tab
+        areas.add_member(self.group, member, None, self.owner1)
+        self.client.logout()
+        self.login(member)
+        journal = f'/dcim/devices/{self.other.pk}/journal/'
+        html = self.client.get(f'/dcim/devices/{self.other.pk}/').content.decode()
+        self.assertIn(journal, html)  # the default: the tab is a door, the page behind it explains
+        self.assertEqual(self.client.get(journal).status_code, 403)
+        areas.update_area(self.area, self.owner1, hide_denied=True)
+        areas.clear_cache()
+        html = self.client.get(f'/dcim/devices/{self.other.pk}/').content.decode()
+        self.assertNotIn(journal, html)  # hidden: the user sees no tab his group does not allow
+        self.assertEqual(self.client.get(journal).status_code, 403)  # and the address stays closed
+        areas.set_group_tabs(self.group, ['journal'], self.owner1)
+        areas.clear_cache()
+        self.assertIn(journal, self.client.get(f'/dcim/devices/{self.other.pk}/').content.decode())  # allowed: shown
+        stranger = User.objects.create_user('stranger2', 's2@example.com')
+        areas.clear_cache()
+        stranger = User.objects.get(pk=stranger.pk)
+        area_guard.arm_user(stranger)
+        self.assertFalse(stranger.has_perm('dcim.view_device'))  # no door in the menu either
+        areas.update_area(self.area, self.owner1, hide_denied=False)
+        areas.clear_cache()
+        stranger = User.objects.get(pk=stranger.pk)
+        area_guard.arm_user(stranger)
+        self.assertTrue(stranger.has_perm('dcim.view_device'))

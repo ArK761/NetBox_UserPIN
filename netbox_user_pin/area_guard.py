@@ -422,6 +422,31 @@ def _child_denied(request, user, cls, tab=None):
     return None
 
 
+def _tab_hidden(tab, instance):
+    """Is this tab of the page of ``instance`` hidden from the current user (an area that hides what is not allowed)?"""
+    try:
+        from netbox.context import current_request
+        request = current_request.get()
+    except Exception:  # noqa: BLE001
+        return False
+    user = getattr(request, 'user', None)
+    meta = getattr(instance, '_meta', None)
+    if meta is None or not getattr(user, 'is_authenticated', False) or not areas.active_areas():
+        return False
+    area = areas.area_for(meta.app_label, meta.model_name, package=meta.app_label)
+    if area is None or not area.hide_denied:
+        return False
+    target = f'{meta.app_label}.{meta.model_name}'
+    for config, view in areas._tab_configs(meta.app_label, meta.model_name):
+        if getattr(view, 'tab', None) is not tab or not config['name']:
+            continue
+        if view.__module__.split('.')[0] in getattr(django_settings, 'PLUGINS', ()):
+            plugin_area = areas.area_for(None, None, package=view.__module__.split('.')[0])
+            return plugin_area is not None and not areas.can(user, plugin_area, 'view', None)
+        return not areas.tab_allowed(user, area, target, config['name'])
+    return False
+
+
 def _is_token_request(request):
     """A script calling the API or GraphQL with a token: whoever holds the key is not a person at a screen."""
     if request is None or not request.path_info.startswith(('/api/', '/graphql/')):
@@ -502,6 +527,17 @@ def install():
 
         restrict._userpin = True
         RestrictedQuerySet.restrict = restrict
+
+    from utilities.views import ViewTab
+    if not getattr(ViewTab.render, '_userpin', False):
+        original_render = ViewTab.render
+
+        def render(self, instance):
+            result = original_render(self, instance)
+            return None if result is not None and _tab_hidden(self, instance) else result
+
+        render._userpin = True
+        ViewTab.render = render
 
     for cls in (TokenAuthentication, SessionAuthentication):
         if getattr(cls.authenticate, '_userpin', False):

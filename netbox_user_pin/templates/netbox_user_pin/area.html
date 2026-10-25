@@ -111,6 +111,7 @@
       {% render_field area_form.description %}
       {% render_field area_form.enabled %}
       {% render_field area_form.max_hours %}
+      {% render_field area_form.denied_view %}
       <div class="text-end"><button type="submit" class="btn btn-primary">{% trans "Save" %}</button></div>
     </form>
     <form method="post" onsubmit="return confirm('{% trans "Delete this area? Its objects become visible again according to the NetBox permissions." %}');">{% csrf_token %}<input type="hidden" name="action" value="delete"><button class="btn btn-outline-danger" type="submit">{% trans "Delete the area" %}</button></form>

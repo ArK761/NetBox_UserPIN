@@ -476,6 +476,12 @@ class AreaForm(forms.Form):
                                    initial=24, widget=forms.NumberInput(attrs={'class': 'form-control'}))
     enabled = forms.BooleanField(label=_('Active'), required=False, initial=True,
                                  widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}))
+    denied_view = forms.ChoiceField(
+        label=_('What is not allowed'), required=False, initial='show',
+        choices=[('show', _('Shown, and blocked by the PIN notice (with a request)')),
+                 ('hide', _('Hidden: the user sees only what his group allows'))],
+        widget=forms.Select(attrs={'class': 'form-select'}),
+        help_text=_('Applies to the menu items and to the tabs of the objects of this area.'))
 
     def __init__(self, *args, plugin=False, create=False, **kwargs):
         super().__init__(*args, **kwargs)
@@ -485,6 +491,7 @@ class AreaForm(forms.Form):
             del self.fields['enabled']
         else:  # the objects of an existing area are added / removed one by one on its page
             del self.fields['target']
+            self.fields['denied_view'].required = False
             if plugin:  # the switch of a plugin area belongs to the plugin
                 del self.fields['enabled']
 

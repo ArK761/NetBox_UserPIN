@@ -778,6 +778,10 @@ class ProtectedArea(models.Model):
     )
     created = models.DateTimeField(auto_now_add=True)
 
+    # What is not allowed to a user: shown as a door that explains and offers a request (False), or not shown at all
+    # (menu items and tabs of this area).
+    hide_denied = models.BooleanField(default=False)
+
     class Meta:
         verbose_name = _('protected area')
         verbose_name_plural = _('protected areas')

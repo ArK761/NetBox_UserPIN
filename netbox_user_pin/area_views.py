@@ -266,7 +266,7 @@ class AreaView(AreaViewMixin, View):
             'pending': [(r, AreaDecideForm(area=area)) for r in pending],
             'area_form': forms.get('area_form') or AreaForm(plugin=area.plugin, initial={
                 'name': area.name, 'description': area.description, 'max_hours': area.max_hours,
-                'enabled': area.enabled}),
+                'enabled': area.enabled, 'denied_view': 'hide' if area.hide_denied else 'show'}),
             'target_form': AreaTargetForm(exclude=areas.targets_of(area)),
             'target_labels': [(t, _target_label(t)) for t in areas.targets_of(area)],
             'owner_form': AreaOwnerForm(), 'group_blocks': self._group_blocks(area),
@@ -303,7 +303,8 @@ class AreaView(AreaViewMixin, View):
                     return self._render(request, area, area_form=form)
                 data = form.cleaned_data
                 areas.update_area(area, request.user, name=data['name'], description=data['description'],
-                                  enabled=data.get('enabled'), max_hours=data['max_hours'], request=request)
+                                  enabled=data.get('enabled'), max_hours=data['max_hours'], request=request,
+                                  hide_denied=(data.get('denied_view') == 'hide') if data.get('denied_view') else None)
                 messages.success(request, _('Saved.'))
             elif action == 'delete':
                 areas.delete_area(area, request.user, request=request)

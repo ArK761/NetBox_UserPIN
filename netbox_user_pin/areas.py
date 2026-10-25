@@ -784,7 +784,8 @@ def check_perm(user, perm):
         return None
     rights = _memo_rights(user, area, f'{app_label}.{model}' if model else None)
     if not rights:
-        return action == 'view', area  # the door (menu item) stays so that a request can be made; no button does
+        # the door (menu item) stays so that a request can be made (unless the area hides what is not allowed)
+        return action == 'view' and not area.hide_denied, area
     # a permission named after a right of the area (e.g. app.config_model) asks for exactly that right
     return (action if action in rights_available(area) else 'change') in rights, area
 
@@ -1004,12 +1005,13 @@ def remove_owner(area, user, actor, request=None):
     clear_cache()
 
 
-def update_area(area, actor, name=None, description=None, targets=None, enabled=None, max_hours=None, request=None):
+def update_area(area, actor, name=None, description=None, targets=None, enabled=None, max_hours=None, request=None,
+                hide_denied=None):
     if not _core_or_owner(actor, area):
         raise PermissionDenied
     changes = []
     for field, value in (('name', name), ('description', description), ('targets', targets), ('enabled', enabled),
-                         ('max_hours', max_hours)):
+                         ('max_hours', max_hours), ('hide_denied', hide_denied)):
         if value is None or area.plugin and field in ('targets', 'enabled'):
             continue
         if field == 'targets' and not all(_may_take(actor, area, t) for t in value if t not in (area.targets or [])):
