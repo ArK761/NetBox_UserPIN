@@ -169,6 +169,8 @@ class AreaListView(AreaViewMixin, View):
             'waiting': len(waiting_list), 'waiting_list': waiting_list,
             'deny_on': service.get_settings().default_deny, 'keepers': areas.keepers(),
             'is_keeper': areas.is_keeper(request.user), 'can_keepers': areas.can_manage_keepers(request.user),
+            'denied_view': service.get_settings().denied_view, 'allow_requests': service.get_settings().allow_requests,
+            'allow_own_tokens': service.get_settings().allow_own_tokens,
             'keeper_form': KeeperForm(),
             'settings': service.get_settings(), **_step_up_context(request),
         })
@@ -180,6 +182,12 @@ class AreaListView(AreaViewMixin, View):
         action = request.POST.get('action')
         from django.contrib.auth import get_user_model
         try:
+            if action == 'visibility':
+                areas.set_visibility(request.user, request.POST.get('denied_view', 'doors'),
+                                     request.POST.get('allow_requests') == 'on',
+                                     request.POST.get('allow_own_tokens') == 'on', request=request)
+                messages.success(request, _('Saved.'))
+                return redirect('plugins:netbox_user_pin:areas')
             if action == 'create':
                 if not areas._stand_in(request.user):
                     raise PermissionDenied
@@ -266,7 +274,8 @@ class AreaView(AreaViewMixin, View):
             'pending': [(r, AreaDecideForm(area=area)) for r in pending],
             'area_form': forms.get('area_form') or AreaForm(plugin=area.plugin, initial={
                 'name': area.name, 'description': area.description, 'max_hours': area.max_hours,
-                'enabled': area.enabled, 'denied_view': 'hide' if area.hide_denied else 'show'}),
+                'enabled': area.enabled,
+                'denied_view': {None: 'follow', True: 'hide', False: 'show'}[area.hide_denied]}),
             'target_form': AreaTargetForm(exclude=areas.targets_of(area)),
             'target_labels': [(t, _target_label(t)) for t in areas.targets_of(area)],
             'owner_form': AreaOwnerForm(), 'group_blocks': self._group_blocks(area),
@@ -304,7 +313,8 @@ class AreaView(AreaViewMixin, View):
                 data = form.cleaned_data
                 areas.update_area(area, request.user, name=data['name'], description=data['description'],
                                   enabled=data.get('enabled'), max_hours=data['max_hours'], request=request,
-                                  hide_denied=(data.get('denied_view') == 'hide') if data.get('denied_view') else None)
+                                  hide_denied={'follow': None, 'show': False, 'hide': True}.get(
+                                      data.get('denied_view') or 'follow'))
                 messages.success(request, _('Saved.'))
             elif action == 'delete':
                 areas.delete_area(area, request.user, request=request)

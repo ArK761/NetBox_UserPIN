@@ -38,8 +38,14 @@
         {% if keepers %}<p class="text-secondary">{% trans "Protection keepers:" %} <strong>{% for u in keepers %}{{ u.username }}{% if not forloop.last %}, {% endif %}{% endfor %}</strong></p>{% endif %}
         {% if pending %}
           <div class="alert alert-info mb-0"><i class="mdi mdi-clock-outline"></i> {% blocktrans with when=pending.created|date:"Y-m-d H:i" %}Your request from {{ when }} is waiting for a decision. You will get an e-mail when it is decided.{% endblocktrans %}</div>
-        {% elif target and request.user.is_authenticated %}
+        {% elif target and request.user.is_authenticated and can_request %}
           {% include 'netbox_user_pin/inc/request_form.html' %}
+        {% endif %}
+        {% if only_password %}
+          <div class="border rounded p-2 mt-2"><div class="fw-bold mb-1">{% trans "What you can do here" %}</div>
+            <a class="btn btn-sm btn-outline-primary me-1" href="{% url 'account:change_password' %}"><i class="mdi mdi-lock-reset"></i> {% trans "Change the password" %}</a>
+            <a class="btn btn-sm btn-outline-primary me-1" href="{% url 'plugins:netbox_user_pin:my_pin' %}"><i class="mdi mdi-dialpad"></i> {% trans "My PIN" %}</a>
+            {% if own_tokens %}<a class="btn btn-sm btn-outline-primary" href="{% url 'account:usertoken_list' %}"><i class="mdi mdi-key"></i> {% trans "My API keys" %}</a>{% endif %}</div>
         {% endif %}
       </div>
     </div>
@@ -52,7 +58,7 @@
         {% if owners %}<p class="text-secondary">{% trans "Access is managed by:" %} <strong>{% for u in owners %}{{ u.username }}{% if not forloop.last %}, {% endif %}{% endfor %}</strong></p>{% endif %}
         {% if pending %}
           <div class="alert alert-info"><i class="mdi mdi-clock-outline"></i> {% blocktrans with when=pending.created|date:"Y-m-d H:i" %}Your request from {{ when }} is waiting for the owners. You will get an e-mail when they decide.{% endblocktrans %}</div>
-        {% elif has_owners %}
+        {% elif has_owners and can_request %}
           {% include 'netbox_user_pin/inc/request_form.html' %}
         {% else %}
           <div class="alert alert-secondary mb-0">{% trans "The area has no owners yet. Ask the administrator to appoint them." %}</div>

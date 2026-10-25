@@ -1832,3 +1832,98 @@ class HiddenFieldPathsTest(AreaTestCase):
         stranger = User.objects.get(pk=stranger.pk)
         area_guard.arm_user(stranger)
         self.assertTrue(stranger.has_perm('dcim.view_device'))
+
+
+class VisibilityBTest(AreaTestCase):
+    """B: what is not allowed is not seen at all - only the password and the PIN stay (and an own API key if allowed)."""
+
+    def setUp(self):
+        super().setUp()
+        from dcim.models import Device, DeviceRole, DeviceType, Manufacturer, Site
+        site = Site.objects.create(name='S1', slug='s1')
+        dtype = DeviceType.objects.create(manufacturer=Manufacturer.objects.create(name='M1', slug='m1'),
+                                          model='T1', slug='t1')
+        Device.objects.create(name='DEV_1', site=site, device_type=dtype,
+                              role=DeviceRole.objects.create(name='R1', slug='r1', color='ff0000'))
+        self.keeper = User.objects.create_superuser('keeperb', 'kb@example.com', 'x')
+        service.set_pin(self.keeper, GOOD_PIN)
+        enable_2fa(self.keeper)
+        areas.add_keeper(self.keeper, self.master)
+        self.area = self.make_area(targets=('dcim.device',))
+        self.group = areas.create_group(self.area, 'dcim.device', 'Technici', ['view'], self.owner1, records='all')
+        self.member = User.objects.create_user('memberb', 'mb@example.com')
+        areas.add_member(self.group, self.member, None, self.owner1)
+        self.nobody = User.objects.create_user('nobody', 'n@example.com')
+        areas.set_visibility(self.keeper, 'hidden', False, False)
+        areas.clear_cache()
+        self.denied = lambda response: response.headers.get('X-UserPIN') == 'denied'
+
+    def armed(self, user):
+        areas.clear_cache()
+        user = User.objects.get(pk=user.pk)
+        area_guard.arm_user(user)
+        return user
+
+    def test_who_sees_nothing(self):
+        self.assertTrue(areas.sees_nothing(self.armed(self.nobody)))
+        for user in (self.keeper, self.owner1, self.member):
+            self.assertFalse(areas.sees_nothing(self.armed(user)), user.username)
+        areas.set_visibility(self.keeper, 'doors', True, False)  # A: a door, nobody is "nothing"
+        self.assertFalse(areas.sees_nothing(self.armed(self.nobody)))
+
+    def test_a_user_in_no_group_sees_no_menu_page_or_api_and_keeps_the_password_and_the_pin(self):
+        nobody = self.armed(self.nobody)
+        self.assertFalse(nobody.has_perm('dcim.view_site'))  # no door in the menu
+        self.assertFalse(nobody.has_perm('netbox_user_pin.view_myaccess'))  # requests are off: no "My access"
+        self.assertFalse(nobody.has_perm('netbox_user_pin.view_pintest'))
+        self.assertFalse(nobody.has_perm('netbox_user_pin.view_areaspage'))
+        self.login(self.nobody, unlock=False)
+        for url in ('/', '/dcim/sites/', '/dcim/devices/', '/ipam/prefixes/', '/search/', '/user/profile/'):
+            self.assertTrue(self.denied(self.client.get(url)), url)
+        for url in ('/api/', '/api/status/', '/api/dcim/sites/'):
+            self.assertTrue(self.denied(self.client.get(url, HTTP_ACCEPT='application/json')), url)
+        for url in ('/user/password/', '/plugins/user-pin/'):
+            self.assertFalse(self.denied(self.client.get(url)), url)
+        page = self.client.get('/dcim/sites/').content.decode()
+        self.assertIn('/user/password/', page)  # what he can still do
+        self.assertNotIn('request-access', page)  # asking is switched off
+
+    def test_requests_for_access_can_be_switched_off(self):
+        with self.assertRaises(PermissionDenied):
+            areas.request_target_access(self.nobody, 'dcim.site', ['view'], 'please')
+        areas.set_visibility(self.keeper, 'hidden', True, False)
+        self.assertIsNotNone(areas.request_target_access(self.nobody, 'dcim.site', ['view'], 'please'))
+        self.assertTrue(self.armed(self.nobody).has_perm('netbox_user_pin.view_myaccess'))
+
+    def test_a_member_sees_what_the_group_allows_and_nothing_else(self):
+        member = self.armed(self.member)
+        self.assertTrue(member.has_perm('dcim.view_device'))
+        self.assertFalse(member.has_perm('dcim.view_site'))
+        self.login(self.member)
+        self.assertEqual(self.client.get('/dcim/devices/').status_code, 200)
+        self.assertTrue(self.denied(self.client.get('/dcim/sites/')))
+        self.assertEqual(self.client.get('/api/dcim/devices/', HTTP_ACCEPT='application/json').status_code, 200)
+
+    def test_an_area_may_choose_its_own_and_the_keeper_sets_the_switch_on_the_page(self):
+        areas.update_area(self.area, self.owner1, hide_denied=False)  # this area: A, whatever the settings say
+        self.assertTrue(self.armed(self.nobody).has_perm('dcim.view_device'))  # the door of this area stays
+        self.assertFalse(self.armed(self.nobody).has_perm('dcim.view_site'))  # B for the rest
+        areas.update_area(self.area, self.owner1, hide_denied=None)
+        self.assertFalse(self.armed(self.nobody).has_perm('dcim.view_device'))
+        self.client.force_login(self.nobody)
+        with self.assertRaises(PermissionDenied):
+            areas.set_visibility(self.nobody, 'doors', True, True)
+
+    @override_settings(API_TOKEN_PEPPERS={1: 'x' * 50})
+    def test_an_own_api_key_when_the_settings_allow_it(self):
+        from users.models import Token
+        Token.objects.create(user=self.nobody, description='mine')
+        Token.objects.create(user=self.member, description='theirs')
+        self.login(self.nobody, unlock=False)
+        self.assertTrue(self.denied(self.client.get('/user/api-tokens/')))  # off: closed
+        areas.set_visibility(self.keeper, 'hidden', False, True)
+        areas.clear_cache()
+        self.assertFalse(self.denied(self.client.get('/user/api-tokens/')))
+        nobody = self.armed(self.nobody)
+        self.assertEqual(list(Token.objects.restrict(nobody, 'view').values_list('description', flat=True)), ['mine'])
+        self.assertEqual(Token.objects.restrict(self.armed(self.keeper), 'view').count(), 2)  # a keeper sees all

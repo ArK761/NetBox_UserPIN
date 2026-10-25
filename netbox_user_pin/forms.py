@@ -477,9 +477,10 @@ class AreaForm(forms.Form):
     enabled = forms.BooleanField(label=_('Active'), required=False, initial=True,
                                  widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}))
     denied_view = forms.ChoiceField(
-        label=_('What is not allowed'), required=False, initial='show',
-        choices=[('show', _('Shown, and blocked by the PIN notice (with a request)')),
-                 ('hide', _('Hidden: the user sees only what his group allows'))],
+        label=_('What is not allowed'), required=False, initial='follow',
+        choices=[('follow', _('As the settings say (Protected areas page)')),
+                 ('show', _('A: shown, and blocked by the PIN notice (with a request)')),
+                 ('hide', _('B: hidden - the user sees only what his group allows'))],
         widget=forms.Select(attrs={'class': 'form-select'}),
         help_text=_('Applies to the menu items and to the tabs of the objects of this area.'))
 

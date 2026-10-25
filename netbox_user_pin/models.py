@@ -196,6 +196,21 @@ class PinSettings(models.Model):
         help_text=_('Everything that no protected area allows is denied to everybody except the protection keepers. '
                     'Needs at least one keeper (PIN + 2FA).'),
     )
+    denied_view = models.CharField(
+        verbose_name=_('What is not allowed'), max_length=10, default='doors',
+        choices=[('doors', _('A: shown, and blocked by the PIN notice')),
+                 ('hidden', _('B: the user sees nothing he is not allowed (only the password and the PIN)'))],
+        help_text=_('The default for all protected areas; an area can choose its own.'),
+    )
+    allow_requests = models.BooleanField(
+        verbose_name=_('Users may ask for access'), default=True,
+        help_text=_('Off: nobody but the administrators can ask for access (there is no request page or button).'),
+    )
+    allow_own_tokens = models.BooleanField(
+        verbose_name=_('Users may create their own API key'), default=False,
+        help_text=_('A key works with the NetBox permissions of its user and the PIN does not judge it: a superuser with '
+                    'a key reads everything through a script. Allow it for users with narrow NetBox permissions.'),
+    )
     areas_enabled = models.BooleanField(
         verbose_name=_('Protect areas and objects'),
         default=False,
@@ -780,7 +795,8 @@ class ProtectedArea(models.Model):
 
     # What is not allowed to a user: shown as a door that explains and offers a request (False), or not shown at all
     # (menu items and tabs of this area).
-    hide_denied = models.BooleanField(default=False)
+    # None: as the settings say (A or B), True: B (hidden), False: A (a door)
+    hide_denied = models.BooleanField(null=True, blank=True, default=None)
 
     class Meta:
         verbose_name = _('protected area')

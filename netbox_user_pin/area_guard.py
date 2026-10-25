@@ -47,6 +47,16 @@ def _plugin_perm(user, perm):
     action, _underscore, model = codename.partition('_')
     if action != 'view':
         return None
+    # the items of the "My PIN" part of the menu: B takes from the user who is in no group what is not the PIN itself
+    if model in ('myroles', 'myaccess', 'pintest', 'areaspage'):
+        nothing = areas.sees_nothing(user)
+        if model == 'myroles':
+            return not nothing or roles.is_manager(user)
+        if model == 'myaccess':
+            return areas.requests_allowed() if nothing else True
+        if model == 'pintest':
+            return not nothing
+        return areas.administers_any(user)
     if areas.keepers():  # with protection keepers a superuser is no PIN authority by being a superuser
         if user.is_superuser and not roles.core_roles().filter(user=user).exists():
             if model in ('userpin', 'pinevent'):
@@ -195,7 +205,7 @@ def _scope_hint(overview, blocked):
         'blocked': areas.target_label(blocked), 'field': via['field'], 'type': via['type']}
 
 
-def denied_response(request, area, right='view', target=None, tab_label=None):
+def denied_response(request, area, right='view', target=None, tab_label=None, only_password=False):
     """``area=None``: refused by "deny everything not allowed"."""
     user = request.user
     wants_json = request.path_info.startswith('/api/') or 'application/json' in request.headers.get('Accept', '')
@@ -208,6 +218,8 @@ def denied_response(request, area, right='view', target=None, tab_label=None):
             response = render(request, 'netbox_user_pin/area_denied.html', {
                 'area': None, 'deny': True, 'keepers': areas.keepers(), 'next': request.get_full_path(),
                 **_request_context(request, None, right, target), 'tab_label': tab_label,
+                'only_password': only_password, 'can_request': areas.requests_allowed(),
+                'own_tokens': areas.own_tokens_allowed(),
                 'pending': AreaRequest.objects.filter(user=user, target=target or '', status=AreaRequestStatus.PENDING
                                                       ).first() if getattr(user, 'is_authenticated', False) else None,
                 'overview': (overview := _overview(user, target)), 'scope_hint': _scope_hint(overview, target),
@@ -229,6 +241,7 @@ def denied_response(request, area, right='view', target=None, tab_label=None):
             'area': area, 'right': right, 'pending': pending, 'owners': areas.owners(area),
             'has_owners': True,
             'next': request.get_full_path(), **_request_context(request, area, right, target),
+            'can_request': areas.requests_allowed(),
             'tab_label': tab_label, 'overview': (overview := _overview(user, target)),
             'scope_hint': _scope_hint(overview, target),
         }, status=403)
@@ -250,6 +263,8 @@ class AreaGuardMiddleware:
             return None
         if request.path_info.startswith('/graphql') and _graphql_would_leak(request):
             return denied_response(request, None, right='view', target=None)
+        if areas.sees_nothing(request.user) and not _open_to_the_unlisted(request):
+            return denied_response(request, None, right='view', target=None, only_password=True)
         cls = getattr(view_func, 'view_class', None) or getattr(view_func, 'cls', None)
         if cls is not None and request.method in ('GET', 'POST') and not request.path_info.startswith('/api/') and \
                 any(word in cls.__name__ for word in ('Edit', 'Create', 'Import')):
@@ -260,7 +275,8 @@ class AreaGuardMiddleware:
             model = candidate if hasattr(candidate, '_meta') else None
         package = (cls.__module__ if cls is not None else getattr(view_func, '__module__', '') or '').split('.')[0]
         if model is None and package not in getattr(django_settings, 'PLUGINS', ()):
-            if areas.default_deny_active() and request.path_info.startswith(SYSTEM_PATHS):
+            if areas.default_deny_active() and request.path_info.startswith(SYSTEM_PATHS) and not (
+                    areas.own_tokens_allowed() and request.path_info.startswith('/user/api-tokens')):
                 user = request.user
                 if getattr(user, 'is_authenticated', False) and not areas.is_keeper(user):
                     return denied_response(request, None, right='view', target=None)
@@ -422,6 +438,19 @@ def _child_denied(request, user, cls, tab=None):
     return None
 
 
+# What a user who is in no group still has (B): the pages of this plugin (PIN, 2FA, unlock), the password, the login,
+# the files of the pages - and the own API keys, when the settings allow them.
+OPEN_TO_THE_UNLISTED = ('/plugins/user-pin/', '/login/', '/logout/', '/user/password', '/static/', '/media/',
+                        '/oauth/', '/social-auth/', '/htmx/')
+
+
+def _open_to_the_unlisted(request):
+    path = request.path_info
+    if path.startswith(OPEN_TO_THE_UNLISTED):
+        return True
+    return areas.own_tokens_allowed() and path.startswith('/user/api-tokens')
+
+
 def _tab_hidden(tab, instance):
     """Is this tab of the page of ``instance`` hidden from the current user (an area that hides what is not allowed)?"""
     try:
@@ -434,7 +463,7 @@ def _tab_hidden(tab, instance):
     if meta is None or not getattr(user, 'is_authenticated', False) or not areas.active_areas():
         return False
     area = areas.area_for(meta.app_label, meta.model_name, package=meta.app_label)
-    if area is None or not area.hide_denied:
+    if area is None or not areas.hides_denied(area):
         return False
     target = f'{meta.app_label}.{meta.model_name}'
     for config, view in areas._tab_configs(meta.app_label, meta.model_name):
@@ -517,6 +546,9 @@ def install():
                 hidden = areas.unseen_objects(user, meta.app_label, meta.model_name)
                 if hidden is not None:
                     result = result.exclude(hidden)
+                own = areas.own_rows_only(user, meta.app_label, meta.model_name)
+                if own and getattr(user, 'is_authenticated', False):
+                    result = result.filter(**{own: user})
                 return result
             if action not in areas.rights_available(area):  # sync, render_config, run ... need the right to change
                 action = 'change'

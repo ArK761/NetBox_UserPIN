@@ -7,9 +7,12 @@ menu = PluginMenu(
     groups=(
         (_('My PIN'), (
             PluginMenuItem(link='plugins:netbox_user_pin:my_pin', link_text=_('My PIN'), auth_required=True),
-            PluginMenuItem(link='plugins:netbox_user_pin:my_roles', link_text=_('My roles'), auth_required=True),
-            PluginMenuItem(link='plugins:netbox_user_pin:my_access', link_text=_('My access'), auth_required=True),
-            PluginMenuItem(link='plugins:netbox_user_pin:test', link_text=_('Test unlock'), auth_required=True),
+            PluginMenuItem(link='plugins:netbox_user_pin:my_roles', link_text=_('My roles'),
+                           permissions=['netbox_user_pin.view_myroles']),
+            PluginMenuItem(link='plugins:netbox_user_pin:my_access', link_text=_('My access'),
+                           permissions=['netbox_user_pin.view_myaccess']),
+            PluginMenuItem(link='plugins:netbox_user_pin:test', link_text=_('Test unlock'),
+                           permissions=['netbox_user_pin.view_pintest']),
         )),
         (_('Administration'), (
             PluginMenuItem(
@@ -21,7 +24,8 @@ menu = PluginMenu(
                 permissions=['netbox_user_pin.view_userpin'],
             ),
             PluginMenuItem(
-                link='plugins:netbox_user_pin:areas', link_text=_('Protected areas'), auth_required=True,
+                link='plugins:netbox_user_pin:areas', link_text=_('Protected areas'),
+                permissions=['netbox_user_pin.view_areaspage'],
             ),
             PluginMenuItem(
                 link='plugins:netbox_user_pin:approval_list', link_text=_('Approvals (four eyes)'),

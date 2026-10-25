@@ -55,7 +55,7 @@ CACHE_SECONDS = 5
 EVENT_TYPE = 'netbox_user_pin_area_request'
 
 _registry = {}
-_cache = {'at': 0.0, 'areas': None, 'deny': False, 'keepers': frozenset()}
+_cache = {'at': 0.0, 'areas': None, 'deny': False, 'keepers': frozenset(), 'hide': False, 'requests': True, 'tokens': False}
 # Never refused by the default deny: technical data NetBox needs to draw its forms. Nothing else - the user may do what
 # a group allows him, and change his password (a view without objects, never refused).
 DEFAULT_DENY_EXEMPT = frozenset({'core.objecttype'})
@@ -153,7 +153,11 @@ def _refresh():
     _cache['areas'] = loaded if loaded is not None else (_cache['areas'] or [])
     try:
         keepers = frozenset(PolicyKeeper.objects.filter(user__is_active=True).values_list('user_id', flat=True))
-        _cache['deny'] = bool(service.get_settings().default_deny and keepers)
+        _settings = service.get_settings()
+        _cache['deny'] = bool(_settings.default_deny and keepers)
+        _cache['hide'] = _settings.denied_view == 'hidden'
+        _cache['requests'] = bool(_settings.allow_requests)
+        _cache['tokens'] = bool(_settings.allow_own_tokens)
         _cache['keepers'] = keepers
     except DatabaseError:
         logger.exception('PIN: the keepers cannot be read, the last known state stays')
@@ -164,6 +168,48 @@ def active_areas():
     if _cache['areas'] is None or time.monotonic() - _cache['at'] > CACHE_SECONDS:
         _refresh()
     return _cache['areas']
+
+
+def hides_denied(area=None):
+    """B: what is not allowed is not shown at all (the area's own choice, else the settings'); A: a door."""
+    active_areas()
+    if area is not None and area.hide_denied is not None:
+        return bool(area.hide_denied)
+    return bool(_cache['hide'])
+
+
+def own_rows_only(user, app_label, model):
+    """The field narrowing the rows to the user's own ones (the API keys), or None."""
+    if f'{app_label}.{model}' == 'users.token' and own_tokens_allowed() and default_deny_active() \
+            and not is_keeper(user):
+        return 'user'
+    return None
+
+
+def requests_allowed():
+    """May the users ask for access (a page and a button for it)?"""
+    active_areas()
+    return bool(_cache['requests'])
+
+
+def own_tokens_allowed():
+    """May the users create their own API key (and see and change only their own)?"""
+    active_areas()
+    return bool(_cache['tokens'])
+
+
+def sees_nothing(user):
+    """
+    B: the user sees nothing - no group in any area, no keeper, no owner. Only meaningful while "deny everything not
+    allowed" is on and the settings choose B.
+    """
+    if not (getattr(user, 'is_authenticated', False) and default_deny_active() and hides_denied()):
+        return False
+    if is_keeper(user) or administers_any(user):
+        return False
+    return not AreaGrant.objects.filter(
+        Q(expires__isnull=True) | Q(expires__gt=timezone.now()), user=user, revoked__isnull=True,
+        area__in=active_areas()).exists()
 
 
 def default_deny_active():
@@ -187,6 +233,8 @@ def default_deny_blocks(user, app_label, model, package=None):
         return False
     if f'{app_label}.{model}' in DEFAULT_DENY_EXEMPT:
         return False
+    if f'{app_label}.{model}' == 'users.token' and _cache['tokens']:
+        return False  # the own keys: the rows are narrowed to the user's own ones (own_rows_only)
     return not is_keeper(user)
 
 
@@ -778,14 +826,14 @@ def check_perm(user, perm):
         if model and default_deny_blocks(user, app_label, model, app_label):
             # nothing allows it. The door (menu item) stays, so that the "request access" page can be reached;
             # buttons do not, and the system apps (users, permissions, jobs ...) have no door at all
-            if action == 'view' and app_label not in SENSITIVE_APPS:
+            if action == 'view' and app_label not in SENSITIVE_APPS and not hides_denied():
                 return None
             return False, None
         return None
     rights = _memo_rights(user, area, f'{app_label}.{model}' if model else None)
     if not rights:
         # the door (menu item) stays so that a request can be made (unless the area hides what is not allowed)
-        return action == 'view' and not area.hide_denied, area
+        return action == 'view' and not hides_denied(area), area
     # a permission named after a right of the area (e.g. app.config_model) asks for exactly that right
     return (action if action in rights_available(area) else 'change') in rights, area
 
@@ -1005,13 +1053,16 @@ def remove_owner(area, user, actor, request=None):
     clear_cache()
 
 
+_KEEP = object()
+
+
 def update_area(area, actor, name=None, description=None, targets=None, enabled=None, max_hours=None, request=None,
-                hide_denied=None):
+                hide_denied=_KEEP):
     if not _core_or_owner(actor, area):
         raise PermissionDenied
     changes = []
     for field, value in (('name', name), ('description', description), ('targets', targets), ('enabled', enabled),
-                         ('max_hours', max_hours), ('hide_denied', hide_denied)):
+                         ('max_hours', max_hours)):
         if value is None or area.plugin and field in ('targets', 'enabled'):
             continue
         if field == 'targets' and not all(_may_take(actor, area, t) for t in value if t not in (area.targets or [])):
@@ -1020,6 +1071,9 @@ def update_area(area, actor, name=None, description=None, targets=None, enabled=
         if getattr(area, field) != value:
             changes.append(f'{field}: {getattr(area, field)!r} -> {value!r}')
             setattr(area, field, value)
+    if hide_denied is not _KEEP and area.hide_denied != hide_denied:  # None: as the settings say
+        changes.append(f'hide_denied: {area.hide_denied!r} -> {hide_denied!r}')
+        area.hide_denied = hide_denied
     if changes:
         area.save()
         _log(PinEventAction.AREA_CHANGED, area, actor, request=request, detail='\n'.join(changes))
@@ -1083,11 +1137,18 @@ def _notify(req, users, text, subject):
         service.send_user_mail(user, subject, text)
 
 
+def _check_requests_allowed(user):
+    """The settings may take the request for access from the users (the administrators keep it)."""
+    if not requests_allowed() and not roles.is_manager(user):
+        raise PermissionDenied
+
+
 def request_access(area, user, note='', request=None, scope='', target='', rights=None):
     """A user asks the owners for access. One waiting request per user, area and object type."""
     area = get_area(area)
     if area is None or not user.is_authenticated or not user.is_active:
         raise PermissionDenied
+    _check_requests_allowed(user)
     existing = AreaRequest.objects.filter(area=area, user=user, target=target or '',
                                           status=AreaRequestStatus.PENDING).first()
     if existing:
@@ -1103,6 +1164,7 @@ def request_target_access(user, target, rights, note, request=None, scope=''):
     A user whose way is blocked asks for ``rights`` on an object type / app. The owners of the area that protects it
     decide; when no area protects it yet, the protection keepers do (and approving creates the area).
     """
+    _check_requests_allowed(user)
     if not user.is_authenticated or not user.is_active:
         raise PermissionDenied
     target = (target or '').strip().lower()
@@ -1518,6 +1580,22 @@ def remove_keeper(user, actor, request=None):
         raise ValidationError(_('The last keeper cannot be removed. Appoint another keeper first.'))
     keeper.delete()
     service.log_event(PinEventAction.KEEPER_REMOVED, user=user, actor=actor, request=request)
+    clear_cache()
+
+
+def set_visibility(actor, mode, allow_requests, allow_own_tokens, request=None):
+    """What a user sees of what is not allowed to him (A: a door, B: nothing) and what he may ask for / create."""
+    if not can_manage_keepers(actor):
+        raise PermissionDenied
+    if mode not in ('doors', 'hidden'):
+        raise ValidationError(_('Choose A or B.'))
+    settings = service.get_settings()
+    settings.denied_view, settings.allow_requests = mode, bool(allow_requests)
+    settings.allow_own_tokens = bool(allow_own_tokens)
+    settings.save()
+    service.log_event(PinEventAction.SETTINGS_CHANGED, actor=actor, request=request,
+                      detail=f'what is not allowed: {mode}; ask for access: {bool(allow_requests)}; own API key: '
+                             f'{bool(allow_own_tokens)}')
     clear_cache()
 
 

@@ -27,7 +27,23 @@
     {% endif %}
   </div>
 </div>
-<div class="card">
+{% if can_keepers %}
+<div class="card mt-3">
+  <h2 class="card-header"><i class="mdi mdi-eye-off-outline"></i> {% trans "What the users see" %}</h2>
+  <div class="card-body">
+    <form method="post" class="d-flex flex-column gap-2">{% csrf_token %}<input type="hidden" name="action" value="visibility">
+      <div class="form-check"><input class="form-check-input" type="radio" name="denied_view" id="dv-doors" value="doors" {% if denied_view == 'doors' %}checked{% endif %}><label class="form-check-label" for="dv-doors"><strong>A</strong> – {% trans "the user sees everything, and the PIN blocks what is not allowed with a notice (and a request)." %}</label></div>
+      <div class="form-check"><input class="form-check-input" type="radio" name="denied_view" id="dv-hidden" value="hidden" {% if denied_view == 'hidden' %}checked{% endif %}><label class="form-check-label" for="dv-hidden"><strong>B</strong> – {% trans "the user who is in no group sees nothing: only the change of the password and of the PIN. In a group he sees only what the group allows. No API in the browser." %}</label></div>
+      <div class="form-check form-switch"><input class="form-check-input" type="checkbox" name="allow_requests" id="dv-req" {% if allow_requests %}checked{% endif %}><label class="form-check-label" for="dv-req">{% trans "Users may ask for access" %}</label></div>
+      <div class="form-check form-switch"><input class="form-check-input" type="checkbox" name="allow_own_tokens" id="dv-tok" {% if allow_own_tokens %}checked{% endif %}><label class="form-check-label" for="dv-tok">{% trans "Users may create their own API key" %}</label>
+        <div class="form-text text-danger">{% trans "A key works with the NetBox permissions of its user and the PIN does not judge it: a superuser with a key reads everything through a script. Allow it for users with narrow NetBox permissions." %}</div></div>
+      <div><button class="btn btn-primary" type="submit">{% trans "Save" %}</button>
+        <span class="text-secondary small ms-2">{% trans "Each area can choose its own (Open the area → Settings of the area)." %}</span></div>
+    </form>
+  </div>
+</div>
+{% endif %}
+<div class="card mt-3">
   <h2 class="card-header">{% trans "What is set up" %}</h2>
   <div class="card-body">
     <input type="search" class="form-control form-control-sm mb-3" id="pin-tree-search" placeholder="{% trans 'Search a user, a group or an object type…' %}">
