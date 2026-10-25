@@ -1313,6 +1313,15 @@ class RowConditionsTest(AreaTestCase):
         areas.clear_cache()
         self.assertEqual(areas.rights_of(other, self.area, 'dcim.device'), set())
 
+    def test_without_a_right_only_the_door_stays_not_the_buttons(self):
+        stranger = User.objects.create_user('stranger', 's@example.com')
+        areas.clear_cache()
+        stranger = User.objects.get(pk=stranger.pk)
+        area_guard.arm_user(stranger)
+        self.assertTrue(stranger.has_perm('dcim.view_device'))  # the menu item: the request page is behind it
+        for action in ('add', 'change', 'delete'):
+            self.assertFalse(stranger.has_perm(f'dcim.{action}_device'), action)
+
     def test_two_is_conditions_of_one_field_are_alternatives_not_an_empty_set(self):
         areas.add_group_condition(self.group, self.owner1, 'role', 'eq', [str(self.role1.pk)])
         areas.add_group_condition(self.group, self.owner1, 'role', 'eq', [str(self.role2.pk)])  # Switch OR Router

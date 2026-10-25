@@ -232,7 +232,7 @@ class Command(BaseCommand):
                 transaction.set_rollback(True)
             return response
 
-        def verdict(response):
+        def verdict(response, method='GET'):
             if response.headers.get('X-UserPIN') == 'denied':
                 return 'no'
             if response.status_code == 403:
@@ -240,7 +240,7 @@ class Command(BaseCommand):
             if response.status_code in (401, 404, 405):
                 return None
             if response.status_code >= 500:
-                return 'ERR'
+                return 'ok*' if method != 'GET' else 'ERR'  # past the guard; the empty form fails on its own
             return 'ok'
 
         try:
@@ -290,20 +290,22 @@ class Command(BaseCommand):
                     except Exception as exc:  # noqa: BLE001
                         problems.append(f'{method} {url}: {type(exc).__name__}')
                         continue
-                    result = verdict(response)
-                    if result == 'ERR':
-                        problems.append(f'{method} {url}: HTTP {response.status_code}')
+                    result = verdict(response, method)
+                    if result in ('ERR', 'ok*'):
+                        problems.append(f'{method} {url}: HTTP {response.status_code}'
+                                        + (' (the empty form of this test; the guard let it in)' if result == 'ok*' else ''))
                     if result:
                         table[label][column] = result
         finally:
             client.logout()
 
-        opened = {label: cols for label, cols in table.items() if any(v in ('ok', 'ERR') for v in cols.values())}
+        opened = {label: cols for label, cols in table.items() if any(v in ('ok', 'ok*', 'ERR') for v in cols.values())}
         self.stdout.write(f'Object types: {len(table)}; with something open: {len(opened)}; '
                           f'fully denied: {len(table) - len(opened)}')
-        self.stdout.write('\nWHAT THE USER CAN DO (ok = allowed, no = the "no access" page; only types with something open):')
+        self.stdout.write('\nWHAT THE USER CAN DO (OPEN = allowed, DENIED = the "no access" page; only types with something '
+                          'open; * = the guard let it in, the test then sent an empty form that fails on its own):')
         for label in sorted(opened):
-            ok = [f'{c}' for c, v in sorted(opened[label].items()) if v == 'ok']
+            ok = [f'{c}' + ('*' if v == 'ok*' else '') for c, v in sorted(opened[label].items()) if v in ('ok', 'ok*')]
             no = [f'{c}' for c, v in sorted(opened[label].items()) if v.startswith('no')]
             self.stdout.write(f'\n  {label}\n     OPEN:   {", ".join(ok) or "-"}\n     DENIED: {", ".join(no) or "-"}')
         if problems:

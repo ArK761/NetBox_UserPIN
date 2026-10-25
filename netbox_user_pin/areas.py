@@ -784,7 +784,7 @@ def check_perm(user, perm):
         return None
     rights = _memo_rights(user, area, f'{app_label}.{model}' if model else None)
     if not rights:
-        return True, area
+        return action == 'view', area  # the door (menu item) stays so that a request can be made; no button does
     # a permission named after a right of the area (e.g. app.config_model) asks for exactly that right
     return (action if action in rights_available(area) else 'change') in rights, area
 
