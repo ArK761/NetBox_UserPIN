@@ -114,6 +114,9 @@ class Command(BaseCommand):
                           f'areas on={areas.protection_on()}, deny everything not allowed={areas.default_deny_active()}')
         if keeper:
             self.stdout.write(self.style.WARNING('A keeper is exempt from the deny: expect OPEN almost everywhere.'))
+        if areas.is_exempt(user):
+            self.stdout.write(self.style.WARNING('An EXCEPTION is set for this user: the PIN protection does not apply '
+                                                 'to him, NetBox permissions rule (expect OPEN where NetBox allows).'))
 
         self.stdout.write('\n== Pages and browser API (as the person at the screen) ==')
         django_settings.ALLOWED_HOSTS = ['*']

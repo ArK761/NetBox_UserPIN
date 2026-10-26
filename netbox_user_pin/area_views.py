@@ -169,6 +169,9 @@ class AreaListView(AreaViewMixin, View):
             'waiting': len(waiting_list), 'waiting_list': waiting_list,
             'deny_on': service.get_settings().default_deny, 'keepers': areas.keepers(),
             'is_keeper': areas.is_keeper(request.user), 'can_keepers': areas.can_manage_keepers(request.user),
+            'exceptions': areas.exceptions() if areas.is_keeper(request.user) else [],
+            'exception_users': [(pk, label) for pk, label in _all_user_choices()
+                                if pk not in {k.pk for k in areas.keepers()}] if areas.is_keeper(request.user) else [],
             'denied_view': service.get_settings().denied_view, 'allow_requests': service.get_settings().allow_requests,
             'allow_own_tokens': service.get_settings().allow_own_tokens,
             'keeper_form': KeeperForm(),
@@ -182,6 +185,27 @@ class AreaListView(AreaViewMixin, View):
         action = request.POST.get('action')
         from django.contrib.auth import get_user_model
         try:
+            if action == 'exception-add':
+                from django.contrib.auth import get_user_model
+                from django.utils.dateparse import parse_datetime
+                end = None
+                if request.POST.get('expires'):
+                    end = parse_datetime(request.POST['expires'])
+                    if end is None:
+                        raise ValidationError(_('Write the end as a date and a time.'))
+                    if timezone.is_naive(end):
+                        end = timezone.make_aware(end)
+                user = get_object_or_404(get_user_model(), pk=request.POST.get('user') or 0)
+                areas.add_exception(user, request.user, end, request.POST.get('note', ''), request=request)
+                messages.success(request, _('The exception is set: %(user)s works with the permissions of NetBox.')
+                                 % {'user': user.username})
+                return redirect('plugins:netbox_user_pin:areas')
+            if action == 'exception-remove':
+                from django.contrib.auth import get_user_model
+                areas.remove_exception(get_object_or_404(get_user_model(), pk=request.POST.get('pk') or 0),
+                                       request.user, request=request)
+                messages.success(request, _('The exception was taken away: the protection applies to him again.'))
+                return redirect('plugins:netbox_user_pin:areas')
             if action == 'visibility':
                 areas.set_visibility(request.user, request.POST.get('denied_view', 'doors'),
                                      request.POST.get('allow_requests') == 'on',

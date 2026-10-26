@@ -270,8 +270,8 @@ class AreaGuardMiddleware:
         return response
 
     def process_view(self, request, view_func, view_args, view_kwargs):
-        if not areas.protection_on() or _is_token_request(request):
-            return None
+        if not areas.protection_on() or _is_token_request(request) or areas.is_exempt(request.user):
+            return None  # (an exception: NetBox's own permissions rule the user)
         if request.path_info.startswith('/graphql') and _graphql_would_leak(request):
             return denied_response(request, None, right='view', target=None)
         if request.path_info == '/' and request.method == 'GET' and areas.sees_nothing(request.user):
@@ -350,7 +350,7 @@ class AreaGuardMiddleware:
 def _graphql_would_leak(request):
     """GraphQL draws every field of what it returns: not for a person at a screen while any field is hidden."""
     user = request.user
-    if not getattr(user, 'is_authenticated', False) or areas.is_keeper(user):
+    if not getattr(user, 'is_authenticated', False) or areas.is_keeper(user) or areas.is_exempt(user):
         return False
     from .models import AreaFieldMode, AreaFieldRule
     return AreaFieldRule.objects.filter(mode=AreaFieldMode.HIDDEN).exists()
@@ -459,7 +459,7 @@ def _child_denied(request, user, cls, tab=None):
 def _hides_menu_for(user):
     """B is on and the user is no keeper: the menus and the account pages show only what is allowed."""
     return bool(getattr(user, 'is_authenticated', False) and areas.protection_on() and areas.default_deny_active()
-                and areas.hides_denied() and not areas.is_keeper(user))
+                and areas.hides_denied() and not areas.is_keeper(user) and not areas.is_exempt(user))
 
 
 def _menu_item_allowed(item):
@@ -558,7 +558,8 @@ def _tab_hidden(tab, instance):
         return False
     user = getattr(request, 'user', None)
     meta = getattr(instance, '_meta', None)
-    if meta is None or not getattr(user, 'is_authenticated', False) or not areas.active_areas():
+    if meta is None or not getattr(user, 'is_authenticated', False) or not areas.active_areas() \
+            or areas.is_exempt(user):
         return False
     area = areas.area_for(meta.app_label, meta.model_name, package=meta.app_label)
     if area is None or not areas.hides_denied(area):
@@ -619,7 +620,7 @@ def install():
         original = RestrictedQuerySet.restrict
 
         def restrict(self, user, action='view'):
-            if _token_request():
+            if _token_request() or areas.is_exempt(user):
                 return original(self, user, action)
             meta = self.model._meta
             if (flag := _select_flag(meta) or _form_pick(user, meta)) is not None:  # a drop-down / a form field

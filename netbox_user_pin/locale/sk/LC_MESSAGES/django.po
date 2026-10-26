@@ -6191,6 +6191,77 @@ msgstr "vybraných"
 msgid "click to choose"
 msgstr "klikni a vyber"
 
+msgid "protection exception"
+msgstr "výnimka z ochrany"
+
+msgid "protection exceptions"
+msgstr "výnimky z ochrany"
+
+msgid "A protection keeper has no need of an exception."
+msgstr "Správca ochrany výnimku nepotrebuje."
+
+msgid "The end of the exception must be in the future."
+msgstr "Koniec výnimky musí byť v budúcnosti."
+
+msgid "Protection exception: %(user)s"
+msgstr "Výnimka z ochrany: %(user)s"
+
+msgid ""
+"%(actor)s took the PIN protection off %(user)s (%(end)s). He works with the "
+"permissions of NetBox until the exception is taken away."
+msgstr ""
+"%(actor)s zrušil ochranu PIN-om pre %(user)s (%(end)s). Pracuje s právami z "
+"NetBoxu, kým sa výnimka neodoberie."
+
+msgid "until %(when)s"
+msgstr "do %(when)s"
+
+msgid "no end"
+msgstr "bez konca"
+
+msgid "Write the end as a date and a time."
+msgstr "Zadaj koniec ako dátum a čas."
+
+msgid "The exception is set: %(user)s works with the permissions of NetBox."
+msgstr "Výnimka je nastavená: %(user)s pracuje s právami z NetBoxu."
+
+msgid "The exception was taken away: the protection applies to him again."
+msgstr "Výnimka bola odobratá: ochrana sa naňho vzťahuje znova."
+
+msgid "Exceptions"
+msgstr "Výnimky"
+
+msgid ""
+"A user with an exception is not bound by the protection: he works with the "
+"permissions NetBox gives him. His groups, accesses and roles stay as they "
+"are and apply again when the exception is taken away or ends."
+msgstr ""
+"Používateľa s výnimkou ochrana neviaže: pracuje s právami, ktoré mu dáva "
+"NetBox. Jeho skupiny, prístupy a roly ostávajú, ako sú, a platia znova, keď "
+"sa výnimka odoberie alebo skončí."
+
+msgid "Take away"
+msgstr "Odobrať"
+
+msgid "No exceptions."
+msgstr "Žiadne výnimky."
+
+msgid "Until (optional)"
+msgstr "Do (voliteľné)"
+
+msgid "Why (optional)"
+msgstr "Prečo (voliteľné)"
+
+msgid "Set the exception"
+msgstr "Nastaviť výnimku"
+
+msgid ""
+"A superuser with an exception sees everything without the PIN. The other "
+"keepers are told by e-mail and the audit log records it."
+msgstr ""
+"Superuser s výnimkou vidí všetko bez PIN-u. Ostatní správcovia sa to "
+"dozvedia e-mailom a zapíše sa do audit logu."
+
 #~ msgid ""
 #~ "There is no other administrator or delegate with PIN and 2FA who could "
 #~ "confirm."

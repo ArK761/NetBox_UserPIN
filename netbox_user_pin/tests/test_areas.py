@@ -2000,3 +2000,112 @@ class VisibilityBTest(AreaTestCase):
         with translation.override('sk'):
             for text in texts:
                 self.assertNotEqual(translation.gettext(text), text, text)
+
+
+class ExceptionTest(AreaTestCase):
+    """A keeper takes the protection off a user: NetBox's permissions rule him, his groups wait under the exception."""
+
+    def setUp(self):
+        super().setUp()
+        from dcim.models import Device, DeviceRole, DeviceType, Manufacturer, Site
+        site = Site.objects.create(name='S1', slug='s1')
+        dtype = DeviceType.objects.create(manufacturer=Manufacturer.objects.create(name='M1', slug='m1'),
+                                          model='T1', slug='t1')
+        role = DeviceRole.objects.create(name='R1', slug='r1', color='ff0000')
+        self.Device = Device
+        Device.objects.create(name='AGG_1', site=site, device_type=dtype, role=role, description='SECRETTEXT')
+        Device.objects.create(name='OTHER_1', site=site, device_type=dtype, role=role)
+        self.keeper = User.objects.create_superuser('keeperx', 'kx@example.com', 'x')
+        service.set_pin(self.keeper, GOOD_PIN)
+        enable_2fa(self.keeper)
+        areas.add_keeper(self.keeper, self.master)
+        self.area = self.make_area(targets=('dcim.device',))
+        self.group = areas.create_group(self.area, 'dcim.device', 'Technici', ['view'], self.owner1, records='all')
+        areas.add_group_condition(self.group, self.owner1, 'name', 'contains', ['agg'])
+        areas.save_field_rules(self.area, self.group, 'dcim.device', {'description': ('hidden', '')}, self.owner1)
+        self.su = User.objects.create_user('su', 'su@example.com', is_superuser=True)
+        areas.add_member(self.group, self.su, None, self.owner1)
+        areas.clear_cache()
+
+    def armed(self, user):
+        areas.clear_cache()
+        user = User.objects.get(pk=user.pk)
+        area_guard.arm_user(user)
+        return user
+
+    def names(self, user):
+        return sorted(self.Device.objects.restrict(self.armed(user), 'view').values_list('name', flat=True))
+
+    def test_an_exception_lifts_the_protection_and_leaves_the_group_under_it(self):
+        from netbox_user_pin import fieldrules
+        from netbox_user_pin.models import AreaGrant
+        from dcim.models import Site
+        self.assertEqual(self.names(self.su), ['AGG_1'])  # the group: only the records with agg
+        self.assertEqual(Site.objects.restrict(self.armed(self.su), 'view').count(), 0)  # the rest is denied
+        self.assertEqual(fieldrules.hidden_by_type(self.armed(self.su)), {'dcim.device': {'description'}})
+        areas.add_exception(self.su, self.keeper, None, 'on a duty')
+        su = self.armed(self.su)
+        self.assertTrue(areas.is_exempt(su))
+        self.assertEqual(self.names(self.su), ['AGG_1', 'OTHER_1'])  # NetBox rules: a superuser sees all
+        self.assertEqual(Site.objects.restrict(su, 'view').count(), Site.objects.count())
+        self.assertEqual(fieldrules.hidden_by_type(su), {})  # no hidden field either
+        self.assertTrue(su.has_perm('dcim.add_site'))  # the permissions of NetBox
+        self.login(self.su, unlock=False)
+        self.assertEqual(self.client.get('/dcim/sites/').status_code, 200)
+        self.assertIn('SECRETTEXT', self.client.get('/dcim/devices/').content.decode() +
+                      self.client.get(f'/dcim/devices/{self.Device.objects.get(name="AGG_1").pk}/').content.decode())
+        # taken away: the group he was in applies again, nothing was lost
+        self.assertTrue(areas.remove_exception(self.su, self.keeper))
+        self.assertEqual(AreaGrant.objects.filter(user=self.su, revoked__isnull=True).count(), 1)
+        self.assertEqual(self.names(self.su), ['AGG_1'])
+        self.assertEqual(self.client.get('/dcim/sites/').headers.get('X-UserPIN'), 'denied')
+
+    def test_an_exception_ends_by_itself_and_only_in_the_future(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+        from netbox_user_pin.models import PolicyException
+        with self.assertRaises(ValidationError):
+            areas.add_exception(self.su, self.keeper, timezone.now() - timedelta(hours=1))
+        areas.add_exception(self.su, self.keeper, timezone.now() + timedelta(hours=2))
+        self.assertTrue(areas.is_exempt(self.armed(self.su)))
+        PolicyException.objects.filter(user=self.su).update(expires=timezone.now() - timedelta(minutes=1))
+        self.assertFalse(areas.is_exempt(self.armed(self.su)))  # expired: the group rules again
+        self.assertEqual(self.names(self.su), ['AGG_1'])
+
+    def test_only_a_keeper_sets_it_and_not_for_a_keeper(self):
+        for actor in (self.owner1, self.master, self.su):
+            with self.assertRaises(PermissionDenied):
+                areas.add_exception(self.su, actor)
+            with self.assertRaises(PermissionDenied):
+                areas.remove_exception(self.su, actor)
+        with self.assertRaises(ValidationError):
+            areas.add_exception(self.keeper, self.keeper)  # a keeper needs none
+
+    def test_the_page_sets_and_takes_away_an_exception_and_the_log_remembers(self):
+        from netbox_user_pin.models import PinEvent, PolicyException
+        admin_login(self.client, self.keeper)
+        url = reverse('plugins:netbox_user_pin:areas')
+        self.assertIn('exception-add', self.client.get(url).content.decode())
+        response = self.client.post(url, {'action': 'exception-add', 'user': self.su.pk, 'note': 'a test',
+                                          'expires': ''})
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(PolicyException.objects.filter(user=self.su, note='a test').exists())
+        self.assertTrue(PinEvent.objects.filter(detail__startswith='EXCEPTION added for su').exists())
+        self.assertIn('a test', self.client.get(url).content.decode())  # the list is always visible
+        self.client.post(url, {'action': 'exception-remove', 'pk': self.su.pk})
+        self.assertFalse(PolicyException.objects.filter(user=self.su).exists())
+        self.assertTrue(PinEvent.objects.filter(detail__startswith='EXCEPTION removed for su').exists())
+        self.client.logout()
+        admin_login(self.client, self.owner1)  # an owner is no keeper
+        self.assertEqual(self.client.post(url, {'action': 'exception-add', 'user': self.su.pk}).status_code, 403)
+        self.assertFalse(PolicyException.objects.filter(user=self.su).exists())
+
+    def test_the_exception_user_is_not_in_the_visibility_b(self):
+        areas.set_visibility(self.keeper, 'hidden', False, False)
+        stranger = User.objects.create_user('stranger9', 's9@example.com', is_superuser=True)
+        self.assertTrue(areas.sees_nothing(self.armed(stranger)))
+        areas.add_exception(stranger, self.keeper)
+        stranger = self.armed(stranger)
+        self.assertFalse(areas.sees_nothing(stranger))
+        self.assertFalse(area_guard._hides_menu_for(stranger))

@@ -37,7 +37,7 @@ from django.utils.translation import gettext as _
 
 from . import roles, service
 from .models import (
-    AreaFieldMode, AreaFieldRule, AreaGrant, AreaOwner, AreaProfile, AreaRequest, AreaRequestStatus, PinEventAction, PolicyKeeper, ProtectedArea,
+    AreaFieldMode, AreaFieldRule, AreaGrant, AreaOwner, AreaProfile, AreaRequest, AreaRequestStatus, PinEventAction, PolicyException, PolicyKeeper, ProtectedArea,
 )
 
 logger = logging.getLogger('netbox_user_pin')
@@ -55,7 +55,7 @@ CACHE_SECONDS = 5
 EVENT_TYPE = 'netbox_user_pin_area_request'
 
 _registry = {}
-_cache = {'at': 0.0, 'areas': None, 'deny': False, 'keepers': frozenset(), 'hide': False, 'requests': True, 'tokens': False}
+_cache = {'at': 0.0, 'areas': None, 'deny': False, 'keepers': frozenset(), 'hide': False, 'requests': True, 'tokens': False, 'exempt': frozenset()}
 # Never refused by the default deny: technical data NetBox needs to draw its forms. Nothing else - the user may do what
 # a group allows him, and change his password (a view without objects, never refused).
 DEFAULT_DENY_EXEMPT = frozenset({'core.objecttype'})
@@ -69,7 +69,7 @@ POINTING_AT_OBJECTS = {'core.objectchange': 'changed_object_type', 'extras.journ
 def unseen_objects(user, app_label, model):
     """A ``Q`` of the rows (change log, journal, attachments) that belong to objects the user may not view, or None."""
     field = POINTING_AT_OBJECTS.get(f'{app_label}.{model}')
-    if not field or not active_areas():
+    if not field or not active_areas() or is_exempt(user):
         return None
     hidden = Q()
     from . import fieldrules
@@ -159,6 +159,8 @@ def _refresh():
         _cache['requests'] = bool(_settings.allow_requests)
         _cache['tokens'] = bool(_settings.allow_own_tokens)
         _cache['keepers'] = keepers
+        _cache['exempt'] = frozenset(PolicyException.objects.filter(
+            Q(expires__isnull=True) | Q(expires__gt=timezone.now()), user__is_active=True).values_list('user_id', flat=True))
     except DatabaseError:
         logger.exception('PIN: the keepers cannot be read, the last known state stays')
     _cache['at'] = time.monotonic()
@@ -181,7 +183,7 @@ def hides_denied(area=None):
 def own_rows_only(user, app_label, model):
     """The field narrowing the rows to the user's own ones (the API keys), or None."""
     if f'{app_label}.{model}' == 'users.token' and own_tokens_allowed() and default_deny_active() \
-            and not is_keeper(user):
+            and not is_keeper(user) and not is_exempt(user):
         return 'user'
     return None
 
@@ -190,6 +192,12 @@ def requests_allowed():
     """May the users ask for access (a page and a button for it)?"""
     active_areas()
     return bool(_cache['requests'])
+
+
+def is_exempt(user):
+    """A user for whom the protection does not apply (a keeper set an exception): NetBox's own permissions rule."""
+    active_areas()
+    return bool(getattr(user, 'is_authenticated', False) and user.pk in _cache['exempt'])
 
 
 def own_tokens_allowed():
@@ -205,7 +213,7 @@ def sees_nothing(user):
     """
     if not (getattr(user, 'is_authenticated', False) and default_deny_active() and hides_denied()):
         return False
-    if is_keeper(user) or administers_any(user):
+    if is_keeper(user) or is_exempt(user) or administers_any(user):
         return False
     return not AreaGrant.objects.filter(
         Q(expires__isnull=True) | Q(expires__gt=timezone.now()), user=user, revoked__isnull=True,
@@ -229,7 +237,7 @@ def is_keeper(user):
 
 def default_deny_blocks(user, app_label, model, package=None):
     """Is this object type refused by "deny everything not allowed" (it is in no active area)?"""
-    if not default_deny_active() or app_label in NEVER or package in NEVER:
+    if not default_deny_active() or app_label in NEVER or package in NEVER or is_exempt(user):
         return False
     if f'{app_label}.{model}' in DEFAULT_DENY_EXEMPT:
         return False
@@ -321,7 +329,7 @@ def rights_of(user, area, target=None):
 def can(user, area, right='view', target=None):
     """May the user use ``right`` in the area? Areas that do not protect (inactive / unknown key) allow."""
     area = get_area(area)
-    if area is None or area not in active_areas():
+    if area is None or area not in active_areas() or is_exempt(user):
         return True
     return right in _memo_rights(user, area, target)
 
@@ -817,7 +825,7 @@ def check_perm(user, perm):
     holds no key at all still sees the door (menu item, tab): ``True`` here, and the guard refuses the entry.
     """
     app_label, _dot, codename = perm.partition('.')
-    if not codename:
+    if not codename or is_exempt(user):
         return None
     active_areas()
     action, _underscore, model = codename.partition('_')
@@ -1581,6 +1589,52 @@ def remove_keeper(user, actor, request=None):
     keeper.delete()
     service.log_event(PinEventAction.KEEPER_REMOVED, user=user, actor=actor, request=request)
     clear_cache()
+
+
+def exceptions():
+    """Every exception (the active ones and the expired ones, so that they can be seen and cleaned)."""
+    return list(PolicyException.objects.select_related('user'))
+
+
+def add_exception(user, actor, expires=None, note='', request=None):
+    """A keeper takes the protection off a user: he works with the permissions of NetBox until it is taken away."""
+    if not is_keeper(actor):
+        raise PermissionDenied
+    if not user.is_active:
+        raise ValidationError(_('The account is not active.'))
+    if is_keeper(user):
+        raise ValidationError(_('A protection keeper has no need of an exception.'))
+    if expires is not None and expires <= timezone.now():
+        raise ValidationError(_('The end of the exception must be in the future.'))
+    exception, created = PolicyException.objects.update_or_create(
+        user=user, defaults={'expires': expires, 'note': (note or '').strip()[:200],
+                             'added_by_name': actor.username, 'since': timezone.now()})
+    service.log_event(PinEventAction.SETTINGS_CHANGED, user=user, actor=actor, request=request,
+                      detail=f'EXCEPTION {"added" if created else "changed"} for {user.username}: '
+                             f'{"until " + expires.isoformat() if expires else "no end"}'
+                             f'{" - " + exception.note if exception.note else ""}')
+    for keeper in keepers():
+        if keeper.pk != actor.pk:
+            service.send_user_mail(keeper, _('Protection exception: %(user)s') % {'user': user.username}, _(
+                '%(actor)s took the PIN protection off %(user)s (%(end)s). He works with the permissions of NetBox '
+                'until the exception is taken away.') % {
+                    'actor': actor.username, 'user': user.username,
+                    'end': (_('until %(when)s') % {'when': timezone.localtime(expires).strftime('%Y-%m-%d %H:%M')})
+                    if expires else _('no end')}, request=request)
+    clear_cache()
+    return exception
+
+
+def remove_exception(user, actor, request=None):
+    """The protection applies to the user again, with the groups and accesses he had."""
+    if not is_keeper(actor):
+        raise PermissionDenied
+    removed = PolicyException.objects.filter(user=user).delete()[0]
+    if removed:
+        service.log_event(PinEventAction.SETTINGS_CHANGED, user=user, actor=actor, request=request,
+                          detail=f'EXCEPTION removed for {user.username}')
+    clear_cache()
+    return bool(removed)
 
 
 def set_visibility(actor, mode, allow_requests, allow_own_tokens, request=None):

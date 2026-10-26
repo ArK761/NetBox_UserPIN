@@ -184,7 +184,7 @@ def choice_set_ids(user):
 def hidden_by_type(user):
     """{'app.model': {field names}}: the fields hidden from the user, for every protected object type."""
     result = {}
-    if not getattr(user, 'is_authenticated', False):
+    if not getattr(user, 'is_authenticated', False) or areas.is_exempt(user):
         return result
     for area in areas.active_areas():
         for target in areas.targets_of(area):
@@ -205,7 +205,8 @@ def current_policy(app_label, model):
     except Exception:
         return None
     user = getattr(request, 'user', None)
-    if request is None or not getattr(user, 'is_authenticated', False) or not areas.active_areas():
+    if request is None or not getattr(user, 'is_authenticated', False) or not areas.active_areas() \
+            or areas.is_exempt(user):
         return None
     area = areas.area_for(app_label, model, package=app_label)
     if area is None:

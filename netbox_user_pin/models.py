@@ -933,6 +933,31 @@ class PolicyKeeper(models.Model):
         return str(self.user)
 
 
+class PolicyException(models.Model):
+    """
+    A user for whom the protection does not apply: he works with the permissions NetBox gives him. The groups, the
+    accesses and the roles he has are left as they are (the exception only lies over them): when it is taken away or
+    expires, they apply again. Only a protection keeper sets it.
+    """
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='policy_exception')
+    since = models.DateTimeField(default=timezone.now)
+    expires = models.DateTimeField(null=True, blank=True)  # None: until it is taken away
+    added_by_name = models.CharField(max_length=150, blank=True)
+    note = models.CharField(max_length=200, blank=True)
+
+    class Meta:
+        verbose_name = _('protection exception')
+        verbose_name_plural = _('protection exceptions')
+        ordering = ('user__username',)
+
+    def __str__(self):
+        return str(self.user)
+
+    @property
+    def is_active(self):
+        return self.expires is None or self.expires > timezone.now()
+
+
 class AreaFieldMode(models.TextChoices):
     DEFAULT = 'default', _('By rights')  # no mode of its own: the rights decide; the rule only carries its settings
     HIDDEN = 'hidden', _('Hidden')

@@ -27,6 +27,32 @@
     {% endif %}
   </div>
 </div>
+{% if is_keeper %}
+<div class="card mt-3">
+  <h2 class="card-header"><i class="mdi mdi-account-key"></i> {% trans "Exceptions" %}</h2>
+  <div class="card-body">
+    <p class="text-secondary">{% trans "A user with an exception is not bound by the protection: he works with the permissions NetBox gives him. His groups, accesses and roles stay as they are and apply again when the exception is taken away or ends." %}</p>
+    <table class="table table-sm align-middle">
+      <tbody>
+        {% for e in exceptions %}
+        <tr><td><strong>{{ e.user.username }}</strong>{% if e.note %}<div class="small text-secondary">{{ e.note }}</div>{% endif %}</td>
+          <td class="small">{% trans "since" %} {{ e.since|date:"Y-m-d H:i" }} · {{ e.added_by_name }}</td>
+          <td>{% if e.expires %}{% if e.is_active %}{% blocktrans with when=e.expires|date:"Y-m-d H:i" %}until {{ when }}{% endblocktrans %}{% else %}<span class="badge text-bg-secondary">{% trans "expired" %}</span> {{ e.expires|date:"Y-m-d H:i" }}{% endif %}{% else %}{% trans "no end" %}{% endif %}</td>
+          <td class="text-end"><form method="post" class="d-inline">{% csrf_token %}<input type="hidden" name="action" value="exception-remove"><input type="hidden" name="pk" value="{{ e.user.pk }}"><button class="btn btn-sm btn-outline-danger" type="submit">{% trans "Take away" %}</button></form></td></tr>
+        {% empty %}<tr><td class="text-secondary">{% trans "No exceptions." %}</td></tr>{% endfor %}
+      </tbody>
+    </table>
+    <form method="post" class="d-flex flex-wrap gap-2 align-items-end">{% csrf_token %}<input type="hidden" name="action" value="exception-add">
+      <div><label class="form-label small mb-0">{% trans "User" %}</label>
+        <select name="user" class="form-select form-select-sm" required style="min-width: 16rem"><option value="">{% trans "— choose a user —" %}</option>{% for pk, label in exception_users %}<option value="{{ pk }}">{{ label }}</option>{% endfor %}</select></div>
+      <div><label class="form-label small mb-0">{% trans "Until (optional)" %}</label><input type="datetime-local" name="expires" class="form-control form-control-sm"></div>
+      <div><label class="form-label small mb-0">{% trans "Why (optional)" %}</label><input type="text" name="note" maxlength="200" class="form-control form-control-sm" style="min-width: 16rem"></div>
+      <button class="btn btn-primary btn-sm" type="submit">{% trans "Set the exception" %}</button>
+    </form>
+    <div class="form-text text-danger mt-2">{% trans "A superuser with an exception sees everything without the PIN. The other keepers are told by e-mail and the audit log records it." %}</div>
+  </div>
+</div>
+{% endif %}
 {% if can_keepers %}
 <div class="card mt-3">
   <h2 class="card-header"><i class="mdi mdi-eye-off-outline"></i> {% trans "What the users see" %}</h2>
