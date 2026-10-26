@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-29 05:52+0000\n"
+"POT-Creation-Date: 2026-10-26 09:30+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -2017,6 +2017,46 @@ msgstr "Vaše dvojfaktorové overenie bolo resetované"
 #, python-brace-format
 msgid "Set it up again under User PIN > My PIN (reset started by {by})."
 msgstr "Nastavte ho znova v User PIN > Môj PIN (reset spustil {by})."
+
+#: template_content.py:48
+#| msgid "First set up"
+msgid "set up"
+msgstr "nastaviť"
+
+#: template_content.py:48
+#| msgid "No PIN yet"
+msgid "You have no PIN yet."
+msgstr "Zatiaľ nemáte PIN."
+
+#: template_content.py:50
+#| msgid "Your PIN was suspended"
+msgid "Your PIN is suspended."
+msgstr "Váš PIN je pozastavený."
+
+#: template_content.py:52 template_content.py:58
+#| msgid "Change"
+msgid "change"
+msgstr "zmeniť"
+
+#: template_content.py:52
+#| msgid "Your PIN has been changed."
+msgid "Your PIN must be changed."
+msgstr "PIN musíte zmeniť."
+
+#: template_content.py:58
+#| msgid "Your PIN has been set."
+msgid "Your PIN has expired."
+msgstr "Platnosť PINu vypršala."
+
+#: template_content.py:59
+#, python-brace-format
+msgid "PIN valid for {days} more days (until {date})."
+msgstr "PIN platí ešte {days} dní (do {date})."
+
+#: template_content.py:62
+#, python-brace-format
+msgid "{days} d"
+msgstr "{days} d"
 
 #: templates/netbox_user_pin/approval.html:3
 #, python-format

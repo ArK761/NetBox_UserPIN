@@ -1,6 +1,6 @@
 {% extends 'generic/_base.html' %}
 {% load i18n %}
-{% block title %}<i class="mdi mdi-shield-refresh"></i> {% if kind == 'pin' %}{% trans "Confirm PIN reset" %}{% else %}{% trans "Confirm 2FA reset" %}{% endif %}{% endblock %}
+{% block title %}{% if kind == 'pin' %}{% trans "Confirm PIN reset" %}{% else %}{% trans "Confirm 2FA reset" %}{% endif %}{% endblock %}
 {% block content %}
 <div class="row"><div class="col-12 col-md-8 col-lg-5">
   <div class="alert alert-info"><div>

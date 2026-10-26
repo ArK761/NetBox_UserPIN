@@ -1,6 +1,6 @@
 {% extends 'generic/_base.html' %}
 {% load form_helpers i18n %}
-{% block title %}<i class="mdi mdi-account-multiple-check"></i> {% blocktrans with pk=req.pk %}Four-eyes request #{{ pk }}{% endblocktrans %}{% endblock %}
+{% block title %}{% blocktrans with pk=req.pk %}Four-eyes request #{{ pk }}{% endblocktrans %}{% endblock %}
 {% block content %}
 <div class="row">
   <div class="col-12 col-lg-7">

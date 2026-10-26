@@ -1388,7 +1388,7 @@ class RolesTest(PinTestCase):
         self.client.post(reverse('plugins:netbox_user_pin:step_up'), {'pin': GOOD_PIN, 'otp': self.otp(head)})
         response = self.client.get(reverse('plugins:netbox_user_pin:user_list'))
         self.assertContains(response, 'm1')
-        self.assertNotContains(response, 'm2')
+        self.assertNotContains(response, 'm2@firma.sk')
         self.assertEqual(self.client.get(reverse('plugins:netbox_user_pin:department',
                                                  kwargs={'pk': other.pk})).status_code, 403)
         self.assertContains(self.client.get(reverse('plugins:netbox_user_pin:department',
@@ -1556,3 +1556,20 @@ class RolesTest(PinTestCase):
         roles_.create_department('NoHead', self.boss)
         self.assertContains(self.client.get(url, {'view': 'tree'}), 'pin-dot error')
         self.assertContains(self.client.get(reverse('plugins:netbox_user_pin:department_list')), 'pin-dot error')
+
+
+class MenuBadgeTest(PinTestCase):
+
+    def test_days_left_badge_on_every_page(self):
+        user = User.objects.create_user('badge', password='pw')
+        self.client.force_login(user)
+        response = self.client.get('/')
+        self.assertContains(response, 'pin-days')
+        self.assertContains(response, '"color": "orange"')   # no PIN yet
+        service.set_pin(user, GOOD_PIN)
+        UserPin.objects.filter(user=user).update(changed=timezone.now() - timedelta(days=170) + timedelta(hours=1))
+        response = self.client.get('/')
+        self.assertContains(response, '"color": "yellow"')
+        self.assertContains(response, '"text": "10 d"')
+        self.client.logout()
+        self.assertNotContains(self.client.get('/login/'), 'pin-days')

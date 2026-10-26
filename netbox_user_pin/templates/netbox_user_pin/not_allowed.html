@@ -1,6 +1,6 @@
 {% extends 'generic/_base.html' %}
 {% load i18n %}
-{% block title %}<i class="mdi mdi-lock"></i> {% if suspended %}{% trans "PIN suspended" %}{% else %}{% trans "PIN not permitted" %}{% endif %}{% endblock %}
+{% block title %}{% if suspended %}{% trans "PIN suspended" %}{% else %}{% trans "PIN not permitted" %}{% endif %}{% endblock %}
 {% block content %}
 <div class="row"><div class="col-12 col-md-8 col-lg-5">
   <div class="alert alert-warning"><div>
