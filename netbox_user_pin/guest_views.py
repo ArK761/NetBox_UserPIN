@@ -44,6 +44,9 @@ class GuestLoginView(View):
     def get(self, request, token):
         guest = guests.find(token)
         if guest is None:
+            disabled = guests.find_disabled(token)
+            if disabled is not None:
+                return render(request, T + 'invalid.html', {'error': guests.disabled_message(disabled)}, status=403)
             return render(request, T + 'invalid.html', status=404)
         if request.user.is_authenticated and request.session.get(guests.SESSION_KEY, {}).get('id') == guest.pk:
             return redirect('plugins:netbox_user_pin:guest_home')
@@ -52,6 +55,9 @@ class GuestLoginView(View):
     def post(self, request, token):
         guest = guests.find(token)
         if guest is None:
+            disabled = guests.find_disabled(token)
+            if disabled is not None:
+                return render(request, T + 'invalid.html', {'error': guests.disabled_message(disabled)}, status=403)
             return render(request, T + 'invalid.html', status=404)
         link = guests.link_path(token)
         if not guests.has_pin(guest):  # the person chooses the first PIN
@@ -89,6 +95,8 @@ class GuestPinLoginView(View):
 
     def post(self, request):
         status, guest = guests.pin_only_login(request, request.POST.get('pin', ''))
+        if status == 'disabled' and guest is not None:
+            return self._page(request, error=guests.disabled_message(guest))
         if status == 'ok':
             guests.start_session(request, guest, guests.login_path())
             return redirect('plugins:netbox_user_pin:guest_home')

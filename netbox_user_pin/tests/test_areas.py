@@ -2292,7 +2292,9 @@ class GuestAccessTest(AreaTestCase):
         self.guests.revoke(PinGuest.objects.get(pk=self.guest.pk), self.keeper)
         self.assertEqual(self.guests.check_pin(PinGuest.objects.get(pk=self.guest.pk), 'Secret-pin-1'), 'disabled')
         __import__('django.core.cache', fromlist=['cache']).cache.clear()
-        self.assertContains(self.client.post('/plugins/user-pin/pin/', {'pin': 'Secret-pin-1'}), 'disabled')
+        page = self.client.post('/plugins/user-pin/pin/', {'pin': 'Secret-pin-1'})
+        self.assertContains(page, 'temporarily disabled by the administrator keepg')
+        self.assertContains(self.client.get(self.url), 'temporarily disabled by the administrator keepg', status_code=403)
         self.guests.restore(PinGuest.objects.get(pk=self.guest.pk), self.keeper)
         # forced change of a signed-in person: no current PIN, and an e-mail
         self.sign_in()
@@ -2383,7 +2385,7 @@ class GuestAccessTest(AreaTestCase):
         self.assertEqual(client.get('/tenancy/tenants/').status_code, 200)
         self.guests.revoke(PinGuest.objects.get(pk=self.guest.pk), self.keeper)
         self.assertNotEqual(client.get('/tenancy/tenants/').status_code, 200)
-        self.assertContains(self.client.__class__().get(self.url), 'not valid', status_code=404)
+        self.assertContains(self.client.__class__().get(self.url), 'temporarily disabled', status_code=403)
 
     def test_signing_out_returns_to_the_pin_page_even_from_a_browser_with_another_user(self):
         self.client.force_login(self.master)  # the browser of an administrator

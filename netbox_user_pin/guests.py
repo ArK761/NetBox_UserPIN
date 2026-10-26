@@ -69,6 +69,27 @@ def link_path(token):
     return reverse('plugins:netbox_user_pin:guest_login', args=[token])
 
 
+def find_disabled(token):
+    """The access of a link when it is disabled by an administrator (to say so instead of 'invalid link')."""
+    if not token:
+        return None
+    guest = PinGuest.objects.select_related('user').filter(token_hash=_hash(token)).first()
+    return guest if guest is not None and guest.revoked else None
+
+
+def disabled_by(guest):
+    """(username of the administrator, time) of the last disabling, from the audit log."""
+    from .models import PinEvent
+    event = PinEvent.objects.filter(user=guest.user, action=PinEventAction.GUEST_REVOKED).order_by('-time').first()
+    return (event.actor_username or '?', event.time) if event else ('?', guest.revoked)
+
+
+def disabled_message(guest):
+    who, when = disabled_by(guest)
+    return _('Your account is temporarily disabled by the administrator %(admin)s (since %(time)s). Contact them.') % {
+        'admin': who, 'time': timezone.localtime(when).strftime('%d.%m.%Y %H:%M') if when else ''}
+
+
 def find(token):
     """The usable access of a link, or None."""
     if not token:
@@ -721,7 +742,7 @@ def pin_only_login(request, pin):
         guest = PinGuest.objects.select_related('user').filter(pin_index__in=crypto.pin_lookups(pin)).first()
     if guest is not None and _pin_matches(guest, pin):
         if guest.revoked:
-            return 'disabled', None
+            return 'disabled', guest  # the right PIN of a disabled account: say who disabled it
         if not guest.is_active or not guest.user.is_active or not ip_allowed(guest, request):
             return 'blocked', None
         if guest.blocked:
