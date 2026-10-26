@@ -2255,7 +2255,8 @@ class GuestAccessTest(AreaTestCase):
         self.sign_in()
         page = self.client.get('/plugins/user-pin/guest/')
         self.assertContains(page, 'You are signed in as Jan Novak')
-        self.assertContains(page, 'more days')
+        self.assertContains(page, 'days and')
+        self.assertContains(page, 'unlimited')
         self.assertContains(page, 'Continue')
         self.assertContains(page, 'read, add, edit')
         UserPin.objects.filter(user=self.guest.user).update(changed=timezone.now() - timedelta(days=400))
@@ -2271,17 +2272,37 @@ class GuestAccessTest(AreaTestCase):
         self.guests.force_change(self.guest, self.keeper)  # like 'must change password at next logon'
         self.assertTrue(self.guests.must_change(self.guest))
 
-    def test_alias_and_description(self):
-        self.assertEqual(self.guest.user.username, 'pin.jan-novak')
-        other, _t = self.guests.create('Jan Novak', 'jan2@example.com', self.group, self.keeper)
-        self.assertEqual(other.user.username, 'pin.jan-novak-2')
-        with self.assertRaises(ValidationError):
-            self.guests.set_alias(other, self.keeper, 'pin.jan-novak')
-        with self.assertRaises(ValidationError):
-            self.guests.set_alias(other, self.keeper, 'X Y')
-        self.guests.set_alias(other, self.keeper, 'pin.jn2', 'Technik XY')
-        other.user.refresh_from_db()
-        self.assertEqual((other.user.username, other.user.last_name), ('pin.jn2', 'Technik XY'))
+    def test_account_id_alias_email_disable_language(self):
+        from django.core import mail
+        from netbox_user_pin.models import PinGuest
+        self.assertRegex(self.guest.user.username, r'^PinUser\d{4}$')
+        other, _t = self.guests.create('Eva', 'eva2@example.com', self.group, self.keeper, alias='Ja som',
+                                       pin_language='en', ui_language='en')
+        self.assertNotEqual(other.user.username, self.guest.user.username)
+        self.guests.set_alias(other, self.keeper, 'Ja som Eva', 'Technik XY')
+        other.refresh_from_db()
+        self.assertEqual(other.alias, 'Ja som Eva')
+        self.assertRegex(other.user.username, r'^PinUser\d{4}$')  # the alias never renames the account
+        self.assertEqual(other.user.config.get('locale.language'), 'en')
+        with self.assertRaises(ValidationError):  # an address of a NetBox user
+            self.guests.create('X', 'kg@example.com', self.group, self.keeper)
+        # disabled account
+        self.sign_in()
+        self.client.logout()
+        self.guests.revoke(PinGuest.objects.get(pk=self.guest.pk), self.keeper)
+        self.assertEqual(self.guests.check_pin(PinGuest.objects.get(pk=self.guest.pk), 'Secret-pin-1'), 'disabled')
+        __import__('django.core.cache', fromlist=['cache']).cache.clear()
+        self.assertContains(self.client.post('/plugins/user-pin/pin/', {'pin': 'Secret-pin-1'}), 'disabled')
+        self.guests.restore(PinGuest.objects.get(pk=self.guest.pk), self.keeper)
+        # forced change of a signed-in person: no current PIN, and an e-mail
+        self.sign_in()
+        with override_settings(EMAIL={'SERVER': 'localhost', 'FROM_EMAIL': 'netbox@example.com'}):
+            self.guests.force_change(PinGuest.objects.get(pk=self.guest.pk), self.keeper)
+        self.assertIn('new PIN', mail.outbox[-1].body)
+        page = self.client.get('/plugins/user-pin/guest/change/')
+        self.assertNotContains(page, 'name="current"')
+        self.client.post('/plugins/user-pin/guest/change/', {'pin': 'Fresh-pin-55', 'pin2': 'Fresh-pin-55'})
+        self.assertFalse(self.guests.must_change(PinGuest.objects.get(pk=self.guest.pk)))
 
     def test_two_part_address_and_admin_page(self):
         with self.assertRaises(ValidationError):

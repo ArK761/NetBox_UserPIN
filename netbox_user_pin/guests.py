@@ -19,6 +19,7 @@ from django.core.validators import validate_email
 from django.db import transaction
 from django.urls import reverse
 from django.utils import timezone
+from django.utils import translation
 from django.utils.translation import gettext as _
 
 from . import areas, crypto, service
@@ -146,7 +147,10 @@ def _log(action, guest, actor=None, request=None, detail=''):
 
 
 def _mail(guest, subject, body):
-    """The mail goes to the person's own address, whatever the allowed domains say (the keeper wrote it)."""
+    """
+    The mail goes to the person's own address, whatever the allowed domains say (the keeper wrote it). Callers that
+    want the person's language build the texts inside ``translation.override(language_of(guest))``.
+    """
     settings = service.get_settings()
     if not service.email_configured(settings):
         return False
@@ -158,6 +162,13 @@ def _mail(guest, subject, body):
         return False
     service.log_event(PinEventAction.MAIL_SENT, user=guest.user, scope='guest', detail=subject)
     return True
+
+
+def _say(guest, make):
+    """E-mail the person in their own language: ``make`` returns (subject, body) built under that language."""
+    with translation.override(language_of(guest)):
+        subject, body = make()
+    return _mail(guest, subject, body)
 
 
 def _absolute(request, path):
@@ -180,52 +191,77 @@ def _join(group, user, actor, request):
     return grant
 
 
-ALIAS_RE = r'[a-z0-9][a-z0-9._-]{2,29}'
+LANGUAGES = (('', 'default'), ('sk', 'Slovenčina'), ('en', 'English'))
 
 
-def _free_alias(alias, exclude_user=None):
-    qs = get_user_model().objects.filter(username__iexact=alias)
-    if exclude_user is not None:
-        qs = qs.exclude(pk=exclude_user.pk)
-    return not qs.exists()
-
-
-def clean_alias(alias, name='', exclude_user=None):
-    """The alias is the username of the technical account (seen in the changelog, groups ...). Empty = from the name."""
+def next_account_id():
+    """The stable username of a new PIN-only account: PinUser0001, PinUser0002 ... (never reused, never renamed)."""
     import re
-    from django.utils.text import slugify
-    alias = (alias or '').strip().lower()
-    if not alias:
-        base = 'pin.' + (slugify(name)[:24] or secrets.token_hex(3))
-        alias, n = base, 2
-        while not _free_alias(alias, exclude_user):
-            alias, n = f'{base}-{n}', n + 1
-        return alias
-    if not re.fullmatch(ALIAS_RE, alias):
-        raise ValidationError(_('Alias: 3 to 30 characters – small letters, digits, dot, dash or underscore.'))
-    if not _free_alias(alias, exclude_user):
-        raise ValidationError(_('The alias %(alias)s is already used.') % {'alias': alias})
-    return alias
+    numbers = [int(m.group(1)) for m in (re.fullmatch(r'PinUser(\d+)', u) for u in
+                                         get_user_model().objects.filter(username__startswith='PinUser')
+                                         .values_list('username', flat=True)) if m]
+    return f'PinUser{max(numbers, default=0) + 1:04d}'
+
+
+def language_of(guest):
+    """Language of the PIN pages and e-mails for this person."""
+    return (guest.pin_language if guest is not None and guest.pin_language else None) \
+        or service.get_settings().language or 'en'
+
+
+def _set_ui_language(guest):
+    """The NetBox interface language of the account (its own preference, like any user)."""
+    try:
+        config = guest.user.config
+        if guest.ui_language:
+            config.set('locale.language', guest.ui_language, commit=True)
+        else:
+            config.clear('locale.language', commit=True)
+    except Exception as exc:  # noqa: BLE001 - a missing preference must not break the change
+        logger.warning('Cannot set the language of %s: %s', guest.user, exc)
+
+
+def set_languages(guest, actor, pin_language=None, ui_language=None, request=None):
+    """Languages of one person: PIN pages / e-mails, and the NetBox interface. ``actor=None`` = the person."""
+    if actor is not None and not _may_manage(actor):
+        raise PermissionDenied
+    valid = {code for code, _label in LANGUAGES}
+    fields = []
+    if pin_language is not None and pin_language in valid:
+        guest.pin_language = pin_language
+        fields.append('pin_language')
+    if ui_language is not None and ui_language in valid:
+        guest.ui_language = ui_language
+        fields.append('ui_language')
+    if fields:
+        guest.save(update_fields=fields)
+        if 'ui_language' in fields:
+            _set_ui_language(guest)
+        _log(PinEventAction.GUEST_RULES, guest, actor or guest.user, request,
+             f'languages: PIN {guest.pin_language or "default"}, NetBox {guest.ui_language or "default"}')
 
 
 def set_alias(guest, actor, alias, description='', request=None):
-    """Rename the technical account (older changelog entries keep the old name) and set its description."""
+    """Alias and description are texts only: the account keeps its ID (username), nothing in NetBox is renamed."""
     if not _may_manage(actor):
         raise PermissionDenied
-    alias = clean_alias(alias, guest.name, exclude_user=guest.user)
-    old = guest.user.username
-    guest.user.username = alias
-    guest.user.last_name = (description or '').strip()[:150]
-    guest.user.save(update_fields=['username', 'last_name'])
-    guest.description = guest.user.last_name
-    guest.save(update_fields=['description'])
-    _log(PinEventAction.GUEST_RULES, guest, actor, request, f'alias {old} -> {alias}; description: {guest.description}')
-    areas.clear_cache()
-    return alias
+    guest.alias = (alias or '').strip()[:100]
+    guest.description = (description or '').strip()[:150]
+    guest.save(update_fields=['alias', 'description'])
+    _log(PinEventAction.GUEST_RULES, guest, actor, request, f'alias: {guest.alias}; description: {guest.description}')
+    return guest.alias
+
+
+def display(guest):
+    """'PinUser0001 – alias (name)' for lists."""
+    parts = [guest.user.username]
+    if guest.alias:
+        parts.append(guest.alias)
+    return ' – '.join(parts)
 
 
 def create(name, email, group, actor, expires=None, ips='', idle=30, hours=8, note='', request=None, alias='',
-           description=''):
+           description='', pin_language='', ui_language=''):
     """
     Create the access: the technical user, its group and the personal link. Returns ``(guest, token)``; the token is
     shown only now (and e-mailed by ``invite``).
@@ -242,6 +278,10 @@ def create(name, email, group, actor, expires=None, ips='', idle=30, hours=8, no
         raise ValidationError(_('Write a valid e-mail address.'))
     if PinGuest.objects.filter(email__iexact=email).exists():
         raise ValidationError(_('An access with this e-mail address exists.'))
+    owner = get_user_model().objects.filter(email__iexact=email).first()
+    if owner is not None:
+        raise ValidationError(_('The e-mail address %(email)s belongs to the NetBox user %(user)s. A PIN-only access '
+                                'needs an address nobody in NetBox uses.') % {'email': email, 'user': owner.username})
     if group.private or not group.target:
         raise ValidationError(_('Choose a group.'))
     if expires is not None and expires <= timezone.now():
@@ -250,12 +290,15 @@ def create(name, email, group, actor, expires=None, ips='', idle=30, hours=8, no
     if not 5 <= idle <= 240 or not 1 <= hours <= 24:
         raise ValidationError(_('Idle time is 5 to 240 minutes, the whole session 1 to 24 hours.'))
     ips = _parse_ips(ips)
-    alias = clean_alias(alias, name)
+    alias = (alias or '').strip()[:100]
     description = (description or '').strip()[:150]
+    valid = {code for code, _label in LANGUAGES}
+    pin_language = pin_language if pin_language in valid else ''
+    ui_language = ui_language if ui_language in valid else ''
     token = _new_token()
     with transaction.atomic():
         user_model = get_user_model()
-        user = user_model(username=alias, first_name=name[:150], last_name=description, email=email,
+        user = user_model(username=next_account_id(), first_name=name[:150], email=email,
                           is_active=True, is_superuser=False)
         user.set_unusable_password()
         user.save()
@@ -263,10 +306,12 @@ def create(name, email, group, actor, expires=None, ips='', idle=30, hours=8, no
         guest = PinGuest.objects.create(
             user=user, name=name, email=email, token_hash=_hash(token), expires=expires, allowed_ips=ips,
             idle_minutes=idle, max_hours=hours, note=(note or '').strip()[:200], created_by_name=actor.username,
-            description=description,
+            description=description, alias=alias, pin_language=pin_language, ui_language=ui_language,
             invite_expires=timezone.now() + timedelta(days=INVITE_DAYS))
         _join(group, user, actor, request)
     _log(PinEventAction.GUEST_CREATED, guest, actor, request, f'{group.area.name} / {group.name}')
+    if ui_language:
+        _set_ui_language(guest)
     return guest, token
 
 
@@ -284,14 +329,14 @@ def invite(guest, actor, request=None):
         guest.invite_expires = now + timedelta(days=INVITE_DAYS)
     guest.save(update_fields=['token_hash', 'invite_expires'])
     link = _absolute(request, link_path(token))
-    sent = _mail(guest, _('Your access to NetBox'), _(
+    sent = _say(guest, lambda: (_('Your access to NetBox'), _(
         'Hello %(name)s,\n\nyou were given access to NetBox through a PIN.\n\nYour personal link:\n%(link)s\n\n'
         '%(first)s\nKeep the link to yourself: it works only together with your PIN.') % {
             'name': guest.name, 'link': link,
             'first': (_('Open it and choose your own PIN within %(days)d days.') % {'days': INVITE_DAYS}
                       if guest.invite_expires and not has_pin(guest) else _('Open it and enter your PIN.'))
             + '\n' + _('Afterwards save this page and sign in there with your PIN only: %(page)s') % {
-                'page': _absolute(request, login_path())}})
+                'page': _absolute(request, login_path())}}))
     _log(PinEventAction.GUEST_INVITED, guest, actor, request, 'sent' if sent else 'not sent')
     return token, sent
 
@@ -352,9 +397,9 @@ def unblock(guest, actor, request=None):
     guest.failed, guest.retry_after, guest.blocked = 0, None, None
     guest.save(update_fields=['failed', 'retry_after', 'blocked'])
     _log(PinEventAction.GUEST_UNBLOCKED, guest, actor, request)
-    _mail(guest, _('Your NetBox access works again'), _(
+    _say(guest, lambda: (_('Your NetBox access works again'), _(
         'Hello %(name)s,\n\nthe administrator unblocked your access. You can sign in with your PIN again.') % {
-            'name': guest.name})
+            'name': guest.name}))
 
 
 def force_change(guest, actor, request=None):
@@ -363,6 +408,11 @@ def force_change(guest, actor, request=None):
         raise PermissionDenied
     UserPin.objects.filter(user=guest.user).exclude(pin_hash='').update(must_change=True)
     service.log_event(PinEventAction.FORCE_CHANGE, user=guest.user, actor=actor, request=request, scope='guest')
+    with translation.override(language_of(guest)):
+        _say(guest, lambda: (_('You must change your PIN'), _(
+            'Hello %(name)s,\n\nthe administrator %(admin)s asked you to choose a new PIN. If you are signed in, you '
+            'are asked for it right away; otherwise at your next sign-in.') % {
+                'name': guest.name, 'admin': actor.username}))
 
 
 def must_change(guest):
@@ -378,9 +428,9 @@ def _block(guest, request):
     guest.blocked = timezone.now()
     guest.save(update_fields=['blocked'])
     _log(PinEventAction.GUEST_BLOCKED, guest, request=request, detail=f'after {guest.failed} wrong PINs')
-    _mail(guest, _('Your NetBox access is blocked'), _(
+    _say(guest, lambda: (_('Your NetBox access is blocked'), _(
         'Hello %(name)s,\n\nafter %(n)d wrong PINs your access was blocked. Ask the administrator to unblock it or to '
-        'send you a link for a new PIN.') % {'name': guest.name, 'n': guest.failed})
+        'send you a link for a new PIN.') % {'name': guest.name, 'n': guest.failed}))
     for keeper in areas.keepers():
         service.send_user_mail(keeper, _('PIN-only access blocked: %(name)s') % {'name': guest.name}, _(
             'The PIN-only access of %(name)s (%(email)s) was blocked after %(n)d wrong PINs. Unblock it or send a '
@@ -442,6 +492,8 @@ def check_pin(guest, pin, request=None):
     ``'ok'``, ``'wrong'``, ``'pause'`` (do not even try), ``'nopin'``, ``'locked'`` (too many wrong PINs, only an
     administrator unblocks) or ``'blocked'`` (revoked / ended / other address). See ``rules()``.
     """
+    if guest.revoked:
+        return 'disabled'
     if not guest.is_active or not guest.user.is_active or not ip_allowed(guest, request):
         return 'blocked'
     if guest.blocked:
@@ -488,10 +540,10 @@ def request_reset(guest, request=None, actor=None):
     guest.reset_hash, guest.reset_expires, guest.reset_sent = _hash(token), now + timedelta(minutes=RESET_MINUTES), now
     guest.save(update_fields=['reset_hash', 'reset_expires', 'reset_sent'])
     link = _absolute(request, reverse('plugins:netbox_user_pin:guest_reset', args=[token]))
-    sent = _mail(guest, _('New PIN for your NetBox access'), _(
+    sent = _say(guest, lambda: (_('New PIN for your NetBox access'), _(
         'Hello %(name)s,\n\nyou asked for a new PIN. Open this link and choose it (valid %(minutes)d minutes, once):'
         '\n%(link)s\n\nIf it was not you, ignore this message.') % {
-            'name': guest.name, 'link': link, 'minutes': RESET_MINUTES})
+            'name': guest.name, 'link': link, 'minutes': RESET_MINUTES}))
     _log(PinEventAction.GUEST_RESET, guest, actor, request=request,
          detail=('sent by the administrator' if actor else 'requested') + ('' if sent else ' (not sent)'))
     return sent
@@ -665,6 +717,8 @@ def pin_only_login(request, pin):
     if pin and MIN_PIN_LENGTH <= len(pin) <= MAX_PIN_LENGTH:
         guest = PinGuest.objects.select_related('user').filter(pin_index__in=crypto.pin_lookups(pin)).first()
     if guest is not None and _pin_matches(guest, pin):
+        if guest.revoked:
+            return 'disabled', None
         if not guest.is_active or not guest.user.is_active or not ip_allowed(guest, request):
             return 'blocked', None
         if guest.blocked:

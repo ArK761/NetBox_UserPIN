@@ -45,6 +45,7 @@ urlpatterns = [
     path('guest/', guest_views.GuestHomeView.as_view(), name='guest_home'),
     path('guest/change/', guest_views.GuestChangeView.as_view(), name='guest_change'),
     path('guest/logout/', guest_views.GuestLogoutView.as_view(), name='guest_logout'),
+    path('guest/language/', guest_views.GuestLanguageView.as_view(), name='guest_language'),
     path('guest/ended/', guest_views.GuestEndedView.as_view(), name='guest_ended'),
     path('guest/reset/<str:token>/', guest_views.GuestResetView.as_view(), name='guest_reset'),
     path('guest/<str:token>/forgot/', guest_views.GuestForgotView.as_view(), name='guest_forgot'),

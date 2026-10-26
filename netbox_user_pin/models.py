@@ -1047,7 +1047,10 @@ class PinGuest(models.Model):
     reset_expires = models.DateTimeField(null=True, blank=True)
     reset_sent = models.DateTimeField(null=True, blank=True)
     note = models.CharField(max_length=200, blank=True)
-    description = models.CharField(max_length=150, blank=True)  # shown with the alias (= username) across NetBox
+    description = models.CharField(max_length=150, blank=True)  # e.g. technician of company XY
+    alias = models.CharField(max_length=100, blank=True)  # free text shown next to the account ID (PinUser0001)
+    pin_language = models.CharField(max_length=5, blank=True)  # language of the PIN pages / e-mails ('' = default)
+    ui_language = models.CharField(max_length=5, blank=True)  # language of the NetBox interface ('' = default)
     created_by_name = models.CharField(max_length=150, blank=True)
     created = models.DateTimeField(default=timezone.now)
 

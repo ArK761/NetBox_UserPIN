@@ -14,7 +14,7 @@ from . import areas, guests, service
 from .area_views import AreaViewMixin, _target_label
 from .models import PinGuest
 
-__all__ = ('GuestChangeView', 'GuestEndedView', 'GuestForgotView', 'GuestHomeView', 'GuestListView',
+__all__ = ('GuestChangeView', 'GuestEndedView', 'GuestForgotView', 'GuestHomeView', 'GuestLanguageView', 'GuestListView',
            'GuestLoginView', 'GuestLogoutView', 'GuestPinLoginView', 'GuestPinForgotView', 'GuestResetView')
 
 T = 'netbox_user_pin/guest_'
@@ -70,6 +70,7 @@ class GuestLoginView(View):
         guest.refresh_from_db()
         error = {'pause': _('Wait a moment before the next attempt.'),
                  'blocked': _('This access is not usable now (ended, revoked or from another address).'),
+                 'disabled': _('Your account is disabled (suspended). Contact the administrator.'),
                  'locked': _('Your access is blocked after too many wrong PINs. Ask the administrator to unblock it or to send you a link for a new PIN.'),
                  'nopin': _('Choose your PIN first.')}.get(status, _('The PIN is not correct.'))
         return self._page(request, guest, token, error=error, wrong=status == 'wrong')
@@ -93,6 +94,7 @@ class GuestPinLoginView(View):
             return redirect('plugins:netbox_user_pin:guest_home')
         error = {'pause': _('Wait a moment before the next attempt.'),
                  'blocked': _('This access is not usable now (ended, revoked or from another address).'),
+                 'disabled': _('Your account is disabled (suspended). Contact the administrator.'),
                  'locked': _('Your access is blocked after too many wrong PINs. Ask the administrator to unblock it or to send you a link for a new PIN.'),
                  }.get(status, _('The PIN is not correct.'))
         return self._page(request, error=error, wrong=status == 'wrong')
@@ -176,8 +178,10 @@ def _doors(user):
                 add = reverse(f'{app_label}:{model}_add')
             except NoReverseMatch:
                 add = None
+        ends = [d for d in (grant.expires, user.pin_guest.expires) if d]
         rows.append({'label': _target_label(profile.target), 'url': url, 'add': add, 'rights': profile.rights,
-                     'rights_text': _rights_text(profile.rights), 'group': profile.name, 'area': grant.area.name})
+                     'rights_text': _rights_text(profile.rights), 'group': profile.name, 'area': grant.area.name,
+                     'valid_until': min(ends) if ends else None})
     return rows
 
 
@@ -186,10 +190,14 @@ class GuestHomeView(GuestMixin, View):
         guest = request.user.pin_guest
         until = guests.pin_valid_until(guest)
         settings = service.get_settings()
-        days = (until - timezone.now()).days if until else None
+        left = (until - timezone.now()) if until else None
+        days = left.days if left else None
+        hours = left.seconds // 3600 if left else None
         return render(request, T + 'home.html', {
             'guest': guest, 'doors': _doors(request.user), 'left': guests.seconds_left(request, guest) // 60,
-            'pin_until': until, 'pin_days': days, 'pin_warn': days is not None and days <= settings.warn_days})
+            'pin_until': until, 'pin_days': days, 'pin_hours': hours,
+            'pin_warn': days is not None and days <= settings.warn_days, 'languages': guests.LANGUAGES[1:],
+            'pin_language': guests.language_of(guest)})
 
 
 class GuestChangeView(GuestMixin, View):
@@ -202,12 +210,13 @@ class GuestChangeView(GuestMixin, View):
 
     def post(self, request):
         guest = request.user.pin_guest
-        status = guests.check_pin(guest, request.POST.get('current', ''), request=request)
-        if status == 'locked':
-            guests.end_session(request)
-            return redirect(guests.return_url(guest))
-        if status != 'ok':
-            return self._page(request, error=_('The current PIN is not correct, or you must wait a moment.'))
+        if not guests.must_change(guest):  # a forced change of a signed-in person needs no current PIN
+            status = guests.check_pin(guest, request.POST.get('current', ''), request=request)
+            if status == 'locked':
+                guests.end_session(request)
+                return redirect(guests.return_url(guest))
+            if status != 'ok':
+                return self._page(request, error=_('The current PIN is not correct, or you must wait a moment.'))
         try:
             guests.set_pin(guest, _same(request), request=request)
         except ValidationError as exc:
@@ -216,6 +225,20 @@ class GuestChangeView(GuestMixin, View):
         guest = request.user.pin_guest
         link = guests.end_session(request)
         return redirect(guests.return_url(guest, link))
+
+
+class GuestLanguageView(GuestMixin, View):
+    """The person switches the language (PIN pages and the NetBox interface)."""
+
+    def post(self, request):
+        code = request.POST.get('language', '')
+        guest = request.user.pin_guest
+        guests.set_languages(guest, None, pin_language=code, ui_language=code, request=request)
+        response = redirect('plugins:netbox_user_pin:guest_home')
+        from django.conf import settings as django_settings
+        if code:
+            response.set_cookie(django_settings.LANGUAGE_COOKIE_NAME, code)
+        return response
 
 
 class GuestLogoutView(View):
@@ -256,7 +279,7 @@ class GuestListView(AreaViewMixin, View):
         rows = []
         for guest in PinGuest.objects.select_related('user'):
             if guest.revoked:
-                state = ('revoked', _('Revoked'))
+                state = ('revoked', _('Disabled'))
             elif guest.blocked:
                 state = ('blocked', _('Blocked (wrong PINs)'))
             elif guest.expires and guest.expires <= timezone.now():
@@ -278,7 +301,8 @@ class GuestListView(AreaViewMixin, View):
             'is_keeper': areas.is_keeper(request.user),
             'rows': rows, 'group_choices': self._groups(request.user), 'mail_ok': service.email_configured(),
             'min_length': guests.MIN_PIN_LENGTH, 'default_step': service.get_settings().guest_step_attempts,
-            'default_waits': service.get_settings().guest_waits, 'default_rules': guests.rules_text(), **extra})
+            'default_waits': service.get_settings().guest_waits, 'default_rules': guests.rules_text(),
+            'languages': guests.LANGUAGES[1:], **extra})
 
     def get(self, request):
         return self._render(request)
@@ -303,7 +327,8 @@ class GuestListView(AreaViewMixin, View):
                     expires=_time(request.POST.get('expires')), ips=request.POST.get('ips', ''),
                     idle=request.POST.get('idle'), hours=request.POST.get('hours'), note=request.POST.get('note', ''),
                     request=request, alias=request.POST.get('alias', ''),
-                    description=request.POST.get('description', ''))
+                    description=request.POST.get('description', ''),
+                    pin_language=request.POST.get('pin_language', ''), ui_language=request.POST.get('ui_language', ''))
                 token, sent = guests.invite(guest, request.user, request=request)
                 if sent:
                     messages.success(request, _('The access was created and the invitation sent to %(email)s.') % {
@@ -341,9 +366,11 @@ class GuestListView(AreaViewMixin, View):
                 guests.force_change(guest, request.user, request=request)
                 messages.success(request, _('The person must choose a new PIN at the next sign-in.'))
             elif action == 'alias':
-                alias = guests.set_alias(guest, request.user, request.POST.get('alias'),
-                                         request.POST.get('description', ''), request=request)
-                messages.success(request, _('The account is now %(alias)s.') % {'alias': alias})
+                guests.set_alias(guest, request.user, request.POST.get('alias'), request.POST.get('description', ''),
+                                 request=request)
+                guests.set_languages(guest, request.user, request.POST.get('pin_language'),
+                                     request.POST.get('ui_language'), request=request)
+                messages.success(request, _('Saved.'))
             elif action == 'rules':
                 guests.set_rules(guest, request.user, request.POST.get('step'), request.POST.get('waits'),
                                  request=request)

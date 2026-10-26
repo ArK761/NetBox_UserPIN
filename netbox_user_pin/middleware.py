@@ -22,7 +22,14 @@ class PluginLanguageMiddleware:
         if not request.path.startswith(self._plugin_prefix()):
             return self.get_response(request)
         from .service import get_settings
-        with translation.override(get_settings().language or 'en'):
+        language = get_settings().language or 'en'
+        user = getattr(request, 'user', None)
+        if getattr(user, 'is_authenticated', False):
+            from . import guests
+            guest = guests.guest_of(user)
+            if guest is not None:
+                language = guests.language_of(guest)  # a PIN-only person may have their own language
+        with translation.override(language):
             response = self.get_response(request)
             if hasattr(response, 'render') and not getattr(response, 'is_rendered', True):
                 response.render()

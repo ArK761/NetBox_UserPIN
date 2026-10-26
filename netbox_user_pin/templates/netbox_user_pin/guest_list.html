@@ -28,7 +28,7 @@
   {% if not mail_ok %}<div class="alert alert-warning">{% trans "E-mail is not set up (Mail page): the links are shown here for you to hand over." %}</div>{% endif %}
   <table class="table table-hover"><thead><tr><th>{% trans "Name" %}</th><th>{% trans "E-mail" %}</th><th>{% trans "Group" %}</th><th>{% trans "State" %}</th><th>{% trans "Last sign-in" %}</th><th>{% trans "Ends" %}</th><th></th></tr></thead><tbody>
   {% for r in rows %}<tr>
-    <td>{{ r.guest.name }} <code>{{ r.guest.user.username }}</code>{% if r.guest.description %}<div class="small">{{ r.guest.description }}</div>{% endif %}{% if r.guest.note %}<div class="text-secondary small">{{ r.guest.note }}</div>{% endif %}</td>
+    <td>{{ r.guest.name }} <code>{{ r.guest.user.username }}</code>{% if r.guest.alias %} <span class="badge text-bg-blue">{{ r.guest.alias }}</span>{% endif %}{% if r.guest.description %}<div class="small">{{ r.guest.description }}</div>{% endif %}{% if r.guest.note %}<div class="text-secondary small">{{ r.guest.note }}</div>{% endif %}</td>
     <td>{{ r.guest.email }}</td>
     <td>{% for g in r.groups %}<div>{{ g.area.name }} › {{ g.profile.name }}</div>{% empty %}–{% endfor %}</td>
     <td><span class="badge bg-{% if r.state.0 == 'active' %}green{% elif r.state.0 == 'invited' or r.state.0 == 'pause' %}yellow{% else %}red{% endif %}">{{ r.state.1 }}</span>
@@ -43,8 +43,8 @@
       <button class="btn btn-sm btn-outline-secondary" name="action" value="force-change" title="{% trans 'Like: user must change password at next logon' %}">{% trans "Force a PIN change" %}</button>
       <button class="btn btn-sm btn-outline-primary" name="action" value="invite" title="{% trans 'Sends a new link; the old one stops working.' %}">{% trans "Send the link again" %}</button>
       <button class="btn btn-sm btn-outline-secondary" name="action" value="reset" onclick="return confirm('{% trans "Clear the PIN? The person chooses a new one." %}')">{% trans "Reset the PIN" %}</button>
-      {% if r.guest.revoked %}<button class="btn btn-sm btn-outline-success" name="action" value="restore">{% trans "Restore" %}</button>
-      {% else %}<button class="btn btn-sm btn-outline-warning" name="action" value="revoke" onclick="return confirm('{% trans "Revoke the access now?" %}')">{% trans "Revoke" %}</button>{% endif %}
+      {% if r.guest.revoked %}<button class="btn btn-sm btn-success" name="action" value="restore">{% trans "Enable" %}</button>
+      {% else %}<button class="btn btn-sm btn-outline-warning" name="action" value="revoke" onclick="return confirm('{% trans "Disable the account? The person cannot sign in until you enable it." %}')">{% trans "Disable" %}</button>{% endif %}
       <button class="btn btn-sm btn-outline-danger" name="action" value="delete" onclick="return confirm('{% trans "Delete the access for good?" %}')">{% trans "Delete" %}</button>
     </form></td></tr>
   <tr><td colspan="7" class="p-0 border-top-0"><details class="px-3 pb-2"><summary class="text-secondary small">{% trans "Activity and rules" %} ({{ r.activity.events|length }} / {{ r.activity.changes_total }})</summary>
@@ -55,8 +55,13 @@
         <table class="table table-sm mb-0"><tbody>{% for c in r.activity.changes %}<tr><td class="text-nowrap">{{ c.time|date:"Y-m-d H:i" }}</td><td>{{ c.get_action_display }}</td><td><a href="{% url 'core:objectchange' pk=c.pk %}">{{ c.object_repr }}</a></td></tr>{% empty %}<tr><td class="text-secondary">{% trans "No changes yet." %}</td></tr>{% endfor %}</tbody></table></div>
       <div class="col-lg-3"><div class="fw-bold small">{% trans "Alias and description" %}</div>
         <form method="post" class="mb-2">{% csrf_token %}<input type="hidden" name="pk" value="{{ r.guest.pk }}"><input type="hidden" name="action" value="alias">
-          <input class="form-control form-control-sm mb-1" name="alias" value="{{ r.guest.user.username }}" maxlength="30" title="{% trans 'Alias (the account name in NetBox)' %}">
+          <div class="small text-secondary mb-1">ID: <code>{{ r.guest.user.username }}</code> ({% trans "never changes" %})</div>
+          <input class="form-control form-control-sm mb-1" name="alias" value="{{ r.guest.alias }}" maxlength="100" placeholder="{% trans 'Alias (any text)' %}">
           <input class="form-control form-control-sm mb-1" name="description" value="{{ r.guest.description }}" maxlength="150" placeholder="{% trans 'Description, e.g. technician of company XY' %}">
+          <label class="small">{% trans "Language of the PIN pages and e-mails" %}</label>
+          <select class="form-select form-select-sm mb-1" name="pin_language"><option value="">{% trans "default" %}</option>{% for code, label in languages %}<option value="{{ code }}"{% if r.guest.pin_language == code %} selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+          <label class="small">{% trans "Language of the NetBox interface" %}</label>
+          <select class="form-select form-select-sm mb-1" name="ui_language"><option value="">{% trans "default" %}</option>{% for code, label in languages %}<option value="{{ code }}"{% if r.guest.ui_language == code %} selected{% endif %}>{{ label }}</option>{% endfor %}</select>
           <button class="btn btn-sm btn-outline-primary" type="submit">{% trans "Save" %}</button></form>
         <div class="fw-bold small">{% trans "Rules for wrong PINs" %}</div>
         <div class="small text-secondary mb-1">{{ r.rules }}</div>
@@ -85,8 +90,10 @@
   <div class="col-md-3"><label class="form-label">{% trans "Idle (minutes)" %}</label><input class="form-control" type="number" name="idle" value="30" min="5" max="240"></div>
   <div class="col-md-3"><label class="form-label">{% trans "Session (hours)" %}</label><input class="form-control" type="number" name="hours" value="8" min="1" max="24"></div>
   <div class="col-md-3"><label class="form-label">{% trans "Allowed IP addresses (optional)" %}</label><input class="form-control" name="ips" placeholder="10.0.0.0/24, 192.168.1.5"></div>
-  <div class="col-md-3"><label class="form-label">{% trans "Alias (optional)" %}</label><input class="form-control" name="alias" maxlength="30" placeholder="pin.jnovak"><div class="form-text">{% trans "The account name seen across NetBox (changelog, groups). Empty = from the name." %}</div></div>
-  <div class="col-md-9"><label class="form-label">{% trans "Description (optional)" %}</label><input class="form-control" name="description" maxlength="150" placeholder="{% trans 'e.g. technician of company XY' %}"></div>
+  <div class="col-md-3"><label class="form-label">{% trans "Alias (optional)" %}</label><input class="form-control" name="alias" maxlength="100"><div class="form-text">{% trans "Any text. The account gets its own ID (PinUser0001 ...) that never changes." %}</div></div>
+  <div class="col-md-2"><label class="form-label">{% trans "PIN language" %}</label><select class="form-select" name="pin_language"><option value="">{% trans "default" %}</option>{% for code, label in languages %}<option value="{{ code }}">{{ label }}</option>{% endfor %}</select></div>
+  <div class="col-md-2"><label class="form-label">{% trans "NetBox language" %}</label><select class="form-select" name="ui_language"><option value="">{% trans "default" %}</option>{% for code, label in languages %}<option value="{{ code }}">{{ label }}</option>{% endfor %}</select></div>
+  <div class="col-md-5"><label class="form-label">{% trans "Description (optional)" %}</label><input class="form-control" name="description" maxlength="150" placeholder="{% trans 'e.g. technician of company XY' %}"></div>
   <div class="col-12"><label class="form-label">{% trans "Note" %}</label><input class="form-control" name="note" maxlength="200"></div>
   <div class="col-12 text-end"><button class="btn btn-primary" type="submit">{% trans "Create and send the invitation" %}</button></div>
 </form>

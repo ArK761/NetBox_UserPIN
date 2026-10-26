@@ -4,7 +4,7 @@
 <h2 class="text-center mb-3">{% trans "Change my PIN" %}</h2>
 {% if forced %}<div class="alert alert-warning">{% trans "Your PIN has expired or the administrator asked for a new one. Choose a new PIN to continue." %}</div>{% endif %}
 <form method="post" autocomplete="off">{% csrf_token %}
-  <div class="mb-3"><label class="form-label" for="current">{% trans "Current PIN" %}</label><input class="form-control" type="password" id="current" name="current" autocomplete="current-password" required autofocus></div>
+  {% if not forced %}<div class="mb-3"><label class="form-label" for="current">{% trans "Current PIN" %}</label><input class="form-control" type="password" id="current" name="current" autocomplete="current-password" required autofocus></div>{% endif %}
   <div class="mb-3"><label class="form-label" for="pin">{% trans "New PIN" %} ({{ min_length }}+)</label><input class="form-control" type="password" id="pin" name="pin" autocomplete="new-password" required></div>
   <div class="mb-3"><label class="form-label" for="pin2">{% trans "New PIN again" %}</label><input class="form-control" type="password" id="pin2" name="pin2" autocomplete="new-password" required></div>
   <button class="btn btn-primary w-100" type="submit">{% trans "Change the PIN" %}</button>
