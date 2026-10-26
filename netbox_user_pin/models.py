@@ -451,6 +451,14 @@ class PinEventAction(models.TextChoices):
     KEEPER_REMOVED = 'keeper_removed', _('Protection keeper removed')
     DENY_ENABLED = 'deny_enabled', _('Default deny switched on')
     DENY_DISABLED = 'deny_disabled', _('Default deny switched off')
+    GUEST_CREATED = 'guest_created', _('PIN-only access created')
+    GUEST_INVITED = 'guest_invited', _('PIN-only access: invitation sent')
+    GUEST_LOGIN = 'guest_login', _('PIN-only access: signed in')
+    GUEST_FAILED = 'guest_failed', _('PIN-only access: wrong PIN')
+    GUEST_PIN = 'guest_pin', _('PIN-only access: PIN set or changed')
+    GUEST_RESET = 'guest_reset', _('PIN-only access: PIN reset')
+    GUEST_REVOKED = 'guest_revoked', _('PIN-only access revoked')
+    GUEST_DELETED = 'guest_deleted', _('PIN-only access deleted')
     ERROR = 'error', _('Error')
 
 
@@ -989,3 +997,44 @@ class AreaFieldRule(models.Model):
 
     def __str__(self):
         return f'{self.target}.{self.field}: {self.mode}'
+
+
+class PinGuest(models.Model):
+    """
+    A person who works in NetBox only through a PIN - no account of their own. A technical user without a usable
+    password stands behind it (the groups of the protected areas give it rights); the person signs in with a personal
+    link and a PIN they chose themselves. No 2FA, no password, no API, never a keeper or an owner.
+    """
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='pin_guest')
+    name = models.CharField(verbose_name=_('Name'), max_length=150)
+    email = models.EmailField(verbose_name=_('E-mail'), unique=True)
+    token_hash = models.CharField(max_length=64, unique=True)  # the personal link; never stored in clear
+    invite_expires = models.DateTimeField(null=True, blank=True)  # the first setup of the PIN must happen before
+    expires = models.DateTimeField(null=True, blank=True)  # the whole access ends (None: until revoked)
+    revoked = models.DateTimeField(null=True, blank=True)
+    allowed_ips = models.CharField(max_length=255, blank=True)  # addresses / networks, comma separated; empty = any
+    idle_minutes = models.PositiveSmallIntegerField(default=30)
+    max_hours = models.PositiveSmallIntegerField(default=8)
+    failed = models.PositiveSmallIntegerField(default=0)
+    retry_after = models.DateTimeField(null=True, blank=True)  # wrong PIN: no attempt before this moment
+    alerted = models.DateTimeField(null=True, blank=True)
+    last_login = models.DateTimeField(null=True, blank=True)
+    last_ip = models.GenericIPAddressField(null=True, blank=True)
+    reset_hash = models.CharField(max_length=64, blank=True)
+    reset_expires = models.DateTimeField(null=True, blank=True)
+    reset_sent = models.DateTimeField(null=True, blank=True)
+    note = models.CharField(max_length=200, blank=True)
+    created_by_name = models.CharField(max_length=150, blank=True)
+    created = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        verbose_name = _('PIN-only access')
+        verbose_name_plural = _('PIN-only accesses')
+        ordering = ('name',)
+
+    def __str__(self):
+        return f'{self.name} <{self.email}>'
+
+    @property
+    def is_active(self):
+        return self.revoked is None and (self.expires is None or self.expires > timezone.now())
