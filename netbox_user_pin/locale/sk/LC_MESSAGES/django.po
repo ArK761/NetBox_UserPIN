@@ -6262,6 +6262,349 @@ msgstr ""
 "Superuser s výnimkou vidí všetko bez PIN-u. Ostatní správcovia sa to "
 "dozvedia e-mailom a zapíše sa do audit logu."
 
+msgid "PIN-only access created"
+msgstr "Prístup len cez PIN vytvorený"
+
+msgid "PIN-only access: invitation sent"
+msgstr "Prístup len cez PIN: pozvánka odoslaná"
+
+msgid "PIN-only access: signed in"
+msgstr "Prístup len cez PIN: prihlásenie"
+
+msgid "PIN-only access: wrong PIN"
+msgstr "Prístup len cez PIN: zlý PIN"
+
+msgid "PIN-only access: PIN set or changed"
+msgstr "Prístup len cez PIN: PIN nastavený alebo zmenený"
+
+msgid "PIN-only access: PIN reset"
+msgstr "Prístup len cez PIN: reset PINu"
+
+msgid "PIN-only access revoked"
+msgstr "Prístup len cez PIN odvolaný"
+
+msgid "PIN-only access deleted"
+msgstr "Prístup len cez PIN zmazaný"
+
+msgid "PIN-only access"
+msgstr "Prístup len cez PIN"
+
+msgid "PIN-only accesses"
+msgstr "Prístupy len cez PIN"
+
+msgid "People with a PIN only"
+msgstr "Ľudia len s PIN-om"
+
+msgid "The PIN must have %(min)d to %(max)d characters."
+msgstr "PIN musí mať %(min)d až %(max)d znakov."
+
+msgid "This PIN is too easy to guess. Use at least four different characters."
+msgstr "Tento PIN sa dá ľahko uhádnuť. Použi aspoň štyri rôzne znaky."
+
+msgid "\"%(value)s\" is not an IP address or a network."
+msgstr "„%(value)s“ nie je IP adresa ani sieť."
+
+msgid "Write the name of the person."
+msgstr "Napíš meno osoby."
+
+msgid "Write a valid e-mail address."
+msgstr "Napíš platnú e-mailovú adresu."
+
+msgid "An access with this e-mail address exists."
+msgstr "Prístup s touto e-mailovou adresou už existuje."
+
+msgid "Choose a group."
+msgstr "Vyber skupinu."
+
+msgid "The end of the access must be in the future."
+msgstr "Koniec prístupu musí byť v budúcnosti."
+
+msgid "Idle time is 5 to 240 minutes, the whole session 1 to 24 hours."
+msgstr "Nečinnosť je 5 až 240 minút, celá relácia 1 až 24 hodín."
+
+msgid "Your access to NetBox"
+msgstr "Tvoj prístup do NetBoxu"
+
+msgid ""
+"Hello %(name)s,\n"
+"\n"
+"you were given access to NetBox through a PIN.\n"
+"\n"
+"Your personal link:\n"
+"%(link)s\n"
+"\n"
+"%(first)s\n"
+"Keep the link to yourself: it works only together with your PIN."
+msgstr ""
+"Ahoj %(name)s,\n"
+"\n"
+"dostal si prístup do NetBoxu cez PIN.\n"
+"\n"
+"Tvoj osobný odkaz:\n"
+"%(link)s\n"
+"\n"
+"%(first)s\n"
+"Odkaz nikomu nedávaj: funguje len spolu s tvojím PIN-om."
+
+msgid "Open it and choose your own PIN within %(days)d days."
+msgstr "Otvor ho a do %(days)d dní si vyber vlastný PIN."
+
+msgid "Open it and enter your PIN."
+msgstr "Otvor ho a zadaj svoj PIN."
+
+msgid "Wrong PIN attempts on your NetBox access"
+msgstr "Zlé pokusy o PIN na tvojom prístupe do NetBoxu"
+
+msgid ""
+"There were %(n)d wrong PIN attempts on your access. If it was not you, ask "
+"the administrator to revoke it."
+msgstr ""
+"Na tvojom prístupe bolo %(n)d zlých pokusov o PIN. Ak si to nebol ty, popros"
+" správcu, aby prístup odvolal."
+
+msgid "Wrong PIN attempts: %(name)s"
+msgstr "Zlé pokusy o PIN: %(name)s"
+
+msgid ""
+"%(n)d wrong PIN attempts on the PIN-only access of %(name)s (%(email)s)."
+msgstr ""
+"%(n)d zlých pokusov o PIN na prístupe len cez PIN: %(name)s (%(email)s)."
+
+msgid "New PIN for your NetBox access"
+msgstr "Nový PIN pre tvoj prístup do NetBoxu"
+
+msgid ""
+"Hello %(name)s,\n"
+"\n"
+"you asked for a new PIN. Open this link and choose it (valid %(minutes)d minutes, once):\n"
+"%(link)s\n"
+"\n"
+"If it was not you, ignore this message."
+msgstr ""
+"Ahoj %(name)s,\n"
+"\n"
+"požiadal si o nový PIN. Otvor tento odkaz a vyber si ho (platí %(minutes)d minút, jednorazovo):\n"
+"%(link)s\n"
+"\n"
+"Ak si to nebol ty, správu ignoruj."
+
+msgid "An access with a PIN only cannot be given this duty."
+msgstr "Prístup len cez PIN nemôže dostať túto funkciu."
+
+msgid "The two PINs differ."
+msgstr "Oba PIN-y sa líšia."
+
+msgid "The invitation has expired. Ask for a new one."
+msgstr "Pozvánka vypršala. Požiadaj o novú."
+
+msgid "Wait a moment before the next attempt."
+msgstr "Počkaj chvíľu pred ďalším pokusom."
+
+msgid ""
+"This access is not usable now (ended, revoked or from another address)."
+msgstr ""
+"Tento prístup sa teraz nedá použiť (skončil, bol odvolaný alebo ide z inej "
+"adresy)."
+
+msgid "Choose your PIN first."
+msgstr "Najprv si vyber PIN."
+
+msgid "The current PIN is not correct, or you must wait a moment."
+msgstr "Aktuálny PIN nie je správny, alebo musíš chvíľu počkať."
+
+msgid "Your PIN was changed. Sign in again."
+msgstr "Tvoj PIN bol zmenený. Prihlás sa znova."
+
+msgid "Revoked"
+msgstr "Odvolaný"
+
+msgid "Pause after a wrong PIN"
+msgstr "Pauza po zlom PINe"
+
+msgid "The access was created and the invitation sent to %(email)s."
+msgstr "Prístup bol vytvorený a pozvánka odoslaná na %(email)s."
+
+msgid "The invitation was sent."
+msgstr "Pozvánka bola odoslaná."
+
+msgid ""
+"The PIN was cleared; the person chooses a new one through the new link."
+msgstr "PIN bol zrušený; osoba si vyberie nový cez nový odkaz."
+
+msgid "The access was revoked."
+msgstr "Prístup bol odvolaný."
+
+msgid "The access works again."
+msgstr "Prístup opäť funguje."
+
+msgid "The access was deleted."
+msgstr "Prístup bol zmazaný."
+
+msgid "You may not do this."
+msgstr "Toto nesmieš urobiť."
+
+msgid "Import"
+msgstr "Import"
+
+msgid "Export"
+msgstr "Export"
+
+msgid "Change my PIN"
+msgstr "Zmeniť môj PIN"
+
+msgid "Sign out"
+msgstr "Odhlásiť sa"
+
+msgid ""
+"Choose your own PIN (%(n)s or more characters). Nobody can read it, not even"
+" the administrator."
+msgstr ""
+"Vyber si vlastný PIN (%(n)s alebo viac znakov). Nikto ho nemôže prečítať, "
+"ani správca."
+
+msgid "New PIN again"
+msgstr "Nový PIN znova"
+
+msgid "Set the PIN and sign in"
+msgstr "Nastaviť PIN a prihlásiť sa"
+
+msgid "The invitation has expired. Ask the administrator for a new one."
+msgstr "Pozvánka vypršala. Popros správcu o novú."
+
+msgid "Sign in"
+msgstr "Prihlásiť sa"
+
+msgid "Wait before the next attempt:"
+msgstr "Počkaj pred ďalším pokusom:"
+
+msgid "I forgot my PIN – send me a link to set a new one"
+msgstr "Zabudol som PIN – pošlite mi odkaz na nastavenie nového"
+
+msgid ""
+"This link is not valid (any more). Ask the administrator for a new one."
+msgstr "Tento odkaz už nie je platný. Popros správcu o nový."
+
+msgid ""
+"You are signed out. To work again, open your personal link from the "
+"invitation e-mail."
+msgstr ""
+"Si odhlásený. Ak chceš pracovať ďalej, otvor svoj osobný odkaz z pozvánky v "
+"e-maile."
+
+msgid ""
+"If the access is valid, an e-mail with a link for a new PIN is on its way. "
+"The link works for one hour."
+msgstr ""
+"Ak je prístup platný, e-mail s odkazom na nový PIN je na ceste. Odkaz platí "
+"jednu hodinu."
+
+msgid "Choose a PIN of %(n)s or more characters."
+msgstr "Vyber si PIN s %(n)s alebo viac znakmi."
+
+msgid "Change the PIN"
+msgstr "Zmeniť PIN"
+
+msgid "The session ends after %(m)s min of inactivity at the latest."
+msgstr "Relácia skončí najneskôr po %(m)s min nečinnosti."
+
+msgid "No data is open to you yet. Ask the administrator."
+msgstr "Zatiaľ ti nie sú sprístupnené žiadne údaje. Popros správcu."
+
+msgid "State"
+msgstr "Stav"
+
+msgid "Last sign-in"
+msgstr "Posledné prihlásenie"
+
+msgid "Ends"
+msgstr "Končí"
+
+msgid "The e-mail could not be sent."
+msgstr "E-mail sa nepodarilo odoslať."
+
+msgid "Give %(n)s this personal link yourself (it is shown only now):"
+msgstr "Odovzdaj %(n)s tento osobný odkaz sám (zobrazí sa len teraz):"
+
+msgid ""
+"These people have no NetBox account. They get a personal link by e-mail, "
+"choose their own PIN and work only with what their group allows. No "
+"password, no 2FA, no API; a wrong PIN only makes them wait (30 s, then "
+"longer)."
+msgstr ""
+"Títo ľudia nemajú účet v NetBoxe. Dostanú osobný odkaz e-mailom, vyberú si "
+"vlastný PIN a pracujú len s tým, čo im dovolí skupina. Bez hesla, bez 2FA, "
+"bez API; zlý PIN ich len donúti počkať (30 s, potom dlhšie)."
+
+msgid ""
+"E-mail is not set up (Mail page): the links are shown here for you to hand "
+"over."
+msgstr ""
+"E-mail nie je nastavený (stránka Mail): odkazy sa zobrazia tu, aby si ich "
+"odovzdal ručne."
+
+msgid "Sends a new link; the old one stops working."
+msgstr "Pošle nový odkaz; starý prestane fungovať."
+
+msgid "Send the link again"
+msgstr "Poslať odkaz znova"
+
+msgid "Reset the PIN"
+msgstr "Resetovať PIN"
+
+msgid "Clear the PIN? The person chooses a new one."
+msgstr "Zrušiť PIN? Osoba si vyberie nový."
+
+msgid "Restore"
+msgstr "Obnoviť"
+
+msgid "Revoke the access now?"
+msgstr "Odvolať prístup hneď?"
+
+msgid "Delete the access for good?"
+msgstr "Zmazať prístup natrvalo?"
+
+msgid "New access"
+msgstr "Nový prístup"
+
+msgid "— choose a group —"
+msgstr "— vyber skupinu —"
+
+msgid "Access ends (optional)"
+msgstr "Prístup končí (voliteľné)"
+
+msgid "Idle (minutes)"
+msgstr "Nečinnosť (minúty)"
+
+msgid "Session (hours)"
+msgstr "Relácia (hodiny)"
+
+msgid "Allowed IP addresses (optional)"
+msgstr "Povolené IP adresy (voliteľné)"
+
+msgid "Note"
+msgstr "Poznámka"
+
+msgid "Create and send the invitation"
+msgstr "Vytvoriť a poslať pozvánku"
+
+msgid ""
+"The person chooses a PIN of %(n)s or more characters at the first visit. The"
+" invitation link is valid for 7 days for the first setup; after that the "
+"same link serves for signing in until you revoke it."
+msgstr ""
+"Osoba si pri prvej návšteve vyberie PIN s %(n)s alebo viac znakmi. Odkaz z "
+"pozvánky platí 7 dní na prvé nastavenie; potom ten istý odkaz slúži na "
+"prihlásenie, kým ho neodvoláš."
+
+msgid "May import (needs adding as well)"
+msgstr "Smie importovať (potrebuje aj pridávanie)"
+
+msgid "May export"
+msgstr "Smie exportovať"
+
+msgid "Hello %(name)s"
+msgstr "Ahoj %(name)s"
+
 #~ msgid ""
 #~ "There is no other administrator or delegate with PIN and 2FA who could "
 #~ "confirm."

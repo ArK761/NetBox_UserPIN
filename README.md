@@ -338,6 +338,27 @@ A hidden custom field keeps its stored data (saving an object never wipes it).
 mix objects of several types (global search, change log, dashboard widgets). Anybody with root / database access on the
 server can bypass any plugin; the audit log is the answer to that, not a technical lock.
 
+### Import and export are rights of their own
+
+A group may *view*, *add*, *change* and *delete*; importing and exporting a list are two more rights (**May import**,
+**May export**) and are off until ticked. Without them the Import / Export buttons (lists and menu) are not drawn and
+the pages answer "no access". Importing needs *add* as well. Groups made before 0.36.0 lose both until you tick them.
+
+### PIN-only access (people without a NetBox account)
+
+*User PIN > PIN-only access > People with a PIN only* (protection keepers and the owners of the area): enter a name,
+an e-mail address and a group. A technical user without a usable password stands behind it, in that group. The person
+gets a personal link by e-mail (valid 7 days for the first setup), chooses a PIN of their own (8+ characters) and
+signs in with link and PIN.
+
+* No password, no 2FA, no API, no token; never a keeper, an owner or an exception; the account pages and the pages of
+  this plugin are closed to them (only *My access*, *Change my PIN*, *Sign out*).
+* A wrong PIN never locks the account: it only makes the person wait (30 s, 1 min, 5 min, 15 min). After 5 wrong PINs
+  the person and the keepers get an e-mail. "I forgot my PIN" e-mails a link for a new one (1 hour, once).
+* Session: idle 30 min and 8 h at most (settable per access), optional list of IP addresses / networks, optional end.
+* A keeper can send a new link (the old one stops), clear the PIN, revoke (ends every session), restore and delete.
+* Everything is in the audit log; the change log of NetBox shows the technical user (`pin-…`, whose first name is the person's name).
+
 ### Using it from a plugin
 
 ```python

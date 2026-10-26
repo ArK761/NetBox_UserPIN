@@ -722,7 +722,8 @@ class GroupView(AreaViewMixin, View):
             'rights': [(r, areas.right_label(area, r)) for r in areas.rights_available(area)],
             'rights_set': set(group.rights),
             'level': 'none' if not group.rights else ('write' if {'add', 'change'} & set(group.rights) else 'read'),
-            'can_delete': 'delete' in group.rights,
+            'can_delete': 'delete' in group.rights, 'can_import': 'import' in group.rights,
+            'can_export': 'export' in group.rights,
             'extra_rights': [(r, areas.right_label(area, r)) for r in areas.rights_available(area)
                              if r not in areas.GENERIC_RIGHTS],
             'tabs': [dict(t, allowed=group.tabs is None or t['name'] in group.tabs) for t in tabs if not t['plugin']],
@@ -761,7 +762,9 @@ class GroupView(AreaViewMixin, View):
                     extra = [r for r in rights if r not in areas.GENERIC_RIGHTS]
                     rights = {'none': [], 'read': ['view'], 'write': ['view', 'add', 'change']}.get(level, ['view'])
                     if level != 'none':
-                        rights = rights + (['delete'] if request.POST.get('delete') else []) + extra
+                        rights = rights + (['delete'] if request.POST.get('delete') else []) + (
+                            ['import'] if request.POST.get('import') else []) + (
+                            ['export'] if request.POST.get('export') else []) + extra
                 denied = [k[6:] for k in request.POST if k.startswith('deny__')] if 'access' in request.POST else None
                 areas.update_group(group, request.user, name=request.POST.get('name', group.name),
                                    rights=rights, request=request, allow_empty='access' in request.POST, denied=denied)

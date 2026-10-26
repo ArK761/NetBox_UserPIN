@@ -114,6 +114,11 @@ class Command(BaseCommand):
                           f'areas on={areas.protection_on()}, deny everything not allowed={areas.default_deny_active()}')
         if keeper:
             self.stdout.write(self.style.WARNING('A keeper is exempt from the deny: expect OPEN almost everywhere.'))
+        from netbox_user_pin import guests
+        if guests.is_guest(user):
+            self.stdout.write(self.style.WARNING('A PIN-ONLY access: the account pages, the PIN pages, the admin and the '
+                                                 'API of tokens are closed whatever the groups say; the lists open only '
+                                                 'as far as the group allows (import / export need their own rights).'))
         if areas.is_exempt(user):
             self.stdout.write(self.style.WARNING('An EXCEPTION is set for this user: the PIN protection does not apply '
                                                  'to him, NetBox permissions rule (expect OPEN where NetBox allows).'))

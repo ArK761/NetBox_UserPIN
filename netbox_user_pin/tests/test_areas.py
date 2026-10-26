@@ -1661,7 +1661,7 @@ class HiddenFieldPathsTest(AreaTestCase):
         field.object_types.set([ObjectType.objects.get_for_model(Device)])
         self.area = self.make_area(targets=('dcim.device',))
         self.group = areas.create_group(self.area, 'dcim.device', 'Technici', ['view'], self.owner1, records='all')
-        areas.update_group(self.group, self.owner1, rights=['view', 'add', 'change', 'delete'])
+        areas.update_group(self.group, self.owner1, rights=['view', 'add', 'change', 'delete', 'export'])
         self.user = User.objects.create_user('usera', 'a@example.com')
         areas.add_member(self.group, self.user, None, self.owner1)
         areas.save_field_rules(self.area, self.group, 'dcim.device',
@@ -2109,3 +2109,220 @@ class ExceptionTest(AreaTestCase):
         stranger = self.armed(stranger)
         self.assertFalse(areas.sees_nothing(stranger))
         self.assertFalse(area_guard._hides_menu_for(stranger))
+
+
+class ImportExportTest(AreaTestCase):
+    """Importing and exporting are rights of their own: adding / reading does not bring them along."""
+
+    def setUp(self):
+        super().setUp()
+        from tenancy.models import Tenant
+        Tenant.objects.create(name='T1', slug='t1')
+        self.area = self.make_area(targets=('tenancy.tenant',))
+        self.group = areas.create_group(self.area, 'tenancy.tenant', 'Editors', ['view', 'add', 'change'],
+                                        self.owner1, records='all')
+        self.member = User.objects.create_user('editor', 'e@example.com')
+        areas.add_member(self.group, self.member, None, self.owner1)
+        areas.clear_cache()
+        self.login(self.member)
+
+    def test_editing_does_not_import_or_export(self):
+        self.assertEqual(self.client.get('/tenancy/tenants/').status_code, 200)
+        self.assertEqual(self.client.get('/tenancy/tenants/add/').status_code, 200)
+        for url in ('/tenancy/tenants/?export=table', '/tenancy/tenants/?export=yaml', '/tenancy/tenants/import/'):
+            self.assertEqual(self.client.get(url).headers.get('X-UserPIN'), 'denied', url)
+        self.assertEqual(self.client.post('/tenancy/tenants/import/', {'data': 'name,slug\nX,x', 'format': 'csv',
+                                                                       'csv_delimiter': 'comma'}
+                                          ).headers.get('X-UserPIN'), 'denied')
+
+    def test_the_buttons_are_not_drawn(self):
+        page = self.client.get('/tenancy/tenants/').content.decode()
+        self.assertNotIn('/tenancy/tenants/import/', page)
+        self.assertNotIn('export=', page)
+        areas.update_group(self.group, self.owner1, rights=['view', 'add', 'change', 'import', 'export'])
+        areas.clear_cache()
+        page = self.client.get('/tenancy/tenants/').content.decode()
+        self.assertIn('/tenancy/tenants/import/', page)
+
+    def test_the_rights_open_them(self):
+        areas.update_group(self.group, self.owner1, rights=['view', 'export'])
+        areas.clear_cache()
+        self.assertNotEqual(self.client.get('/tenancy/tenants/?export=table').headers.get('X-UserPIN'), 'denied')
+        self.assertEqual(self.client.get('/tenancy/tenants/import/').headers.get('X-UserPIN'), 'denied')
+        areas.update_group(self.group, self.owner1, rights=['view', 'import'])  # import without add is no import
+        areas.clear_cache()
+        self.assertEqual(self.client.get('/tenancy/tenants/?export=table').headers.get('X-UserPIN'), 'denied')
+        self.assertNotEqual(self.client.get('/tenancy/tenants/import/').headers.get('X-UserPIN'), 'denied')
+        self.assertEqual(self.client.post('/tenancy/tenants/import/', {'data': 'name,slug\nX,x', 'format': 'csv',
+                                                                       'csv_delimiter': 'comma'}
+                                          ).headers.get('X-UserPIN'), 'denied')
+
+
+class GuestAccessTest(AreaTestCase):
+    """A person without an account works through a link and a PIN of their own."""
+
+    def setUp(self):
+        super().setUp()
+        from tenancy.models import Tenant
+        from netbox_user_pin import guests
+        self.guests = guests
+        Tenant.objects.create(name='T1', slug='t1')
+        self.keeper = User.objects.create_superuser('keepg', 'kg@example.com', 'x')
+        service.set_pin(self.keeper, GOOD_PIN)
+        enable_2fa(self.keeper)
+        areas.add_keeper(self.keeper, self.master)
+        self.area = self.make_area(targets=('tenancy.tenant',))
+        self.group = areas.create_group(self.area, 'tenancy.tenant', 'Editors', ['view', 'add', 'change'],
+                                        self.owner1, records='all')
+        areas.set_visibility(self.keeper, 'hidden', False, False)
+        self.guest, self.token = guests.create('Jan Novak', 'jan@example.com', self.group, self.keeper)
+        self.url = guests.link_path(self.token)
+        self.denied = lambda response: response.headers.get('X-UserPIN') == 'denied' or response.status_code in (
+            302, 403, 404)
+
+    def sign_in(self, pin='Secret-pin-1'):
+        self.client.post(self.url, {'pin': pin, 'pin2': pin})
+        return self.client
+
+    def test_the_link_leads_to_choosing_a_pin_then_to_signing_in(self):
+        self.assertContains(self.client.get(self.url), 'name="pin2"')
+        response = self.client.post(self.url, {'pin': 'short', 'pin2': 'short'})
+        self.assertContains(response, 'characters')
+        response = self.client.post(self.url, {'pin': 'Secret-pin-1', 'pin2': 'Secret-pin-2'})
+        self.assertContains(response, 'differ')
+        self.assertRedirects(self.client.post(self.url, {'pin': 'Secret-pin-1', 'pin2': 'Secret-pin-1'}),
+                             '/plugins/user-pin/guest/', fetch_redirect_response=False)
+        self.client.logout()
+        page = self.client.get(self.url)
+        self.assertNotContains(page, 'name="pin2"')
+        self.assertRedirects(self.client.post(self.url, {'pin': 'Secret-pin-1'}), '/plugins/user-pin/guest/',
+                             fetch_redirect_response=False)
+
+    def test_a_wrong_pin_makes_the_person_wait_but_never_locks(self):
+        self.sign_in()
+        self.client.logout()
+        response = self.client.post(self.url, {'pin': 'wrong-wrong'})
+        self.assertContains(response, 'not correct')
+        self.assertContains(response, 'forgot')
+        response = self.client.post(self.url, {'pin': 'Secret-pin-1'})  # the right one, but inside the pause
+        self.assertNotEqual(response.status_code, 302)
+        self.guest.refresh_from_db()
+        self.assertEqual(self.guests.pause_seconds(self.guest) // 10, 3)
+        from netbox_user_pin.models import PinGuest
+        PinGuest.objects.filter(pk=self.guest.pk).update(retry_after=timezone.now() - timedelta(seconds=1))
+        self.assertEqual(self.client.post(self.url, {'pin': 'Secret-pin-1'}).status_code, 302)  # the wait is over
+        self.guest.refresh_from_db()
+        for expected in (30, 60, 300, 900, 900):
+            PinGuest.objects.filter(pk=self.guest.pk).update(retry_after=None)
+            self.guests.check_pin(PinGuest.objects.get(pk=self.guest.pk), 'nope-nope')
+            self.assertAlmostEqual(self.guests.pause_seconds(PinGuest.objects.get(pk=self.guest.pk)), expected, delta=3)
+
+    def test_the_person_works_with_the_group_and_nothing_else(self):
+        self.sign_in()
+        self.assertEqual(self.client.get('/tenancy/tenants/').status_code, 200)
+        self.assertEqual(self.client.get('/tenancy/tenants/add/').status_code, 200)
+        self.assertEqual(self.client.get('/tenancy/tenants/?export=table').headers.get('X-UserPIN'), 'denied')
+        for url in ('/user/password/', '/user/api-tokens/', '/user/profile/', '/admin/', '/dcim/devices/',
+                    '/plugins/user-pin/', '/plugins/user-pin/areas/', '/plugins/user-pin/change/'):
+            self.assertTrue(self.denied(self.client.get(url)), url)
+        for url in ('/api/users/tokens/', '/api/users/users/', '/api/dcim/devices/'):
+            self.assertTrue(self.denied(self.client.get(url, HTTP_ACCEPT='application/json')), url)
+        page = self.client.get('/tenancy/tenants/').content.decode()
+        self.assertNotIn('/user/password/', page)
+        self.assertNotIn('/user/api-tokens/', page)
+        self.assertIn('/plugins/user-pin/guest/change/', page)
+
+    def test_the_account_is_never_a_keeper_an_owner_or_an_exception_and_has_no_password(self):
+        user = self.guest.user
+        self.assertFalse(user.has_usable_password())
+        self.assertFalse(user.is_superuser)
+        for call in (lambda: areas.add_keeper(user, self.master), lambda: areas.add_owner(self.area, user, self.master),
+                     lambda: areas.add_exception(user, self.keeper)):
+            with self.assertRaises((ValidationError, PermissionDenied)):
+                call()
+        self.assertFalse(service.has_2fa(user))
+        areas.clear_cache()
+        armed = User.objects.get(pk=user.pk)
+        area_guard.arm_user(armed)
+        self.assertFalse(armed.has_perm('netbox_user_pin.view_areaspage'))
+        self.assertFalse(armed.has_perm('netbox_user_pin.view_userpin'))
+
+    def test_the_session_ends_idle_after_the_maximum_and_when_revoked(self):
+        from netbox_user_pin.models import PinGuest
+        client = self.sign_in()
+        session = client.session
+        data = session[self.guests.SESSION_KEY]
+        data['last'] -= 31 * 60
+        session[self.guests.SESSION_KEY] = data
+        session.save()
+        response = client.get('/tenancy/tenants/')
+        self.assertRedirects(response, self.url, fetch_redirect_response=False)  # back to the link
+        self.assertEqual(client.get('/tenancy/tenants/').status_code, 302)
+        client = self.sign_in()
+        session = client.session
+        data = session[self.guests.SESSION_KEY]
+        data['start'] -= 9 * 3600
+        session[self.guests.SESSION_KEY] = data
+        session.save()
+        self.assertEqual(client.get('/tenancy/tenants/').status_code, 302)
+        client = self.sign_in()
+        self.assertEqual(client.get('/tenancy/tenants/').status_code, 200)
+        self.guests.revoke(PinGuest.objects.get(pk=self.guest.pk), self.keeper)
+        self.assertNotEqual(client.get('/tenancy/tenants/').status_code, 200)
+        self.assertContains(self.client.__class__().get(self.url), 'not valid', status_code=404)
+
+    def test_the_address_list_and_the_end_of_the_access(self):
+        from netbox_user_pin.models import PinGuest
+        PinGuest.objects.filter(pk=self.guest.pk).update(allowed_ips='10.9.8.0/24')
+        self.sign_in()
+        self.client.logout()
+        response = self.client.post(self.url, {'pin': 'Secret-pin-1'}, REMOTE_ADDR='192.0.2.1')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.client.post(self.url, {'pin': 'Secret-pin-1'}, REMOTE_ADDR='10.9.8.7').status_code, 302)
+        self.client.logout()
+        PinGuest.objects.filter(pk=self.guest.pk).update(expires=timezone.now() - timedelta(minutes=1))
+        self.assertEqual(self.client.get(self.url).status_code, 404)
+
+    def test_a_forgotten_pin_is_reset_by_an_e_mailed_link_once(self):
+        from unittest import mock
+        self.sign_in()
+        self.client.logout()
+        sent = []
+        with mock.patch.object(self.guests, '_mail', lambda guest, subject, body: sent.append(body) or True):
+            self.client.post(self.url + 'forgot/')
+            self.client.post(self.url + 'forgot/')  # not twice within a minute
+        self.assertEqual(len(sent), 1)
+        link = [w for w in sent[0].split() if '/guest/reset/' in w][0]
+        path = link[link.index('/plugins'):]
+        self.assertContains(self.client.get(path), 'name="pin2"')
+        self.assertEqual(self.client.post(path, {'pin': 'Brand-new-pin', 'pin2': 'Brand-new-pin'}).status_code, 302)
+        self.assertEqual(self.client.__class__().get(path).status_code, 404)  # once
+        self.client.logout()
+        self.assertEqual(self.client.post(self.url, {'pin': 'Secret-pin-1'}).status_code, 200)  # the old PIN is gone
+
+    def test_a_new_link_replaces_the_old_one_and_a_changed_pin_ends_other_sessions(self):
+        from netbox_user_pin.models import PinGuest
+        client = self.sign_in()
+        other = self.client.__class__()
+        other.post(self.url, {'pin': 'Secret-pin-1'})
+        self.assertEqual(other.get('/tenancy/tenants/').status_code, 200)
+        client.post('/plugins/user-pin/guest/change/', {'current': 'Secret-pin-1', 'pin': 'Another-pin-9',
+                                                         'pin2': 'Another-pin-9'})
+        self.assertEqual(other.get('/tenancy/tenants/').status_code, 302)
+        token, _sent = self.guests.invite(PinGuest.objects.get(pk=self.guest.pk), self.keeper)
+        self.assertEqual(self.client.__class__().get(self.url).status_code, 404)
+        self.assertEqual(self.client.__class__().get(self.guests.link_path(token)).status_code, 200)
+
+    def test_the_administration_is_for_keepers_and_owners_only(self):
+        self.client.force_login(self.keeper)
+        service.unlock  # (the PIN gate of the page is passed by the helper below)
+        self.client.post(reverse('plugins:netbox_user_pin:unlock'), {'pin': GOOD_PIN})
+        self.assertNotEqual(self.client.get(reverse('plugins:netbox_user_pin:guests')).status_code, 404)
+        outsider = User.objects.create_user('outsider', 'out@example.com')
+        armed = User.objects.get(pk=outsider.pk)
+        area_guard.arm_user(armed)
+        self.assertFalse(armed.has_perm('netbox_user_pin.view_guestspage'))
+        with self.assertRaises(PermissionDenied):
+            self.guests.create('X', 'x@example.com', self.group, outsider)
+        with self.assertRaises(ValidationError):
+            self.guests.create('Dup', 'JAN@example.com', self.group, self.keeper)

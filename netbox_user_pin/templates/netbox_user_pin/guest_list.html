@@ -1,0 +1,45 @@
+{% extends 'generic/_base.html' %}
+{% load i18n %}
+{% block title %}{% trans "People with a PIN only" %}{% endblock %}
+{% block content %}
+{% if new_link %}
+<div class="alert alert-warning"><strong>{% trans "The e-mail could not be sent." %}</strong> {% blocktrans with n=new_guest.name %}Give {{ n }} this personal link yourself (it is shown only now):{% endblocktrans %}
+  <input class="form-control mt-2" readonly value="{{ new_link }}" onclick="this.select()"></div>
+{% endif %}
+<div class="card mb-3"><h2 class="card-header"><i class="mdi mdi-account-key"></i> {% trans "People with a PIN only" %}</h2>
+<div class="card-body">
+  <p class="text-secondary">{% trans "These people have no NetBox account. They get a personal link by e-mail, choose their own PIN and work only with what their group allows. No password, no 2FA, no API; a wrong PIN only makes them wait (30 s, then longer)." %}</p>
+  {% if not mail_ok %}<div class="alert alert-warning">{% trans "E-mail is not set up (Mail page): the links are shown here for you to hand over." %}</div>{% endif %}
+  <table class="table table-hover"><thead><tr><th>{% trans "Name" %}</th><th>{% trans "E-mail" %}</th><th>{% trans "Group" %}</th><th>{% trans "State" %}</th><th>{% trans "Last sign-in" %}</th><th>{% trans "Ends" %}</th><th></th></tr></thead><tbody>
+  {% for r in rows %}<tr>
+    <td>{{ r.guest.name }}{% if r.guest.note %}<div class="text-secondary small">{{ r.guest.note }}</div>{% endif %}</td>
+    <td>{{ r.guest.email }}</td>
+    <td>{% for g in r.groups %}<div>{{ g.area.name }} › {{ g.profile.name }}</div>{% empty %}–{% endfor %}</td>
+    <td><span class="badge bg-{% if r.state.0 == 'active' %}green{% elif r.state.0 == 'invited' or r.state.0 == 'pause' %}yellow{% else %}red{% endif %}">{{ r.state.1 }}</span></td>
+    <td>{{ r.guest.last_login|date:"Y-m-d H:i"|default:"–" }}</td>
+    <td>{{ r.guest.expires|date:"Y-m-d H:i"|default:"–" }}</td>
+    <td class="text-end text-nowrap"><form method="post" class="d-inline">{% csrf_token %}<input type="hidden" name="pk" value="{{ r.guest.pk }}">
+      <button class="btn btn-sm btn-outline-primary" name="action" value="invite" title="{% trans 'Sends a new link; the old one stops working.' %}">{% trans "Send the link again" %}</button>
+      <button class="btn btn-sm btn-outline-secondary" name="action" value="reset" onclick="return confirm('{% trans "Clear the PIN? The person chooses a new one." %}')">{% trans "Reset the PIN" %}</button>
+      {% if r.guest.revoked %}<button class="btn btn-sm btn-outline-success" name="action" value="restore">{% trans "Restore" %}</button>
+      {% else %}<button class="btn btn-sm btn-outline-warning" name="action" value="revoke" onclick="return confirm('{% trans "Revoke the access now?" %}')">{% trans "Revoke" %}</button>{% endif %}
+      <button class="btn btn-sm btn-outline-danger" name="action" value="delete" onclick="return confirm('{% trans "Delete the access for good?" %}')">{% trans "Delete" %}</button>
+    </form></td></tr>
+  {% empty %}<tr><td colspan="7" class="text-secondary">{% trans "Nobody yet." %}</td></tr>{% endfor %}
+  </tbody></table>
+</div></div>
+<div class="card"><h2 class="card-header"><i class="mdi mdi-account-plus"></i> {% trans "New access" %}</h2>
+<div class="card-body"><form method="post" class="row g-2">{% csrf_token %}<input type="hidden" name="action" value="create">
+  <div class="col-md-4"><label class="form-label">{% trans "Name" %}</label><input class="form-control" name="name" required></div>
+  <div class="col-md-4"><label class="form-label">{% trans "E-mail" %}</label><input class="form-control" type="email" name="email" required></div>
+  <div class="col-md-4"><label class="form-label">{% trans "Group" %}</label><select class="form-select" name="group" required><option value="">{% trans "— choose a group —" %}</option>{% for pk, label in group_choices %}<option value="{{ pk }}">{{ label }}</option>{% endfor %}</select></div>
+  <div class="col-md-3"><label class="form-label">{% trans "Access ends (optional)" %}</label><input class="form-control" type="datetime-local" name="expires"></div>
+  <div class="col-md-3"><label class="form-label">{% trans "Idle (minutes)" %}</label><input class="form-control" type="number" name="idle" value="30" min="5" max="240"></div>
+  <div class="col-md-3"><label class="form-label">{% trans "Session (hours)" %}</label><input class="form-control" type="number" name="hours" value="8" min="1" max="24"></div>
+  <div class="col-md-3"><label class="form-label">{% trans "Allowed IP addresses (optional)" %}</label><input class="form-control" name="ips" placeholder="10.0.0.0/24, 192.168.1.5"></div>
+  <div class="col-12"><label class="form-label">{% trans "Note" %}</label><input class="form-control" name="note" maxlength="200"></div>
+  <div class="col-12 text-end"><button class="btn btn-primary" type="submit">{% trans "Create and send the invitation" %}</button></div>
+</form>
+<div class="form-text mt-2">{% blocktrans with n=min_length %}The person chooses a PIN of {{ n }} or more characters at the first visit. The invitation link is valid for 7 days for the first setup; after that the same link serves for signing in until you revoke it.{% endblocktrans %}</div>
+</div></div>
+{% endblock %}

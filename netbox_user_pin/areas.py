@@ -37,13 +37,13 @@ from django.utils.translation import gettext as _
 
 from . import roles, service
 from .models import (
-    AreaFieldMode, AreaFieldRule, AreaGrant, AreaOwner, AreaProfile, AreaRequest, AreaRequestStatus, PinEventAction, PolicyException, PolicyKeeper, ProtectedArea,
+    AreaFieldMode, AreaFieldRule, AreaGrant, AreaOwner, AreaProfile, AreaRequest, AreaRequestStatus, PinEventAction, PinGuest, PolicyException, PolicyKeeper, ProtectedArea,
 )
 
 logger = logging.getLogger('netbox_user_pin')
 
 API_VERSION = 1  # for plugins: register / can / require / get_area / is_owner / denied_response
-GENERIC_RIGHTS = ('view', 'add', 'change', 'delete')
+GENERIC_RIGHTS = ('view', 'add', 'change', 'delete', 'import', 'export')  # import / export are their own rights
 DEFAULT_PROFILES = (
     ('Read', ('view',)),
     ('Edit', ('view', 'add', 'change')),
@@ -261,7 +261,8 @@ def right_label(area, right):
     info = _registry.get(area.key) if area is not None and area.plugin else None
     if info and right in info['rights']:
         return info['rights'][right]
-    return {'view': _('View'), 'add': _('Add'), 'change': _('Change'), 'delete': _('Delete')}.get(right, right)
+    return {'view': _('View'), 'add': _('Add'), 'change': _('Change'), 'delete': _('Delete'),
+            'import': _('Import'), 'export': _('Export')}.get(right, right)
 
 
 def get_area(key_or_area):
@@ -849,13 +850,15 @@ def check_perm(user, perm):
 def right_for_request(request, view_class=None, view_kwargs=None):
     """The right a request needs: reading needs ``view``; changes depend on the kind of view."""
     method = request.method
-    if method in ('GET', 'HEAD', 'OPTIONS'):
-        return 'view'
     name = getattr(view_class, '__name__', '') if view_class is not None else ''
+    if 'Import' in name and 'Job' not in name:
+        return 'import'  # the form and the upload: importing is a right of its own (it needs the right to add as well)
+    if method in ('GET', 'HEAD', 'OPTIONS'):
+        if method == 'GET' and request.GET.get('export') is not None and 'Bulk' not in name:
+            return 'export'  # the export of a list (a table, YAML, an export template)
+        return 'view'
     if method == 'DELETE' or 'Delete' in name:
         return 'delete'
-    if 'Import' in name:
-        return 'add'
     if 'BulkEdit' in name or 'BulkRename' in name:
         return 'change'
     if method == 'POST' and view_class is not None and ('Edit' in name or 'Create' in name):
@@ -1011,9 +1014,16 @@ def _add_owner(area, user, actor, request):
     return owner
 
 
+def _no_guest(user):
+    """A person who works through a PIN only never becomes an owner, a keeper or an exception."""
+    if PinGuest.objects.filter(user_id=user.pk).exists():
+        raise ValidationError(_('An access with a PIN only cannot be given this duty.'))
+
+
 def add_owner(area, user, actor, request=None):
     if not _core_or_owner(actor, area):
         raise PermissionDenied
+    _no_guest(user)
     if not user.is_active:
         raise ValidationError(_('The account is not active.'))
     _check_owner_role(user)
@@ -1400,7 +1410,7 @@ WRITE_RIGHTS = ('add', 'change', 'delete')
 def _with_view(rights):
     """Who may write must be able to read: writing rights bring ``view`` along."""
     rights = list(dict.fromkeys(rights))
-    if set(rights) & set(WRITE_RIGHTS) and 'view' not in rights:
+    if set(rights) & set(WRITE_RIGHTS + ('import', 'export')) and 'view' not in rights:
         rights.insert(0, 'view')
     return rights
 
@@ -1555,6 +1565,7 @@ def can_manage_keepers(actor):
 def add_keeper(user, actor, request=None):
     if not can_manage_keepers(actor):
         raise PermissionDenied
+    _no_guest(user)
     if not user.is_active:
         raise ValidationError(_('The account is not active.'))
     if not (service.has_pin(user) and service.has_2fa(user)):
@@ -1600,6 +1611,7 @@ def add_exception(user, actor, expires=None, note='', request=None):
     """A keeper takes the protection off a user: he works with the permissions of NetBox until it is taken away."""
     if not is_keeper(actor):
         raise PermissionDenied
+    _no_guest(user)
     if not user.is_active:
         raise ValidationError(_('The account is not active.'))
     if is_keeper(user):

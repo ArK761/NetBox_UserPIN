@@ -1,0 +1,32 @@
+{% extends 'netbox_user_pin/guest_base.html' %}
+{% load i18n %}
+{% block guest_title %}{% trans "PIN" %}{% endblock %}
+{% block guest_body %}
+<h2 class="text-center mb-3">{% blocktrans with name=guest.name %}Hello {{ name }}{% endblocktrans %}</h2>
+{% if not has_pin %}
+  {% if setup_ok %}
+    <p class="text-secondary">{% blocktrans with n=min_length %}Choose your own PIN ({{ n }} or more characters). Nobody can read it, not even the administrator.{% endblocktrans %}</p>
+    <form method="post" autocomplete="off">{% csrf_token %}
+      <div class="mb-3"><label class="form-label" for="pin">{% trans "New PIN" %}</label><input class="form-control" type="password" id="pin" name="pin" autocomplete="new-password" required autofocus></div>
+      <div class="mb-3"><label class="form-label" for="pin2">{% trans "New PIN again" %}</label><input class="form-control" type="password" id="pin2" name="pin2" autocomplete="new-password" required></div>
+      <button class="btn btn-primary w-100" type="submit">{% trans "Set the PIN and sign in" %}</button>
+    </form>
+  {% else %}
+    <div class="alert alert-warning mb-0">{% trans "The invitation has expired. Ask the administrator for a new one." %}</div>
+  {% endif %}
+{% else %}
+  <form method="post" autocomplete="off">{% csrf_token %}
+    <div class="mb-3"><label class="form-label" for="pin">{% trans "PIN" %}</label><input class="form-control" type="password" id="pin" name="pin" autocomplete="current-password" required autofocus {% if pause %}disabled{% endif %}></div>
+    <button class="btn btn-primary w-100" type="submit" id="go" {% if pause %}disabled{% endif %}>{% trans "Sign in" %}</button>
+  </form>
+  {% if pause %}
+    <p class="text-secondary text-center mt-3">{% trans "Wait before the next attempt:" %} <strong id="left">{{ pause }}</strong> s</p>
+    <script>var s={{ pause }},t=setInterval(function(){s--;document.getElementById('left').textContent=s;if(s<=0){clearInterval(t);location.reload();}},1000);</script>
+  {% endif %}
+  {% if wrong or pause %}
+  <form method="post" action="{% url 'plugins:netbox_user_pin:guest_forgot' token %}" class="mt-3 text-center">{% csrf_token %}
+    <button class="btn btn-outline-secondary btn-sm" type="submit">{% trans "I forgot my PIN – send me a link to set a new one" %}</button>
+  </form>
+  {% endif %}
+{% endif %}
+{% endblock %}

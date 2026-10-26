@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import area_views, views
+from . import area_views, guest_views, views
 
 app_name = 'netbox_user_pin'
 
@@ -39,5 +39,13 @@ urlpatterns = [
     path('request-access/', area_views.AccessRequestView.as_view(), name='request_access'),
     path('requests/<int:pk>/', area_views.RequestDecideView.as_view(), name='request_decide'),
     path('access/', area_views.MyAccessView.as_view(), name='my_access'),
+    path('guests/', guest_views.GuestListView.as_view(), name='guests'),
+    path('guest/', guest_views.GuestHomeView.as_view(), name='guest_home'),
+    path('guest/change/', guest_views.GuestChangeView.as_view(), name='guest_change'),
+    path('guest/logout/', guest_views.GuestLogoutView.as_view(), name='guest_logout'),
+    path('guest/ended/', guest_views.GuestEndedView.as_view(), name='guest_ended'),
+    path('guest/reset/<str:token>/', guest_views.GuestResetView.as_view(), name='guest_reset'),
+    path('guest/<str:token>/forgot/', guest_views.GuestForgotView.as_view(), name='guest_forgot'),
+    path('guest/<str:token>/', guest_views.GuestLoginView.as_view(), name='guest_login'),
     path('invitation/<int:pk>/', views.InvitationView.as_view(), name='invitation'),
 ]

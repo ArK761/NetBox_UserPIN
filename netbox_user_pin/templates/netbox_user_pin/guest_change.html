@@ -1,0 +1,12 @@
+{% extends 'netbox_user_pin/guest_base.html' %}
+{% load i18n %}
+{% block guest_body %}
+<h2 class="text-center mb-3">{% trans "Change my PIN" %}</h2>
+<form method="post" autocomplete="off">{% csrf_token %}
+  <div class="mb-3"><label class="form-label" for="current">{% trans "Current PIN" %}</label><input class="form-control" type="password" id="current" name="current" autocomplete="current-password" required autofocus></div>
+  <div class="mb-3"><label class="form-label" for="pin">{% trans "New PIN" %} ({{ min_length }}+)</label><input class="form-control" type="password" id="pin" name="pin" autocomplete="new-password" required></div>
+  <div class="mb-3"><label class="form-label" for="pin2">{% trans "New PIN again" %}</label><input class="form-control" type="password" id="pin2" name="pin2" autocomplete="new-password" required></div>
+  <button class="btn btn-primary w-100" type="submit">{% trans "Change the PIN" %}</button>
+  <a class="btn btn-link w-100 mt-2" href="{% url 'plugins:netbox_user_pin:guest_home' %}">{% trans "Back" %}</a>
+</form>
+{% endblock %}

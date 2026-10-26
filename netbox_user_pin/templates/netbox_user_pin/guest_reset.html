@@ -1,0 +1,11 @@
+{% extends 'netbox_user_pin/guest_base.html' %}
+{% load i18n %}
+{% block guest_body %}
+<h2 class="text-center mb-3">{% trans "New PIN" %}</h2>
+<p class="text-secondary">{% blocktrans with n=min_length %}Choose a PIN of {{ n }} or more characters.{% endblocktrans %}</p>
+<form method="post" autocomplete="off">{% csrf_token %}
+  <div class="mb-3"><label class="form-label" for="pin">{% trans "New PIN" %}</label><input class="form-control" type="password" id="pin" name="pin" autocomplete="new-password" required autofocus></div>
+  <div class="mb-3"><label class="form-label" for="pin2">{% trans "New PIN again" %}</label><input class="form-control" type="password" id="pin2" name="pin2" autocomplete="new-password" required></div>
+  <button class="btn btn-primary w-100" type="submit">{% trans "Set the PIN and sign in" %}</button>
+</form>
+{% endblock %}

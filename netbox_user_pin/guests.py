@@ -136,12 +136,28 @@ def _absolute(request, path):
     return request.build_absolute_uri(path) if request is not None else path
 
 
+def _may_put_in(actor, area):
+    """Owners of the area, and the protection keepers (the authority above the owners)."""
+    return areas._may_grant(actor, area) or areas.is_keeper(actor)
+
+
+def _join(group, user, actor, request):
+    if areas._may_grant(actor, group.area):
+        return areas.add_member(group, user, None, actor, request=request, notify=False)
+    grant = AreaGrant.objects.create(area=group.area, user=user, profile=group, expires=None, granted_by=actor,
+                                     granted_by_name=actor.username, target=group.target)
+    areas._log(PinEventAction.AREA_GRANTED, group.area, actor, user=user, request=request,
+               detail=f'{group.target} ({", ".join(group.rights)}) by a protection keeper')
+    areas.clear_cache()
+    return grant
+
+
 def create(name, email, group, actor, expires=None, ips='', idle=30, hours=8, note='', request=None):
     """
     Create the access: the technical user, its group and the personal link. Returns ``(guest, token)``; the token is
     shown only now (and e-mailed by ``invite``).
     """
-    if not _may_manage(actor) or not areas._may_grant(actor, group.area):
+    if not _may_manage(actor) or not _may_put_in(actor, group.area):
         raise PermissionDenied
     name = (name or '').strip()[:150]
     email = (email or '').strip().lower()
@@ -165,7 +181,7 @@ def create(name, email, group, actor, expires=None, ips='', idle=30, hours=8, no
     with transaction.atomic():
         user_model = get_user_model()
         user = user_model(username=f'pin-{secrets.token_hex(5)}', first_name=name[:150], email=email,
-                          is_active=True, is_staff=False, is_superuser=False)
+                          is_active=True, is_superuser=False)
         user.set_unusable_password()
         user.save()
         UserPin.objects.create(user=user, access=PinAccess.ALLOWED)
@@ -173,7 +189,7 @@ def create(name, email, group, actor, expires=None, ips='', idle=30, hours=8, no
             user=user, name=name, email=email, token_hash=_hash(token), expires=expires, allowed_ips=ips,
             idle_minutes=idle, max_hours=hours, note=(note or '').strip()[:200], created_by_name=actor.username,
             invite_expires=timezone.now() + timedelta(days=INVITE_DAYS))
-        areas.add_member(group, user, None, actor, request=request, notify=False)
+        _join(group, user, actor, request)
     _log(PinEventAction.GUEST_CREATED, guest, actor, request, f'{group.area.name} / {group.name}')
     return guest, token
 
@@ -345,9 +361,17 @@ def groups_of(guest):
 # The session
 #
 
+def _backend():
+    """NetBox's own permission backend (the one that is configured; ModelBackend may not be)."""
+    from django.conf import settings as django_settings
+    wanted = 'netbox.authentication.ObjectPermissionBackend'
+    backends = list(django_settings.AUTHENTICATION_BACKENDS)
+    return wanted if wanted in backends else backends[-1]
+
+
 def start_session(request, guest):
     from django.contrib.auth import login
-    login(request, guest.user, backend='django.contrib.auth.backends.ModelBackend')  # also renews the session key
+    login(request, guest.user, backend=_backend())  # also renews the session key
     version = UserPin.objects.get(user=guest.user).version
     now = time.time()
     request.session[SESSION_KEY] = {'id': guest.pk, 'start': now, 'last': now, 'ver': version,

@@ -23,7 +23,7 @@ from django.utils import translation
 from django.utils.translation import gettext as _
 from django.utils.http import urlencode
 
-from . import areas, roles, service
+from . import areas, guests, roles, service
 from .models import AreaRequest, AreaRequestStatus, PinEventAction
 
 logger = logging.getLogger('netbox_user_pin')
@@ -45,7 +45,11 @@ def _plugin_perm(user, perm):
     app_label, _dot, codename = perm.partition('.')
     if app_label != 'netbox_user_pin':
         return None
+    if guests.is_guest(user):
+        return False  # a person with a PIN only has no administration, no PIN pages - only their own guest pages
     action, _underscore, model = codename.partition('_')
+    if model == 'guestspage':
+        return action == 'view' and (areas.is_keeper(user) or areas.administers_any(user))
     if action != 'view':
         return None
     # the items of the "My PIN" part of the menu: B takes from the user who is in no group what is not the PIN itself
@@ -81,6 +85,11 @@ def arm_user(user):
     original = user.has_perm
 
     def has_perm(perm, obj=None):
+        if perm.startswith('userpin.import:'):  # the menu button "Import" of an object type
+            try:
+                return _may_use(user, apps.get_model(perm.partition(':')[2]), 'import')
+            except LookupError:
+                return False
         decided = _plugin_perm(user, perm)
         if decided is not None:
             return decided
@@ -270,6 +279,12 @@ class AreaGuardMiddleware:
         return response
 
     def process_view(self, request, view_func, view_args, view_kwargs):
+        guest = guests.guest_of(request.user)
+        if guest is not None and (response := guests.guard(request, guest)) is not None:
+            return response
+        if not getattr(request.user, 'is_authenticated', False) and getattr(view_func, '__module__', '').startswith(
+                'netbox_user_pin.'):
+            return None  # the pages of this plugin ask for the sign-in themselves (the public link of a PIN-only access)
         if not areas.protection_on() or _is_token_request(request) or areas.is_exempt(request.user):
             return None  # (an exception: NetBox's own permissions rule the user)
         if request.path_info.startswith('/graphql') and _graphql_would_leak(request):
@@ -323,7 +338,8 @@ class AreaGuardMiddleware:
             if _select_exception(request, user, api, target, view_kwargs):
                 return None
             return denied_response(request, None, right=right, target=ask, tab_label=tab[1] if tab else None)
-        if areas.can(user, area, right, rights_target):
+        if areas.can(user, area, right, rights_target) and (
+                right != 'import' or request.method != 'POST' or areas.can(user, area, 'add', rights_target)):
             if tab and not tab[2] and not areas.tab_allowed(user, area, target, tab[0]):
                 _throttled_log(user, area, right, request)
                 return denied_response(request, area, right, ask, tab_label=tab[1])
@@ -331,7 +347,7 @@ class AreaGuardMiddleware:
                 return response
             # whoever holds access unlocks the PIN to enter (not before the owners exist, and the REST API has no
             # unlock step)
-            if not api and areas.owners(area):
+            if not api and areas.owners(area) and not guests.is_guest(user):  # (a PIN-only person signed in with it)
                 from .mixins import pin_gate
                 if service.is_allowed(user) and not service.has_pin(user):
                     from django.contrib import messages
@@ -458,6 +474,8 @@ def _child_denied(request, user, cls, tab=None):
 
 def _hides_menu_for(user):
     """B is on and the user is no keeper: the menus and the account pages show only what is allowed."""
+    if guests.is_guest(user):
+        return True  # whatever the settings say: a person with a PIN only sees what the groups allow
     return bool(getattr(user, 'is_authenticated', False) and areas.protection_on() and areas.default_deny_active()
                 and areas.hides_denied() and not areas.is_keeper(user) and not areas.is_exempt(user))
 
@@ -493,6 +511,8 @@ ACCOUNT_OPEN = ('/user/password',)  # what the account pages keep in B (and the 
 
 
 def _account_href_allowed(href):
+    if href.startswith('/plugins/user-pin/guest/'):
+        return True
     return href.startswith(ACCOUNT_OPEN) or href.startswith('/plugins/user-pin/') or (
         areas.own_tokens_allowed() and href.startswith('/user/api-tokens'))
 
@@ -519,6 +539,14 @@ def _shape_html(request, text):
         logout = next((a.group(0) for a in anchors if '/logout/' in a.group(1)), '')
         kept = [a for a in kept if '/logout/' not in a]
         with translation.override(service.get_settings().language or 'en'):
+            if guests.is_guest(user):
+                extra = [(reverse('plugins:netbox_user_pin:guest_home'), 'mdi-home', gettext('My access')),
+                         (reverse('plugins:netbox_user_pin:guest_change'), 'mdi-dialpad', gettext('Change my PIN'))]
+                logout = f'<a href="{reverse("plugins:netbox_user_pin:guest_logout")}" class="dropdown-item">' \
+                         f'<i class="dropdown-item-icon mdi mdi-logout" aria-hidden="true"></i> {gettext("Sign out")}</a>'
+                made = [f'<a href="{href}" class="dropdown-item"><i class="dropdown-item-icon mdi {icon}" '
+                        f'aria-hidden="true"></i> {label}</a>' for href, icon, label in extra]
+                return match.group(1) + ''.join(made) + '<hr class="dropdown-divider" />' + logout + match.group(3)
             extra = [('/user/password/', 'mdi-lock-reset', gettext('Change the password')),
                      (reverse('plugins:netbox_user_pin:my_pin'), 'mdi-dialpad', gettext('My PIN'))]
             if areas.own_tokens_allowed():
@@ -600,6 +628,51 @@ def _child_of_allowed_tab(meta):
     return getattr(request, '_userpin_children', None) == f'{meta.app_label}.{meta.model_name}'
 
 
+def _may_use(user, model, right):
+    """May the user use ``right`` (import / export) on this object type? Outside of the protection NetBox decides."""
+    meta = getattr(model, '_meta', None) or getattr(type(model), '_meta', None)
+    if meta is None or not getattr(user, 'is_authenticated', False) or _token_request() or areas.is_exempt(user):
+        return True
+    area = areas.area_for(meta.app_label, meta.model_name, package=meta.app_label)
+    if area is None:
+        return not areas.default_deny_blocks(user, meta.app_label, meta.model_name, meta.app_label)
+    return areas.can(user, area, right, f'{meta.app_label}.{meta.model_name}')
+
+
+def _import_buttons_need_the_right(menus):
+    """The "Import" buttons of the menu ask for the right to import (not only for adding): once per button."""
+    for menu in menus:
+        for group in menu.groups:
+            for item in group.items:
+                for button in getattr(item, 'buttons', None) or ():
+                    perms = list(button.permissions or ())
+                    if str(button.link).endswith('_bulk_import') and len(perms) == 1 and '.add_' in perms[0]:
+                        app_label, _dot, codename = perms[0].partition('.add_')
+                        button.permissions = [perms[0], f'userpin.import:{app_label}.{codename}']
+
+
+def _hide_buttons():
+    """The Import and Export buttons of the lists appear only for who has these rights."""
+    try:
+        from netbox.object_actions import BulkExport, BulkImport
+    except ImportError:
+        return
+    for action, right in ((BulkImport, 'import'), (BulkExport, 'export')):
+        if getattr(action.render.__func__, '_userpin', False):
+            continue
+
+        def make(original, right):
+            def render(cls, context, obj, **kwargs):
+                request = context.get('request') if hasattr(context, 'get') else None
+                if request is not None and not _may_use(request.user, obj, right):
+                    return ''
+                return original(context, obj, **kwargs)
+            render._userpin = True
+            return render
+
+        action.render = classmethod(make(action.render, right))
+
+
 def install():
     """
     Two small hooks into NetBox, installed once at start:
@@ -616,6 +689,7 @@ def install():
         logger.warning('NetBox internals not found: the row filter of the protected areas is not installed.')
         return
 
+    _hide_buttons()
     if not getattr(RestrictedQuerySet.restrict, '_userpin', False):
         original = RestrictedQuerySet.restrict
 
@@ -665,6 +739,7 @@ def install():
 
         def get_menus():
             menus = original_menus()
+            _import_buttons_need_the_right(menus)
             try:
                 from netbox.context import current_request
                 user = getattr(current_request.get(), 'user', None)

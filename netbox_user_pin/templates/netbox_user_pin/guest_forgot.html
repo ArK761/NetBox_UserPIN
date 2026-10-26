@@ -1,0 +1,3 @@
+{% extends 'netbox_user_pin/guest_base.html' %}
+{% load i18n %}
+{% block guest_body %}<p>{% trans "If the access is valid, an e-mail with a link for a new PIN is on its way. The link works for one hour." %}</p><a class="btn btn-outline-secondary" href="{% url 'plugins:netbox_user_pin:guest_login' token %}">{% trans "Back" %}</a>{% endblock %}

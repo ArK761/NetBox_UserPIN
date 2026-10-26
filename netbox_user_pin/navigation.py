@@ -14,6 +14,10 @@ menu = PluginMenu(
             PluginMenuItem(link='plugins:netbox_user_pin:test', link_text=_('Test unlock'),
                            permissions=['netbox_user_pin.view_pintest']),
         )),
+        (_('PIN-only access'), (
+            PluginMenuItem(link='plugins:netbox_user_pin:guests', link_text=_('People with a PIN only'),
+                           permissions=['netbox_user_pin.view_guestspage']),
+        )),
         (_('Administration'), (
             PluginMenuItem(
                 link='plugins:netbox_user_pin:user_list', link_text=_('Users'),
