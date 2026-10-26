@@ -70,6 +70,7 @@ class GuestLoginView(View):
         guest.refresh_from_db()
         error = {'pause': _('Wait a moment before the next attempt.'),
                  'blocked': _('This access is not usable now (ended, revoked or from another address).'),
+                 'locked': _('Your access is blocked after too many wrong PINs. Ask the administrator to unblock it or to send you a link for a new PIN.'),
                  'nopin': _('Choose your PIN first.')}.get(status, _('The PIN is not correct.'))
         return self._page(request, guest, token, error=error, wrong=status == 'wrong')
 
@@ -91,7 +92,8 @@ class GuestPinLoginView(View):
             guests.start_session(request, guest, guests.login_path())
             return redirect('plugins:netbox_user_pin:guest_home')
         error = {'pause': _('Wait a moment before the next attempt.'),
-                 'blocked': _('This access is not usable now (ended, revoked or from another address).')
+                 'blocked': _('This access is not usable now (ended, revoked or from another address).'),
+                 'locked': _('Your access is blocked after too many wrong PINs. Ask the administrator to unblock it or to send you a link for a new PIN.'),
                  }.get(status, _('The PIN is not correct.'))
         return self._page(request, error=error, wrong=status == 'wrong')
 
@@ -148,6 +150,11 @@ class GuestMixin(LoginRequiredMixin):
         return super().dispatch(request, *args, **kwargs)
 
 
+def _rights_text(rights):
+    labels = {'view': _('read'), 'add': _('add'), 'change': _('edit'), 'delete': _('delete')}
+    return ', '.join(str(labels.get(r, r)) for r in rights)
+
+
 def _doors(user):
     """What the person may open: the lists of the object types their groups allow."""
     rows = []
@@ -169,27 +176,37 @@ def _doors(user):
                 add = reverse(f'{app_label}:{model}_add')
             except NoReverseMatch:
                 add = None
-        rows.append({'label': _target_label(profile.target), 'url': url, 'add': add, 'rights': profile.rights})
+        rows.append({'label': _target_label(profile.target), 'url': url, 'add': add, 'rights': profile.rights,
+                     'rights_text': _rights_text(profile.rights), 'group': profile.name, 'area': grant.area.name})
     return rows
 
 
 class GuestHomeView(GuestMixin, View):
     def get(self, request):
         guest = request.user.pin_guest
+        until = guests.pin_valid_until(guest)
+        settings = service.get_settings()
+        days = (until - timezone.now()).days if until else None
         return render(request, T + 'home.html', {
-            'guest': guest, 'doors': _doors(request.user), 'left': guests.seconds_left(request, guest) // 60})
+            'guest': guest, 'doors': _doors(request.user), 'left': guests.seconds_left(request, guest) // 60,
+            'pin_until': until, 'pin_days': days, 'pin_warn': days is not None and days <= settings.warn_days})
 
 
 class GuestChangeView(GuestMixin, View):
     def _page(self, request, **extra):
-        return render(request, T + 'change.html', {'min_length': guests.MIN_PIN_LENGTH, **extra})
+        return render(request, T + 'change.html', {'min_length': guests.MIN_PIN_LENGTH,
+                                                   'forced': guests.must_change(request.user.pin_guest), **extra})
 
     def get(self, request):
         return self._page(request)
 
     def post(self, request):
         guest = request.user.pin_guest
-        if guests.check_pin(guest, request.POST.get('current', ''), request=request) != 'ok':
+        status = guests.check_pin(guest, request.POST.get('current', ''), request=request)
+        if status == 'locked':
+            guests.end_session(request)
+            return redirect(guests.return_url(guest))
+        if status != 'ok':
             return self._page(request, error=_('The current PIN is not correct, or you must wait a moment.'))
         try:
             guests.set_pin(guest, _same(request), request=request)
@@ -240,6 +257,8 @@ class GuestListView(AreaViewMixin, View):
         for guest in PinGuest.objects.select_related('user'):
             if guest.revoked:
                 state = ('revoked', _('Revoked'))
+            elif guest.blocked:
+                state = ('blocked', _('Blocked (wrong PINs)'))
             elif guest.expires and guest.expires <= timezone.now():
                 state = ('ended', _('Ended'))
             elif not guests.has_pin(guest):
@@ -248,12 +267,18 @@ class GuestListView(AreaViewMixin, View):
                 state = ('pause', _('Pause after a wrong PIN'))
             else:
                 state = ('active', _('Active'))
-            rows.append({'guest': guest, 'state': state, 'groups': guests.groups_of(guest)})
+            rows.append({'guest': guest, 'state': state, 'groups': guests.groups_of(guest),
+                         'must_change': guests.has_pin(guest) and guests.must_change(guest),
+                         'pin_until': guests.pin_valid_until(guest), 'rules': guests.rules_text(guest),
+                         'activity': _activity(guest)})
         return render(request, self.template_name, {
             'login_url': request.build_absolute_uri(guests.login_path()), 'guest_path': areas.guest_path(),
+            'path_a': areas.guest_path().split('/')[0],
+            'path_b': areas.guest_path().split('/')[1] if '/' in areas.guest_path() else '',
             'is_keeper': areas.is_keeper(request.user),
             'rows': rows, 'group_choices': self._groups(request.user), 'mail_ok': service.email_configured(),
-            'min_length': guests.MIN_PIN_LENGTH, **extra})
+            'min_length': guests.MIN_PIN_LENGTH, 'default_step': service.get_settings().guest_step_attempts,
+            'default_waits': service.get_settings().guest_waits, 'default_rules': guests.rules_text(), **extra})
 
     def get(self, request):
         return self._render(request)
@@ -262,8 +287,14 @@ class GuestListView(AreaViewMixin, View):
         action = request.POST.get('action')
         try:
             if action == 'path':
-                slug = areas.set_guest_path(request.user, request.POST.get('path'), request=request)
+                slug = areas.set_guest_path(request.user, (request.POST.get('path_a'), request.POST.get('path_b')),
+                                            request=request)
                 messages.success(request, _('The address is /%(slug)s/.') % {'slug': slug})
+                return redirect('plugins:netbox_user_pin:guests')
+            if action == 'rules-default':
+                guests.set_rules(None, request.user, request.POST.get('step'), request.POST.get('waits'),
+                                 request=request)
+                messages.success(request, _('The rules for wrong PINs were saved.'))
                 return redirect('plugins:netbox_user_pin:guests')
             if action == 'create':
                 group = get_object_or_404(areas.AreaProfile, pk=request.POST.get('group') or 0)
@@ -271,7 +302,8 @@ class GuestListView(AreaViewMixin, View):
                     request.POST.get('name'), request.POST.get('email'), group, request.user,
                     expires=_time(request.POST.get('expires')), ips=request.POST.get('ips', ''),
                     idle=request.POST.get('idle'), hours=request.POST.get('hours'), note=request.POST.get('note', ''),
-                    request=request)
+                    request=request, alias=request.POST.get('alias', ''),
+                    description=request.POST.get('description', ''))
                 token, sent = guests.invite(guest, request.user, request=request)
                 if sent:
                     messages.success(request, _('The access was created and the invitation sent to %(email)s.') % {
@@ -297,6 +329,25 @@ class GuestListView(AreaViewMixin, View):
                 if not sent:
                     return self._render(request, new_link=request.build_absolute_uri(guests.link_path(token)),
                                         new_guest=guest)
+            elif action == 'unblock':
+                guests.unblock(guest, request.user, request=request)
+                messages.success(request, _('The access is unblocked; the old PIN works again.'))
+            elif action == 'reset-mail':
+                if guests.request_reset(guest, request=request, actor=request.user):
+                    messages.success(request, _('A link for a new PIN was sent to %(email)s.') % {'email': guest.email})
+                else:
+                    messages.error(request, _('The e-mail could not be sent – see the audit log.'))
+            elif action == 'force-change':
+                guests.force_change(guest, request.user, request=request)
+                messages.success(request, _('The person must choose a new PIN at the next sign-in.'))
+            elif action == 'alias':
+                alias = guests.set_alias(guest, request.user, request.POST.get('alias'),
+                                         request.POST.get('description', ''), request=request)
+                messages.success(request, _('The account is now %(alias)s.') % {'alias': alias})
+            elif action == 'rules':
+                guests.set_rules(guest, request.user, request.POST.get('step'), request.POST.get('waits'),
+                                 request=request)
+                messages.success(request, _('The rules for wrong PINs were saved.'))
             elif action == 'revoke':
                 guests.revoke(guest, request.user, request=request)
                 messages.success(request, _('The access was revoked.'))
@@ -311,3 +362,14 @@ class GuestListView(AreaViewMixin, View):
         except PermissionDenied:
             messages.error(request, _('You may not do this.'))
         return redirect('plugins:netbox_user_pin:guests')
+
+
+def _activity(guest, limit=30):
+    """Sign-ins and PIN events of the access, and what it changed in NetBox (newest first)."""
+    from core.models import ObjectChange
+    from .models import PinEvent
+    return {
+        'events': list(PinEvent.objects.filter(user=guest.user).order_by('-time')[:limit]),
+        'changes': list(ObjectChange.objects.filter(user=guest.user).order_by('-time')[:limit]),
+        'changes_total': ObjectChange.objects.filter(user=guest.user).count(),
+    }

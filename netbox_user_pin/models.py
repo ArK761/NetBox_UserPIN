@@ -211,9 +211,19 @@ class PinSettings(models.Model):
         help_text=_('A key works with the NetBox permissions of its user and the PIN does not judge it: a superuser with '
                     'a key reads everything through a script. Allow it for users with narrow NetBox permissions.'),
     )
-    guest_path = models.SlugField(
-        verbose_name=_('Address of the PIN-only sign-in'), max_length=50, default='pin',
-        help_text=_('The one address where people with a PIN only sign in, e.g. /pin/ or /tenanti/.'),
+    guest_path = models.CharField(
+        verbose_name=_('Address of the PIN-only sign-in'), max_length=100, default='pin',
+        help_text=_('The one address where people with a PIN only sign in, e.g. /pin/, /tenanti/ or /aqer/x2/.'),
+    )
+    guest_step_attempts = models.PositiveSmallIntegerField(
+        verbose_name=_('Wrong PINs per step'), default=5,
+        validators=[MinValueValidator(1), MaxValueValidator(50)],
+        help_text=_('PIN-only access: after this many wrong PINs the person must wait (see the waits).'),
+    )
+    guest_waits = models.CharField(
+        verbose_name=_('Waits after each step (seconds)'), max_length=100, default='10,20,30',
+        help_text=_('E.g. 10,20,30: 5 wrong PINs, wait 10 s; 5 more, 20 s; 5 more, 30 s; the next wrong PIN blocks '
+                    'the access until an administrator unblocks it or sends a reset e-mail.'),
     )
     areas_enabled = models.BooleanField(
         verbose_name=_('Protect areas and objects'),
@@ -463,6 +473,9 @@ class PinEventAction(models.TextChoices):
     GUEST_RESET = 'guest_reset', _('PIN-only access: PIN reset')
     GUEST_REVOKED = 'guest_revoked', _('PIN-only access revoked')
     GUEST_DELETED = 'guest_deleted', _('PIN-only access deleted')
+    GUEST_BLOCKED = 'guest_blocked', _('PIN-only access blocked after wrong PINs')
+    GUEST_UNBLOCKED = 'guest_unblocked', _('PIN-only access unblocked')
+    GUEST_RULES = 'guest_rules', _('PIN-only access: rules for wrong PINs changed')
     ERROR = 'error', _('Error')
 
 
@@ -1023,6 +1036,10 @@ class PinGuest(models.Model):
     max_hours = models.PositiveSmallIntegerField(default=8)
     failed = models.PositiveSmallIntegerField(default=0)
     retry_after = models.DateTimeField(null=True, blank=True)  # wrong PIN: no attempt before this moment
+    blocked = models.DateTimeField(null=True, blank=True)  # too many wrong PINs: only an administrator unblocks
+    # own rules for wrong PINs of this person (empty = the defaults of the PIN-only page)
+    step_attempts = models.PositiveSmallIntegerField(null=True, blank=True)
+    waits = models.CharField(max_length=100, blank=True)
     alerted = models.DateTimeField(null=True, blank=True)
     last_login = models.DateTimeField(null=True, blank=True)
     last_ip = models.GenericIPAddressField(null=True, blank=True)
@@ -1030,6 +1047,7 @@ class PinGuest(models.Model):
     reset_expires = models.DateTimeField(null=True, blank=True)
     reset_sent = models.DateTimeField(null=True, blank=True)
     note = models.CharField(max_length=200, blank=True)
+    description = models.CharField(max_length=150, blank=True)  # shown with the alias (= username) across NetBox
     created_by_name = models.CharField(max_length=150, blank=True)
     created = models.DateTimeField(default=timezone.now)
 

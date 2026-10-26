@@ -206,9 +206,17 @@ def set_guest_path(actor, slug, request=None):
     import re
     if not is_keeper(actor):
         raise PermissionDenied
+    if isinstance(slug, (list, tuple)):  # two fields: A (required) / B (optional, only with A)
+        first, second = [(part or '').strip().strip('/').lower() for part in slug]
+        if second and not first:
+            raise ValidationError(_('Fill in the first part before the second one.'))
+        slug = f'{first}/{second}' if second else first
     slug = (slug or '').strip().strip('/').lower()
-    if not re.fullmatch(r'[a-z0-9][a-z0-9-]{1,48}', slug) or slug in RESERVED_PATHS:
-        raise ValidationError(_('Use 2 to 49 letters, digits or dashes, not a name NetBox uses (api, admin, login ...).'))
+    parts = slug.split('/')
+    if (len(parts) > 2 or not all(re.fullmatch(r'[a-z0-9][a-z0-9-]{1,48}', part) for part in parts)
+            or parts[0] in RESERVED_PATHS):
+        raise ValidationError(_('Each part: 2 to 49 letters, digits or dashes; at most two parts (e.g. aqer/x2); '
+                                'the first part not a name NetBox uses (api, admin, login ...).'))
     settings = service.get_settings()
     if settings.guest_path != slug:
         settings.guest_path = slug

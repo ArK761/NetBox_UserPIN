@@ -31,8 +31,8 @@ MIN_PIN_LENGTH = 8
 MAX_PIN_LENGTH = 64
 INVITE_DAYS = 7
 RESET_MINUTES = 60
-PAUSES = (30, 60, 300, 900)  # seconds after the 1st, 2nd, 3rd, 4th and every further wrong PIN
-ALERT_EVERY = 5  # wrong PINs between two warnings
+DEFAULT_STEP = 5
+DEFAULT_WAITS = (10, 20, 30)
 
 __all__ = ('check_pin', 'create', 'delete', 'find', 'guard', 'guest_of', 'invite', 'is_guest', 'pause_seconds',
            'request_reset', 'restore', 'revoke', 'set_pin', 'start_session')
@@ -180,7 +180,52 @@ def _join(group, user, actor, request):
     return grant
 
 
-def create(name, email, group, actor, expires=None, ips='', idle=30, hours=8, note='', request=None):
+ALIAS_RE = r'[a-z0-9][a-z0-9._-]{2,29}'
+
+
+def _free_alias(alias, exclude_user=None):
+    qs = get_user_model().objects.filter(username__iexact=alias)
+    if exclude_user is not None:
+        qs = qs.exclude(pk=exclude_user.pk)
+    return not qs.exists()
+
+
+def clean_alias(alias, name='', exclude_user=None):
+    """The alias is the username of the technical account (seen in the changelog, groups ...). Empty = from the name."""
+    import re
+    from django.utils.text import slugify
+    alias = (alias or '').strip().lower()
+    if not alias:
+        base = 'pin.' + (slugify(name)[:24] or secrets.token_hex(3))
+        alias, n = base, 2
+        while not _free_alias(alias, exclude_user):
+            alias, n = f'{base}-{n}', n + 1
+        return alias
+    if not re.fullmatch(ALIAS_RE, alias):
+        raise ValidationError(_('Alias: 3 to 30 characters – small letters, digits, dot, dash or underscore.'))
+    if not _free_alias(alias, exclude_user):
+        raise ValidationError(_('The alias %(alias)s is already used.') % {'alias': alias})
+    return alias
+
+
+def set_alias(guest, actor, alias, description='', request=None):
+    """Rename the technical account (older changelog entries keep the old name) and set its description."""
+    if not _may_manage(actor):
+        raise PermissionDenied
+    alias = clean_alias(alias, guest.name, exclude_user=guest.user)
+    old = guest.user.username
+    guest.user.username = alias
+    guest.user.last_name = (description or '').strip()[:150]
+    guest.user.save(update_fields=['username', 'last_name'])
+    guest.description = guest.user.last_name
+    guest.save(update_fields=['description'])
+    _log(PinEventAction.GUEST_RULES, guest, actor, request, f'alias {old} -> {alias}; description: {guest.description}')
+    areas.clear_cache()
+    return alias
+
+
+def create(name, email, group, actor, expires=None, ips='', idle=30, hours=8, note='', request=None, alias='',
+           description=''):
     """
     Create the access: the technical user, its group and the personal link. Returns ``(guest, token)``; the token is
     shown only now (and e-mailed by ``invite``).
@@ -205,10 +250,12 @@ def create(name, email, group, actor, expires=None, ips='', idle=30, hours=8, no
     if not 5 <= idle <= 240 or not 1 <= hours <= 24:
         raise ValidationError(_('Idle time is 5 to 240 minutes, the whole session 1 to 24 hours.'))
     ips = _parse_ips(ips)
+    alias = clean_alias(alias, name)
+    description = (description or '').strip()[:150]
     token = _new_token()
     with transaction.atomic():
         user_model = get_user_model()
-        user = user_model(username=f'pin-{secrets.token_hex(5)}', first_name=name[:150], email=email,
+        user = user_model(username=alias, first_name=name[:150], last_name=description, email=email,
                           is_active=True, is_superuser=False)
         user.set_unusable_password()
         user.save()
@@ -216,6 +263,7 @@ def create(name, email, group, actor, expires=None, ips='', idle=30, hours=8, no
         guest = PinGuest.objects.create(
             user=user, name=name, email=email, token_hash=_hash(token), expires=expires, allowed_ips=ips,
             idle_minutes=idle, max_hours=hours, note=(note or '').strip()[:200], created_by_name=actor.username,
+            description=description,
             invite_expires=timezone.now() + timedelta(days=INVITE_DAYS))
         _join(group, user, actor, request)
     _log(PinEventAction.GUEST_CREATED, guest, actor, request, f'{group.area.name} / {group.name}')
@@ -248,6 +296,114 @@ def invite(guest, actor, request=None):
     return token, sent
 
 
+def parse_waits(text):
+    """'10,20,30' -> (10, 20, 30); 1 to 10 waits of 1 to 3600 seconds."""
+    try:
+        waits = tuple(int(part) for part in str(text or '').replace(';', ',').split(',') if part.strip())
+    except ValueError:
+        raise ValidationError(_('Write the waits as whole seconds separated by commas, e.g. 10,20,30.'))
+    if not 1 <= len(waits) <= 10 or not all(1 <= w <= 3600 for w in waits):
+        raise ValidationError(_('1 to 10 waits, each 1 to 3600 seconds.'))
+    return waits
+
+
+def rules(guest=None):
+    """(wrong PINs per step, waits) – the person's own rules or the defaults."""
+    settings = service.get_settings()
+    step = (guest.step_attempts if guest is not None and guest.step_attempts else None) \
+        or settings.guest_step_attempts or DEFAULT_STEP
+    try:
+        waits = parse_waits(guest.waits if guest is not None and guest.waits else settings.guest_waits)
+    except ValidationError:
+        waits = DEFAULT_WAITS
+    return step, waits
+
+
+def rules_text(guest=None):
+    step, waits = rules(guest)
+    return _('%(n)d wrong PINs, wait %(waits)s s; then blocked') % {'n': step, 'waits': ' / '.join(map(str, waits))}
+
+
+def set_rules(guest, actor, step, waits, request=None):
+    """Own rules of one person (``guest``) or the defaults (``guest=None``); empty values = back to the defaults."""
+    if not _may_manage(actor):
+        raise PermissionDenied
+    step = int(step) if str(step or '').strip() else None
+    if step is not None and not 1 <= step <= 50:
+        raise ValidationError(_('Wrong PINs per step: 1 to 50.'))
+    waits = ','.join(map(str, parse_waits(waits))) if str(waits or '').strip() else ''
+    if guest is None:
+        settings = service.get_settings()
+        settings.guest_step_attempts = step or DEFAULT_STEP
+        settings.guest_waits = waits or ','.join(map(str, DEFAULT_WAITS))
+        settings.save()
+        service.log_event(PinEventAction.GUEST_RULES, actor=actor, request=request, scope='guest',
+                          detail=f'defaults: {settings.guest_step_attempts} / {settings.guest_waits}')
+        return
+    guest.step_attempts, guest.waits = step, waits
+    guest.save(update_fields=['step_attempts', 'waits'])
+    _log(PinEventAction.GUEST_RULES, guest, actor, request, f'{step or "default"} / {waits or "default"}')
+
+
+def unblock(guest, actor, request=None):
+    """The old PIN works again; the counting starts from zero."""
+    if not _may_manage(actor):
+        raise PermissionDenied
+    guest.failed, guest.retry_after, guest.blocked = 0, None, None
+    guest.save(update_fields=['failed', 'retry_after', 'blocked'])
+    _log(PinEventAction.GUEST_UNBLOCKED, guest, actor, request)
+    _mail(guest, _('Your NetBox access works again'), _(
+        'Hello %(name)s,\n\nthe administrator unblocked your access. You can sign in with your PIN again.') % {
+            'name': guest.name})
+
+
+def force_change(guest, actor, request=None):
+    """Like 'User must change password at next logon': the next sign-in asks for a new PIN."""
+    if not _may_manage(actor):
+        raise PermissionDenied
+    UserPin.objects.filter(user=guest.user).exclude(pin_hash='').update(must_change=True)
+    service.log_event(PinEventAction.FORCE_CHANGE, user=guest.user, actor=actor, request=request, scope='guest')
+
+
+def must_change(guest):
+    """The PIN expired (rotation) or a change was forced."""
+    return service.pin_expired(guest.user)
+
+
+def pin_valid_until(guest):
+    return service.pin_expires_at(UserPin.objects.filter(user=guest.user).first())
+
+
+def _block(guest, request):
+    guest.blocked = timezone.now()
+    guest.save(update_fields=['blocked'])
+    _log(PinEventAction.GUEST_BLOCKED, guest, request=request, detail=f'after {guest.failed} wrong PINs')
+    _mail(guest, _('Your NetBox access is blocked'), _(
+        'Hello %(name)s,\n\nafter %(n)d wrong PINs your access was blocked. Ask the administrator to unblock it or to '
+        'send you a link for a new PIN.') % {'name': guest.name, 'n': guest.failed})
+    for keeper in areas.keepers():
+        service.send_user_mail(keeper, _('PIN-only access blocked: %(name)s') % {'name': guest.name}, _(
+            'The PIN-only access of %(name)s (%(email)s) was blocked after %(n)d wrong PINs. Unblock it or send a '
+            'reset e-mail on the page People with a PIN only.') % {
+                'name': guest.name, 'email': guest.email, 'n': guest.failed}, request=request)
+
+
+def _after_wrong(guest, request):
+    """Count a wrong PIN: a wait after every step, a block after the last one. Returns 'wrong' or 'locked'."""
+    step, waits = rules(guest)
+    guest.failed += 1
+    if guest.failed > step * len(waits):
+        guest.save(update_fields=['failed'])
+        _log(PinEventAction.GUEST_FAILED, guest, request=request, detail=f'attempt {guest.failed}')
+        _block(guest, request)
+        return 'locked'
+    if guest.failed % step == 0:
+        guest.retry_after = timezone.now() + timedelta(seconds=waits[guest.failed // step - 1])
+    guest.save(update_fields=['failed', 'retry_after'])
+    _log(PinEventAction.GUEST_FAILED, guest, request=request, detail=f'attempt {guest.failed}')
+    return 'wrong'
+
+
 def has_pin(guest):
     return UserPin.objects.filter(user=guest.user).exclude(pin_hash='').exists()
 
@@ -262,6 +418,8 @@ def pause_seconds(guest):
 def set_pin(guest, pin, request=None, first=False):
     """The person chooses a PIN (the first one, after a reset, or - ``first=False`` - a change)."""
     pin = _clean_pin(pin)
+    if not first and _pin_matches(guest, pin):
+        raise ValidationError(_('The new PIN must differ from the current one.'))
     index = _take_pin_index(guest, pin)
     with transaction.atomic():
         user_pin = UserPin.objects.select_for_update().get(user=guest.user)
@@ -273,19 +431,21 @@ def set_pin(guest, pin, request=None, first=False):
         user_pin.locked_until = None
         user_pin.save()
         guest.failed, guest.retry_after, guest.reset_hash, guest.reset_expires = 0, None, '', None
-        guest.invite_expires, guest.pin_index = None, index
+        guest.invite_expires, guest.pin_index, guest.blocked = None, index, None
         guest.save(update_fields=['failed', 'retry_after', 'reset_hash', 'reset_expires', 'invite_expires',
-                                  'pin_index'])
+                                  'pin_index', 'blocked'])
     _log(PinEventAction.GUEST_PIN, guest, guest.user, request, 'first' if first else 'changed')
 
 
 def check_pin(guest, pin, request=None):
     """
-    ``'ok'``, ``'wrong'``, ``'pause'`` (do not even try), ``'nopin'`` or ``'blocked'`` (revoked / ended / other address).
-    A wrong PIN never locks the account: it only makes the person wait (30 s, 1 min, 5 min, 15 min).
+    ``'ok'``, ``'wrong'``, ``'pause'`` (do not even try), ``'nopin'``, ``'locked'`` (too many wrong PINs, only an
+    administrator unblocks) or ``'blocked'`` (revoked / ended / other address). See ``rules()``.
     """
     if not guest.is_active or not guest.user.is_active or not ip_allowed(guest, request):
         return 'blocked'
+    if guest.blocked:
+        return 'locked'
     if pause_seconds(guest):
         return 'pause'
     with transaction.atomic():
@@ -305,36 +465,24 @@ def check_pin(guest, pin, request=None):
                 guest.save(update_fields=['pin_index'])
             guest.last_login = timezone.now()
             try:
-                guest.last_ip = str(service.get_client_ip(request)) or None
+                guest.last_ip = (str(service.get_client_ip(request)) or None) if request is not None else None
             except ValueError:
                 guest.last_ip = None
             guest.save(update_fields=['failed', 'retry_after', 'last_login', 'last_ip'])
             return 'ok'
         guest = PinGuest.objects.select_for_update().get(pk=guest.pk)
-        guest.failed += 1
-        guest.retry_after = timezone.now() + timedelta(seconds=PAUSES[min(guest.failed, len(PAUSES)) - 1])
-        guest.save(update_fields=['failed', 'retry_after'])
-    _log(PinEventAction.GUEST_FAILED, guest, request=request, detail=f'attempt {guest.failed}')
-    if guest.failed % ALERT_EVERY == 0:
-        _alert(guest, request)
-    return 'wrong'
+        return _after_wrong(guest, request)
 
 
-def _alert(guest, request):
-    """Several wrong PINs: the person and the keepers are told."""
-    _mail(guest, _('Wrong PIN attempts on your NetBox access'), _(
-        'There were %(n)d wrong PIN attempts on your access. If it was not you, ask the administrator to revoke it.')
-        % {'n': guest.failed})
-    for keeper in areas.keepers():
-        service.send_user_mail(keeper, _('Wrong PIN attempts: %(name)s') % {'name': guest.name}, _(
-            '%(n)d wrong PIN attempts on the PIN-only access of %(name)s (%(email)s).') % {
-                'n': guest.failed, 'name': guest.name, 'email': guest.email}, request=request)
-
-
-def request_reset(guest, request=None):
-    """The person forgot the PIN: an e-mail with a link for a new one (valid 1 hour, once). At most one per minute."""
+def request_reset(guest, request=None, actor=None):
+    """
+    An e-mail with a link for a new PIN (valid 1 hour, once): the person forgot it (at most one per minute), or an
+    administrator (``actor``) sends it, e.g. to a blocked access – the new PIN also unblocks it.
+    """
     now = timezone.now()
-    if not guest.is_active or (guest.reset_sent and guest.reset_sent > now - timedelta(seconds=60)):
+    if actor is not None and not _may_manage(actor):
+        raise PermissionDenied
+    if not guest.is_active or (actor is None and guest.reset_sent and guest.reset_sent > now - timedelta(seconds=60)):
         return False
     token = _new_token()
     guest.reset_hash, guest.reset_expires, guest.reset_sent = _hash(token), now + timedelta(minutes=RESET_MINUTES), now
@@ -344,7 +492,8 @@ def request_reset(guest, request=None):
         'Hello %(name)s,\n\nyou asked for a new PIN. Open this link and choose it (valid %(minutes)d minutes, once):'
         '\n%(link)s\n\nIf it was not you, ignore this message.') % {
             'name': guest.name, 'link': link, 'minutes': RESET_MINUTES})
-    _log(PinEventAction.GUEST_RESET, guest, request=request, detail='requested' + ('' if sent else ' (not sent)'))
+    _log(PinEventAction.GUEST_RESET, guest, actor, request=request,
+         detail=('sent by the administrator' if actor else 'requested') + ('' if sent else ' (not sent)'))
     return sent
 
 
@@ -469,6 +618,9 @@ def guard(request, guest):
             from django.http import HttpResponse
             return HttpResponse(status=401)
         return redirect(return_url(guest, link))
+    if must_change(guest) and not path.startswith(('/plugins/user-pin/guest/change/', '/plugins/user-pin/guest/logout/',
+                                                   '/static/', '/media/')):
+        return redirect('plugins:netbox_user_pin:guest_change')  # like 'must change password at next logon'
     if path.startswith('/plugins/user-pin/guest/') and not path.startswith('/plugins/user-pin/guest/reset/'):
         return None
     if path == '/' or path.startswith('/plugins/user-pin/'):
@@ -495,7 +647,7 @@ def ip_pause(request):
     """Seconds the computer must still wait (wrong PINs from one address, whoever the person is)."""
     address = _client_ip(request)
     state = cache.get(_ip_key(address)) if address else None
-    return max(0, int(state['until'] - time.time()) + 1) if state else 0
+    return max(0, int(state['until'] - time.time()) + 1) if state and state.get('until', 0) > time.time() else 0
 
 
 def pin_only_login(request, pin):
@@ -515,19 +667,24 @@ def pin_only_login(request, pin):
     if guest is not None and _pin_matches(guest, pin):
         if not guest.is_active or not guest.user.is_active or not ip_allowed(guest, request):
             return 'blocked', None
+        if guest.blocked:
+            return 'locked', None
         if pause_seconds(guest):
             return 'pause', None
         cache.delete(_ip_key(address))
         guest.failed, guest.retry_after, guest.last_login, guest.last_ip = 0, None, timezone.now(), str(address)
         guest.save(update_fields=['failed', 'retry_after', 'last_login', 'last_ip'])
         return 'ok', guest
-    state = cache.get(_ip_key(address)) or {'n': 0}
+    # the person is not known: the computer waits by the same steps (the last wait repeats, nobody is blocked)
+    step, waits = rules()
+    state = cache.get(_ip_key(address)) or {'n': 0, 'until': 0}
     state['n'] += 1
-    state['until'] = time.time() + PAUSES[min(state['n'], len(PAUSES)) - 1]
+    if state['n'] % step == 0:
+        state['until'] = time.time() + waits[min(state['n'] // step, len(waits)) - 1]
     cache.set(_ip_key(address), state, 3600)
     service.log_event(PinEventAction.GUEST_FAILED, scope='guest', request=request,
                       detail=f'PIN page, address {address}, attempt {state["n"]}')
-    if state['n'] % ALERT_EVERY == 0:
+    if state['n'] % (step * len(waits)) == 0:
         for keeper in areas.keepers():
             service.send_user_mail(keeper, _('Wrong PINs from %(ip)s') % {'ip': address}, _(
                 '%(n)d wrong PINs on the PIN-only page from the address %(ip)s.') % {'n': state['n'], 'ip': address},

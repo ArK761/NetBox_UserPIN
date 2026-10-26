@@ -2198,24 +2198,103 @@ class GuestAccessTest(AreaTestCase):
         self.assertRedirects(self.client.post(self.url, {'pin': 'Secret-pin-1'}), '/plugins/user-pin/guest/',
                              fetch_redirect_response=False)
 
-    def test_a_wrong_pin_makes_the_person_wait_but_never_locks(self):
+    def test_wrong_pins_wait_by_steps_then_block(self):
+        from netbox_user_pin.models import PinGuest
         self.sign_in()
         self.client.logout()
-        response = self.client.post(self.url, {'pin': 'wrong-wrong'})
+        get = lambda: PinGuest.objects.get(pk=self.guest.pk)  # noqa: E731
+        for _n in range(4):  # 1st - 4th wrong PIN: no wait yet
+            self.assertEqual(self.guests.check_pin(get(), 'nope-nope'), 'wrong')
+        self.assertEqual(self.guests.pause_seconds(get()), 0)
+        response = self.client.post(self.url, {'pin': 'wrong-wrong'})  # 5th: wait 10 s
         self.assertContains(response, 'not correct')
-        self.assertContains(response, 'forgot')
-        response = self.client.post(self.url, {'pin': 'Secret-pin-1'})  # the right one, but inside the pause
-        self.assertNotEqual(response.status_code, 302)
-        self.guest.refresh_from_db()
-        self.assertEqual(self.guests.pause_seconds(self.guest) // 10, 3)
+        self.assertAlmostEqual(self.guests.pause_seconds(get()), 10, delta=2)
+        self.assertNotEqual(self.client.post(self.url, {'pin': 'Secret-pin-1'}).status_code, 302)  # inside the wait
+        for wait in (20, 30):
+            for _n in range(5):
+                PinGuest.objects.filter(pk=self.guest.pk).update(retry_after=None)
+                self.guests.check_pin(get(), 'nope-nope')
+            self.assertAlmostEqual(self.guests.pause_seconds(get()), wait, delta=2)
+        PinGuest.objects.filter(pk=self.guest.pk).update(retry_after=None)
+        self.assertEqual(self.guests.check_pin(get(), 'nope-nope'), 'locked')  # 16th: blocked
+        self.assertIsNotNone(get().blocked)
+        self.assertEqual(self.guests.check_pin(get(), 'Secret-pin-1'), 'locked')  # even the right PIN
+        self.assertContains(self.client.post(self.url, {'pin': 'Secret-pin-1'}), 'blocked')
+        # the administrator unblocks: the old PIN works again
+        self.guests.unblock(get(), self.keeper)
+        self.assertEqual(self.guests.check_pin(get(), 'Secret-pin-1'), 'ok')
+        self.assertEqual(get().failed, 0)
+
+    def test_own_rules_and_reset_mail_unblock(self):
+        from django.core import mail
         from netbox_user_pin.models import PinGuest
-        PinGuest.objects.filter(pk=self.guest.pk).update(retry_after=timezone.now() - timedelta(seconds=1))
-        self.assertEqual(self.client.post(self.url, {'pin': 'Secret-pin-1'}).status_code, 302)  # the wait is over
-        self.guest.refresh_from_db()
-        for expected in (30, 60, 300, 900, 900):
-            PinGuest.objects.filter(pk=self.guest.pk).update(retry_after=None)
-            self.guests.check_pin(PinGuest.objects.get(pk=self.guest.pk), 'nope-nope')
-            self.assertAlmostEqual(self.guests.pause_seconds(PinGuest.objects.get(pk=self.guest.pk)), expected, delta=3)
+        self.sign_in()
+        self.client.logout()
+        get = lambda: PinGuest.objects.get(pk=self.guest.pk)  # noqa: E731
+        self.guests.set_rules(get(), self.keeper, 2, '5')
+        self.assertEqual(self.guests.rules(get()), (2, (5,)))
+        for _n in range(2):
+            self.guests.check_pin(get(), 'nope-nope')
+        self.assertAlmostEqual(self.guests.pause_seconds(get()), 5, delta=2)
+        PinGuest.objects.filter(pk=self.guest.pk).update(retry_after=None)
+        self.assertEqual(self.guests.check_pin(get(), 'nope-nope'), 'locked')
+        with self.assertRaises(ValidationError):
+            self.guests.set_rules(get(), self.keeper, 2, 'abc')
+        with override_settings(EMAIL={'SERVER': 'localhost', 'FROM_EMAIL': 'netbox@example.com'}):
+            self.assertTrue(self.guests.request_reset(get(), actor=self.keeper))
+        import re
+        token = re.search(r'/guest/reset/([^/]+)/', mail.outbox[-1].body).group(1)
+        self.client.post(f'/plugins/user-pin/guest/reset/{token}/', {'pin': 'Brand-new-pin-9', 'pin2': 'Brand-new-pin-9'})
+        self.assertIsNone(get().blocked)
+        self.assertEqual(self.guests.check_pin(get(), 'Brand-new-pin-9'), 'ok')
+        self.guests.set_rules(get(), self.keeper, '', '')  # back to the defaults
+        self.assertEqual(self.guests.rules(get()), (5, (10, 20, 30)))
+
+    def test_expired_pin_must_be_changed_and_home_page(self):
+        from netbox_user_pin.models import UserPin
+        self.sign_in()
+        page = self.client.get('/plugins/user-pin/guest/')
+        self.assertContains(page, 'You are signed in as Jan Novak')
+        self.assertContains(page, 'more days')
+        self.assertContains(page, 'Continue')
+        self.assertContains(page, 'read, add, edit')
+        UserPin.objects.filter(user=self.guest.user).update(changed=timezone.now() - timedelta(days=400))
+        self.assertRedirects(self.client.get('/tenancy/tenants/'), '/plugins/user-pin/guest/change/',
+                             fetch_redirect_response=False)
+        self.assertContains(self.client.get('/plugins/user-pin/guest/change/'), 'expired')
+        response = self.client.post('/plugins/user-pin/guest/change/',
+                                    {'current': 'Secret-pin-1', 'pin': 'Secret-pin-1', 'pin2': 'Secret-pin-1'})
+        self.assertContains(response, 'must differ')
+        self.client.post('/plugins/user-pin/guest/change/',
+                         {'current': 'Secret-pin-1', 'pin': 'Another-pin-7', 'pin2': 'Another-pin-7'})
+        self.assertFalse(self.guests.must_change(self.guest))
+        self.guests.force_change(self.guest, self.keeper)  # like 'must change password at next logon'
+        self.assertTrue(self.guests.must_change(self.guest))
+
+    def test_alias_and_description(self):
+        self.assertEqual(self.guest.user.username, 'pin.jan-novak')
+        other, _t = self.guests.create('Jan Novak', 'jan2@example.com', self.group, self.keeper)
+        self.assertEqual(other.user.username, 'pin.jan-novak-2')
+        with self.assertRaises(ValidationError):
+            self.guests.set_alias(other, self.keeper, 'pin.jan-novak')
+        with self.assertRaises(ValidationError):
+            self.guests.set_alias(other, self.keeper, 'X Y')
+        self.guests.set_alias(other, self.keeper, 'pin.jn2', 'Technik XY')
+        other.user.refresh_from_db()
+        self.assertEqual((other.user.username, other.user.last_name), ('pin.jn2', 'Technik XY'))
+
+    def test_two_part_address_and_admin_page(self):
+        with self.assertRaises(ValidationError):
+            areas.set_guest_path(self.keeper, ('', 'x2'))
+        self.assertEqual(areas.set_guest_path(self.keeper, ('AQER', 'x2')), 'aqer/x2')
+        self.assertEqual(self.guests.login_path(), '/aqer/x2/')
+        self.assertRedirects(self.client.get('/aqer/x2/'), '/plugins/user-pin/pin/', fetch_redirect_response=False)
+        areas.set_guest_path(self.keeper, ('pin', ''))
+        self.client.force_login(self.keeper)
+        session = self.client.session
+        session.save()
+        from netbox_user_pin import guest_views
+        self.assertTrue(hasattr(guest_views, '_activity'))
 
     def test_the_person_works_with_the_group_and_nothing_else(self):
         self.sign_in()
@@ -2304,7 +2383,8 @@ class GuestAccessTest(AreaTestCase):
         self.client.logout()
         cache = __import__('django.core.cache', fromlist=['cache']).cache
         cache.clear()
-        self.client.post('/plugins/user-pin/pin/', {'pin': 'wrong-wrong'}, REMOTE_ADDR='10.9.8.7')
+        for _n in range(5):  # the same steps as for a person: 5 wrong PINs, then the computer waits
+            self.client.post('/plugins/user-pin/pin/', {'pin': 'wrong-wrong'}, REMOTE_ADDR='10.9.8.7')
         response = self.client.post('/plugins/user-pin/pin/', {'pin': 'Secret-pin-1'}, REMOTE_ADDR='10.9.8.7')
         self.assertNotEqual(response.status_code, 302)  # the right PIN, but the computer waits
         self.assertContains(response, 'Wait')
