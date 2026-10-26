@@ -215,6 +215,23 @@ class PinSettings(models.Model):
         verbose_name=_('Address of the PIN-only sign-in'), max_length=50, default='pin',
         help_text=_('The one address where people with a PIN only sign in, e.g. /pin/ or /tenanti/.'),
     )
+    guest_free_attempts = models.PositiveSmallIntegerField(
+        verbose_name=_('Wrong PINs without a pause'), default=5,
+        help_text=_('PIN-only access: how many wrong PINs in a row are answered at once, without any wait.'),
+    )
+    guest_pauses = models.CharField(
+        verbose_name=_('Waits after that (seconds)'), max_length=100, default='10,20,30',
+        help_text=_('The 1st, 2nd, ... wrong PIN after the free ones makes the computer wait this long; the last '
+                    'number repeats.'),
+    )
+    guest_reset_after = models.PositiveSmallIntegerField(
+        verbose_name=_('Offer the reset by e-mail after wrong PINs'), default=8,
+        help_text=_('From this number of wrong PINs on, the page offers a new PIN by e-mail (to the address of the access).'),
+    )
+    guest_min_length = models.PositiveSmallIntegerField(
+        verbose_name=_('Shortest PIN of a PIN-only access'), default=8,
+        help_text=_('The PIN names the person on the shared page: keep it long.'),
+    )
     areas_enabled = models.BooleanField(
         verbose_name=_('Protect areas and objects'),
         default=False,
@@ -1044,3 +1061,19 @@ class PinGuest(models.Model):
     @property
     def is_active(self):
         return self.revoked is None and (self.expires is None or self.expires > timezone.now())
+
+
+class PinGuestBlock(models.Model):
+    """A computer (its address) whose wrong PINs on the shared PIN page make it wait; the keepers see it and release it."""
+    ip = models.GenericIPAddressField(unique=True)
+    wrong = models.PositiveIntegerField(default=0)
+    until = models.DateTimeField(null=True, blank=True)
+    last = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        verbose_name = _('blocked computer')
+        verbose_name_plural = _('blocked computers')
+        ordering = ('-last',)
+
+    def __str__(self):
+        return f'{self.ip} ({self.wrong})'

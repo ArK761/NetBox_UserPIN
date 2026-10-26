@@ -2169,7 +2169,7 @@ class GuestAccessTest(AreaTestCase):
         Tenant.objects.create(name='T1', slug='t1')
         self.keeper = User.objects.create_superuser('keepg', 'kg@example.com', 'x')
         service.set_pin(self.keeper, GOOD_PIN)
-        enable_2fa(self.keeper)
+        self.secret = enable_2fa(self.keeper)
         areas.add_keeper(self.keeper, self.master)
         self.area = self.make_area(targets=('tenancy.tenant',))
         self.group = areas.create_group(self.area, 'tenancy.tenant', 'Editors', ['view', 'add', 'change'],
@@ -2179,6 +2179,9 @@ class GuestAccessTest(AreaTestCase):
         self.url = guests.link_path(self.token)
         self.denied = lambda response: response.headers.get('X-UserPIN') == 'denied' or response.status_code in (
             302, 403, 404)
+
+    def strict(self):
+        self.guests.set_policy(self.keeper, 0, '30,60,300,900', 1, 8)
 
     def sign_in(self, pin='Secret-pin-1'):
         self.client.post(self.url, {'pin': pin, 'pin2': pin})
@@ -2199,6 +2202,7 @@ class GuestAccessTest(AreaTestCase):
                              fetch_redirect_response=False)
 
     def test_a_wrong_pin_makes_the_person_wait_but_never_locks(self):
+        self.strict()
         self.sign_in()
         self.client.logout()
         response = self.client.post(self.url, {'pin': 'wrong-wrong'})
@@ -2216,6 +2220,13 @@ class GuestAccessTest(AreaTestCase):
             PinGuest.objects.filter(pk=self.guest.pk).update(retry_after=None)
             self.guests.check_pin(PinGuest.objects.get(pk=self.guest.pk), 'nope-nope')
             self.assertAlmostEqual(self.guests.pause_seconds(PinGuest.objects.get(pk=self.guest.pk)), expected, delta=3)
+
+    def test_with_one_place_to_work_in_the_person_lands_there_at_once(self):
+        self.sign_in()
+        response = self.client.get('/plugins/user-pin/guest/')
+        self.assertRedirects(response, '/tenancy/tenants/', fetch_redirect_response=False)
+        page = self.client.get('/tenancy/tenants/').content.decode()
+        self.assertIn('/plugins/user-pin/guest/change/', page)  # the PIN is changed from the menu, inside
 
     def test_the_person_works_with_the_group_and_nothing_else(self):
         self.sign_in()
@@ -2283,11 +2294,10 @@ class GuestAccessTest(AreaTestCase):
         with self.assertRaises(ValidationError):  # the PIN names the person: two cannot share one
             self.guests.set_pin(other, 'Secret-pin-1', first=True)
         self.guests.set_pin(other, 'Different-pin-2', first=True)
-        cache = __import__('django.core.cache', fromlist=['cache']).cache
         self.client.logout()
         self.assertRedirects(self.client.get('/pin/'), '/plugins/user-pin/pin/', fetch_redirect_response=False)  # (the chosen address)
         for pin, who in (('Secret-pin-1', self.guest.pk), ('Different-pin-2', other.pk)):
-            cache.clear()
+            __import__('netbox_user_pin.models', fromlist=['x']).PinGuestBlock.objects.all().delete()
             self.assertRedirects(self.client.post('/plugins/user-pin/pin/', {'pin': pin}),
                                  '/plugins/user-pin/guest/', fetch_redirect_response=False)
             self.assertEqual(self.client.session[self.guests.SESSION_KEY]['id'], who)
@@ -2295,15 +2305,15 @@ class GuestAccessTest(AreaTestCase):
             # signing out leads back to the one page
             self.assertRedirects(self.client.get('/plugins/user-pin/guest/logout/'), '/pin/',
                                  fetch_redirect_response=False)
-        cache.clear()
+        __import__('netbox_user_pin.models', fromlist=['x']).PinGuestBlock.objects.all().delete()
         response = self.client.post('/plugins/user-pin/pin/', {'pin': 'Nobody-pin-3'})
         self.assertContains(response, 'not correct')
 
     def test_wrong_pins_from_a_computer_make_it_wait(self):
+        self.strict()
         self.sign_in()
         self.client.logout()
-        cache = __import__('django.core.cache', fromlist=['cache']).cache
-        cache.clear()
+        __import__('netbox_user_pin.models', fromlist=['x']).PinGuestBlock.objects.all().delete()
         self.client.post('/plugins/user-pin/pin/', {'pin': 'wrong-wrong'}, REMOTE_ADDR='10.9.8.7')
         response = self.client.post('/plugins/user-pin/pin/', {'pin': 'Secret-pin-1'}, REMOTE_ADDR='10.9.8.7')
         self.assertNotEqual(response.status_code, 302)  # the right PIN, but the computer waits
@@ -2316,10 +2326,9 @@ class GuestAccessTest(AreaTestCase):
         self.sign_in()
         self.guests.set_pin(PinGuest.objects.get(pk=self.guest.pk), 'Another-pin-9')
         self.client.logout()
-        cache = __import__('django.core.cache', fromlist=['cache']).cache
-        cache.clear()
+        __import__('netbox_user_pin.models', fromlist=['x']).PinGuestBlock.objects.all().delete()
         self.assertEqual(self.client.post('/plugins/user-pin/pin/', {'pin': 'Secret-pin-1'}).status_code, 200)
-        cache.clear()
+        __import__('netbox_user_pin.models', fromlist=['x']).PinGuestBlock.objects.all().delete()
         self.assertEqual(self.client.post('/plugins/user-pin/pin/', {'pin': 'Another-pin-9'}).status_code, 302)
 
     def test_a_forgotten_pin_is_asked_for_by_the_e_mail_and_the_answer_is_always_the_same(self):
@@ -2403,3 +2412,74 @@ class GuestAccessTest(AreaTestCase):
         self.sign_in()
         self.assertRedirects(self.client.get('/plugins/user-pin/guest/logout/'), '/tenanti/',
                              fetch_redirect_response=False)
+
+    def test_the_policy_for_wrong_pins_is_set_by_a_keeper_and_defaults_to_five_free_then_10_20_30(self):
+        self.assertEqual([self.guests.pause_for(n) for n in range(1, 10)], [0, 0, 0, 0, 0, 10, 20, 30, 30])
+        self.assertFalse(self.guests.reset_offered(7))
+        self.assertTrue(self.guests.reset_offered(8))
+        self.guests.set_policy(self.keeper, 2, '5, 15', 4, 10)
+        self.assertEqual([self.guests.pause_for(n) for n in range(1, 6)], [0, 0, 5, 15, 15])
+        self.assertEqual(self.guests.min_length(), 10)
+        with self.assertRaises(ValidationError):
+            self.guests.set_pin(self.guest, 'only-nine')
+        for bad in ((2, 'x', 4, 10), (2, '0', 4, 10), (99, '5', 4, 10), (2, '5', 0, 10), (2, '5', 4, 3)):
+            with self.assertRaises(ValidationError):
+                self.guests.set_policy(self.keeper, *bad)
+        with self.assertRaises(PermissionDenied):
+            self.guests.set_policy(self.owner1, 2, '5', 4, 10)
+
+    def test_the_pin_page_waits_only_after_the_free_attempts_and_then_offers_the_reset(self):
+        self.sign_in()
+        self.client.logout()
+        __import__('netbox_user_pin.models', fromlist=['x']).PinGuestBlock.objects.all().delete()
+        for n in range(1, 6):  # five wrong PINs: answered at once, no wait, no reset offered yet
+            response = self.client.post('/plugins/user-pin/pin/', {'pin': f'wrong-pin-{n}'}, REMOTE_ADDR='10.9.8.7')
+            self.assertContains(response, 'not correct')
+            self.assertNotContains(response, 'id="left"')
+        response = self.client.post('/plugins/user-pin/pin/', {'pin': 'wrong-pin-6'}, REMOTE_ADDR='10.9.8.7')
+        self.assertContains(response, 'id="left"')  # the sixth: a wait of 10 s
+        self.assertAlmostEqual(self.guests.ip_pause(response.wsgi_request), 10, delta=2)
+        self.assertNotContains(response, 'Did you forget')
+        for pause in (20, 30):
+            __import__('netbox_user_pin.models', fromlist=['x']).PinGuestBlock.objects.update(until=timezone.now() - timedelta(seconds=1))
+            response = self.client.post('/plugins/user-pin/pin/', {'pin': 'wrong-pin-x'}, REMOTE_ADDR='10.9.8.7')
+            self.assertAlmostEqual(self.guests.ip_pause(response.wsgi_request), pause, delta=2)
+        self.assertContains(response, 'Did you forget')  # after the eighth: the reset by e-mail is offered
+
+    def test_the_administrator_sees_who_waits_and_releases_them(self):
+        from netbox_user_pin.models import PinGuest, PinGuestBlock
+        self.strict()
+        self.sign_in()
+        self.client.logout()
+        self.client.post('/plugins/user-pin/pin/', {'pin': 'wrong-wrong'}, REMOTE_ADDR='10.9.8.7')  # a computer waits
+        self.client.post(self.url, {'pin': 'wrong-wrong'})  # and the access of the link waits
+        self.assertEqual(len(self.guests.blocked_computers()), 1)
+        admin_login(self.client, self.keeper, secret=self.secret)
+        page = self.client.get(reverse('plugins:netbox_user_pin:guests')).content.decode()
+        self.assertIn('10.9.8.7', page)
+        self.assertIn('Release', page)
+        self.assertIn('Blocked for a time', page)  # the panel at the top, with the access of the link and the computer
+        self.assertIn('Jan Novak', page.split('Blocked for a time')[1].split('Address for signing in')[0])
+        block = PinGuestBlock.objects.get()
+        self.client.post(reverse('plugins:netbox_user_pin:guests'), {'action': 'unblock-ip', 'pk': block.pk})
+        self.assertEqual(self.guests.blocked_computers(), [])
+        self.client.post(reverse('plugins:netbox_user_pin:guests'), {'action': 'unblock', 'pk': self.guest.pk})
+        self.guest.refresh_from_db()
+        self.assertEqual((self.guest.failed, self.guests.pause_seconds(self.guest)), (0, 0))
+        with self.assertRaises(PermissionDenied):
+            self.guests.unblock_guest(User.objects.create_user('nobody2', 'n2@example.com'), self.guest)
+
+    def test_the_list_shows_when_they_signed_in_and_what_they_changed(self):
+        from tenancy.models import Tenant
+        from core.models import ObjectChange
+        self.sign_in()
+        self.client.post('/tenancy/tenants/add/', {'name': 'Made by Jan', 'slug': 'made-by-jan'})
+        self.assertTrue(Tenant.objects.filter(slug='made-by-jan').exists())
+        activity = self.guests.activity(self.guest)
+        self.assertTrue(any(e.action == 'guest_login' for e in activity['events']))
+        self.assertTrue(any(c.object_repr == 'Made by Jan' for c in activity['changes']))
+        self.assertEqual(ObjectChange.objects.filter(user=self.guest.user).count(), activity['changes_total'])
+        admin_login(self.client, self.keeper, secret=self.secret)
+        page = self.client.get(reverse('plugins:netbox_user_pin:guests')).content.decode()
+        self.assertIn('Made by Jan', page)
+        self.assertIn('Activity', page)

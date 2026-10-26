@@ -360,6 +360,12 @@ address list per access restricts the computers.
   the person and the keepers get an e-mail. "I forgot my PIN" e-mails a link for a new one (1 hour, once).
 * Session: idle 30 min and 8 h at most (settable per access), optional list of IP addresses / networks, optional end.
 * A keeper can send a new link (the old one stops), clear the PIN, revoke (ends every session), restore and delete.
+* The page shows statistics (accesses, active, invited, waiting, revoked, signed in within 24 h), who is blocked for a time
+  (with the time stamp and a **Release** button, for the access and for the computer) and, under every access, an
+  expandable **Activity**: sign-ins and PIN events from the audit, and the changes made in NetBox (change log).
+* Wrong PINs: the keeper sets the rules on the page (free attempts, the waits after them, from which count the reset by
+  e-mail is offered, the shortest PIN). Defaults: 5 free, then 10 s, 20 s, 30 s; reset by e-mail offered from the 8th.
+* One place to work in: the person lands in it at once after signing in; the PIN is changed from the user menu.
 * Everything is in the audit log; the change log of NetBox shows the technical user (`pin-…`, whose first name is the person's name).
 
 ### Using it from a plugin

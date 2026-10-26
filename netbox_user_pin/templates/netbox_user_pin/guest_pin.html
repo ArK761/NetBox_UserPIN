@@ -12,7 +12,8 @@
   <script>var s={{ pause }},t=setInterval(function(){s--;document.getElementById('left').textContent=s;if(s<=0){clearInterval(t);location.reload();}},1000);</script>
 {% endif %}
 <hr>
-<details><summary class="text-secondary">{% trans "I forgot my PIN" %}</summary>
+<details{% if reset_offered %} open{% endif %}><summary class="{% if reset_offered %}fw-bold{% else %}text-secondary{% endif %}">{% trans "I forgot my PIN" %}</summary>
+  {% if reset_offered %}<div class="alert alert-warning mt-2">{% trans "Did you forget your PIN? Write your e-mail address; a link for a new PIN goes to the address saved with your access." %}</div>{% endif %}
   <form method="post" action="{% url 'plugins:netbox_user_pin:guest_pin_forgot' %}" class="mt-2">{% csrf_token %}
     <label class="form-label" for="email">{% trans "Your e-mail address" %}</label>
     <input class="form-control mb-2" type="email" id="email" name="email" required>

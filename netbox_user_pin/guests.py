@@ -13,7 +13,6 @@ import time
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
-from django.core.cache import cache
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.validators import validate_email
 from django.db import transaction
@@ -22,20 +21,72 @@ from django.utils import timezone
 from django.utils.translation import gettext as _
 
 from . import areas, crypto, service
-from .models import AreaGrant, PinAccess, PinEventAction, PinGuest, UserPin
+from .models import AreaGrant, PinAccess, PinEventAction, PinGuest, PinGuestBlock, UserPin
 
 logger = logging.getLogger('netbox_user_pin.guests')
 
 SESSION_KEY = 'userpin_guest'
-MIN_PIN_LENGTH = 8
+MIN_PIN_LENGTH = 8  # the default and the floor; the settings may ask for more
 MAX_PIN_LENGTH = 64
 INVITE_DAYS = 7
 RESET_MINUTES = 60
-PAUSES = (30, 60, 300, 900)  # seconds after the 1st, 2nd, 3rd, 4th and every further wrong PIN
 ALERT_EVERY = 5  # wrong PINs between two warnings
 
 __all__ = ('check_pin', 'create', 'delete', 'find', 'guard', 'guest_of', 'invite', 'is_guest', 'pause_seconds',
            'request_reset', 'restore', 'revoke', 'set_pin', 'start_session')
+
+
+def policy():
+    """The rules for wrong PINs, as the keepers set them: ``(free, pauses, reset_after)``."""
+    settings = service.get_settings()
+    return settings.guest_free_attempts, parse_pauses(settings.guest_pauses), settings.guest_reset_after
+
+
+def min_length():
+    return max(MIN_PIN_LENGTH, service.get_settings().guest_min_length or MIN_PIN_LENGTH)
+
+
+def parse_pauses(text):
+    """'10,20,30' -> (10, 20, 30); a broken value falls back to the default."""
+    try:
+        values = tuple(int(part) for part in str(text).replace(';', ',').split(',') if part.strip())
+    except ValueError:
+        values = ()
+    return values if values and all(1 <= v <= 3600 for v in values) else (10, 20, 30)
+
+
+def pause_for(wrong):
+    """Seconds to wait after ``wrong`` wrong PINs in a row (0 inside the free ones)."""
+    free, pauses, _reset = policy()
+    if wrong <= free:
+        return 0
+    return pauses[min(wrong - free, len(pauses)) - 1]
+
+
+def reset_offered(wrong):
+    return wrong >= policy()[2]
+
+
+def set_policy(actor, free, pauses, reset_after, minimum, request=None):
+    """A protection keeper sets how wrong PINs of the PIN-only accesses are answered."""
+    if not areas.is_keeper(actor):
+        raise PermissionDenied
+    try:
+        free, reset_after, minimum = int(free), int(reset_after), int(minimum)
+    except (TypeError, ValueError):
+        raise ValidationError(_('Write numbers.'))
+    parsed = parse_pauses(pauses)
+    if str(pauses).replace(' ', '') != ','.join(str(v) for v in parsed):
+        raise ValidationError(_('Write the waits as seconds separated by commas, e.g. 10,20,30 (1 to 3600 each).'))
+    if not 0 <= free <= 20 or not 1 <= reset_after <= 50 or not MIN_PIN_LENGTH <= minimum <= 32:
+        raise ValidationError(_('Free attempts 0 to 20, the reset after 1 to 50, the PIN length 8 to 32.'))
+    settings = service.get_settings()
+    settings.guest_free_attempts, settings.guest_pauses = free, ','.join(str(v) for v in parsed)
+    settings.guest_reset_after, settings.guest_min_length = reset_after, minimum
+    settings.save()
+    service.log_event(PinEventAction.SETTINGS_CHANGED, actor=actor, request=request,
+                      detail=f'PIN-only wrong PINs: {free} free, then {settings.guest_pauses} s, reset offered after '
+                             f'{reset_after}; shortest PIN {minimum}')
 
 
 def _hash(token):
@@ -105,9 +156,10 @@ def _take_pin_index(guest, pin):
 
 def _clean_pin(pin):
     pin = pin or ''
-    if not MIN_PIN_LENGTH <= len(pin) <= MAX_PIN_LENGTH:
+    minimum = min_length()
+    if not minimum <= len(pin) <= MAX_PIN_LENGTH:
         raise ValidationError(_('The PIN must have %(min)d to %(max)d characters.') % {
-            'min': MIN_PIN_LENGTH, 'max': MAX_PIN_LENGTH})
+            'min': minimum, 'max': MAX_PIN_LENGTH})
     if len(set(pin)) < 4:
         raise ValidationError(_('This PIN is too easy to guess. Use at least four different characters.'))
     return pin
@@ -312,7 +364,8 @@ def check_pin(guest, pin, request=None):
             return 'ok'
         guest = PinGuest.objects.select_for_update().get(pk=guest.pk)
         guest.failed += 1
-        guest.retry_after = timezone.now() + timedelta(seconds=PAUSES[min(guest.failed, len(PAUSES)) - 1])
+        wait = pause_for(guest.failed)
+        guest.retry_after = timezone.now() + timedelta(seconds=wait) if wait else None
         guest.save(update_fields=['failed', 'retry_after'])
     _log(PinEventAction.GUEST_FAILED, guest, request=request, detail=f'attempt {guest.failed}')
     if guest.failed % ALERT_EVERY == 0:
@@ -385,6 +438,15 @@ def delete(guest, actor, request=None):
     _log(PinEventAction.GUEST_DELETED, guest, actor, request)
     guest.user.delete()  # takes the access, the PIN and the grants along; the changelog keeps the name
     areas.clear_cache()
+
+
+def activity(guest, events=30, changes=50):
+    """What the person did: the sign-ins and the PIN events (audit of the PIN) and the changes in NetBox (its change log)."""
+    from core.models import ObjectChange
+    from .models import PinEvent
+    log = list(PinEvent.objects.filter(user=guest.user).exclude(action=PinEventAction.MAIL_SENT)[:events])
+    done = list(ObjectChange.objects.filter(user=guest.user).select_related('changed_object_type')[:changes])
+    return {'events': log, 'changes': done, 'changes_total': ObjectChange.objects.filter(user=guest.user).count()}
 
 
 def groups_of(guest):
@@ -487,15 +549,54 @@ def guard(request, guest):
 # The page that asks only for the PIN: the person is told by the address of the computer and the PIN
 #
 
-def _ip_key(address):
-    return f'userpin-guestpin-{address}'
+WRONG_FORGOTTEN_AFTER = timedelta(hours=1)  # the count of wrong PINs of a computer starts anew after an hour of quiet
+
+
+def _block_of(address):
+    block = PinGuestBlock.objects.filter(ip=str(address)).first()
+    if block is not None and block.last < timezone.now() - WRONG_FORGOTTEN_AFTER:
+        block.delete()
+        return None
+    return block
+
+
+def ip_state(request):
+    """``(seconds to wait, wrong PINs in a row)`` of this computer."""
+    address = _client_ip(request)
+    block = _block_of(address) if address else None
+    if block is None:
+        return 0, 0
+    wait = int((block.until - timezone.now()).total_seconds()) + 1 if block.until and block.until > timezone.now() else 0
+    return max(0, wait), block.wrong
 
 
 def ip_pause(request):
     """Seconds the computer must still wait (wrong PINs from one address, whoever the person is)."""
-    address = _client_ip(request)
-    state = cache.get(_ip_key(address)) if address else None
-    return max(0, int(state['until'] - time.time()) + 1) if state else 0
+    return ip_state(request)[0]
+
+
+def blocked_computers():
+    """The computers that wait now (for the administration)."""
+    return list(PinGuestBlock.objects.filter(until__gt=timezone.now()))
+
+
+def unblock_computer(actor, pk, request=None):
+    if not _may_manage(actor):
+        raise PermissionDenied
+    block = PinGuestBlock.objects.filter(pk=pk).first()
+    if block is not None:
+        service.log_event(PinEventAction.GUEST_RESET, actor=actor, request=request, scope='guest',
+                          detail=f'computer {block.ip} released (wrong PINs: {block.wrong})')
+        block.delete()
+
+
+def unblock_guest(actor, guest, request=None):
+    """Clear the wrong PINs and the wait of one access."""
+    if not _may_manage(actor):
+        raise PermissionDenied
+    guest.failed, guest.retry_after = 0, None
+    guest.save(update_fields=['failed', 'retry_after'])
+    _log(PinEventAction.GUEST_RESET, guest, actor, request, 'released')
 
 
 def pin_only_login(request, pin):
@@ -510,21 +611,25 @@ def pin_only_login(request, pin):
     if ip_pause(request):
         return 'pause', None
     guest = None
-    if pin and MIN_PIN_LENGTH <= len(pin) <= MAX_PIN_LENGTH:
+    if pin and MIN_PIN_LENGTH <= len(pin) <= MAX_PIN_LENGTH:  # (a PIN of the old minimum still opens its owner)
         guest = PinGuest.objects.select_related('user').filter(pin_index__in=crypto.pin_lookups(pin)).first()
     if guest is not None and _pin_matches(guest, pin):
         if not guest.is_active or not guest.user.is_active or not ip_allowed(guest, request):
             return 'blocked', None
         if pause_seconds(guest):
             return 'pause', None
-        cache.delete(_ip_key(address))
+        PinGuestBlock.objects.filter(ip=str(address)).delete()
         guest.failed, guest.retry_after, guest.last_login, guest.last_ip = 0, None, timezone.now(), str(address)
         guest.save(update_fields=['failed', 'retry_after', 'last_login', 'last_ip'])
         return 'ok', guest
-    state = cache.get(_ip_key(address)) or {'n': 0}
-    state['n'] += 1
-    state['until'] = time.time() + PAUSES[min(state['n'], len(PAUSES)) - 1]
-    cache.set(_ip_key(address), state, 3600)
+    with transaction.atomic():
+        block = _block_of(address) or PinGuestBlock(ip=str(address))
+        block.wrong += 1
+        wait = pause_for(block.wrong)
+        block.until = timezone.now() + timedelta(seconds=wait) if wait else None
+        block.last = timezone.now()
+        block.save()
+    state = {'n': block.wrong}
     service.log_event(PinEventAction.GUEST_FAILED, scope='guest', request=request,
                       detail=f'PIN page, address {address}, attempt {state["n"]}')
     if state['n'] % ALERT_EVERY == 0:

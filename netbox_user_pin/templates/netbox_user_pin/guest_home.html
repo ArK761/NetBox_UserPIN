@@ -10,8 +10,7 @@
   </div>
 {% empty %}<div class="alert alert-info">{% trans "No data is open to you yet. Ask the administrator." %}</div>{% endfor %}
 <hr>
-<div class="d-flex justify-content-between">
-  <a class="btn btn-outline-secondary btn-sm" href="{% url 'plugins:netbox_user_pin:guest_change' %}">{% trans "Change my PIN" %}</a>
+<div class="text-end">
   <a class="btn btn-outline-danger btn-sm" href="{% url 'plugins:netbox_user_pin:guest_logout' %}">{% trans "Sign out" %}</a>
 </div>
 {% endblock %}

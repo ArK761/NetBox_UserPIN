@@ -5,6 +5,8 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import NoReverseMatch, reverse
+from datetime import timedelta
+
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from django.utils.translation import gettext as _
@@ -39,7 +41,8 @@ class GuestLoginView(View):
         setup_ok = bool(guest) and not has_pin and guest.invite_expires and guest.invite_expires > timezone.now()
         return render(request, T + 'login.html', {
             'guest': guest, 'token': token, 'has_pin': has_pin, 'setup_ok': setup_ok,
-            'pause': guests.pause_seconds(guest) if guest else 0, 'min_length': guests.MIN_PIN_LENGTH, **extra})
+            'pause': guests.pause_seconds(guest) if guest else 0, 'min_length': guests.min_length(),
+            'reset_offered': bool(guest) and guests.reset_offered(guest.failed), **extra})
 
     def get(self, request, token):
         guest = guests.find(token)
@@ -78,7 +81,8 @@ class GuestPinLoginView(View):
     """The stable address of the computers: only the PIN is asked, the person is told by the address + PIN."""
 
     def _page(self, request, **extra):
-        return render(request, T + 'pin.html', {'pause': guests.ip_pause(request), **extra})
+        pause, wrong = guests.ip_state(request)
+        return render(request, T + 'pin.html', {'pause': pause, 'reset_offered': guests.reset_offered(wrong), **extra})
 
     def get(self, request):
         if request.user.is_authenticated and guests.guest_of(request.user) is not None:
@@ -121,7 +125,7 @@ class GuestResetView(View):
     def get(self, request, token):
         if guests.find_reset(token) is None:
             return render(request, T + 'invalid.html', status=404)
-        return render(request, T + 'reset.html', {'min_length': guests.MIN_PIN_LENGTH})
+        return render(request, T + 'reset.html', {'min_length': guests.min_length()})
 
     def post(self, request, token):
         guest = guests.find_reset(token)
@@ -130,7 +134,7 @@ class GuestResetView(View):
         try:
             guests.set_pin(guest, _same(request), request=request)
         except ValidationError as exc:
-            return render(request, T + 'reset.html', {'min_length': guests.MIN_PIN_LENGTH, 'error': _error(exc)})
+            return render(request, T + 'reset.html', {'min_length': guests.min_length(), 'error': _error(exc)})
         guests.start_session(request, guest)
         request.session.modified = True
         return redirect('plugins:netbox_user_pin:guest_home')
@@ -176,13 +180,16 @@ def _doors(user):
 class GuestHomeView(GuestMixin, View):
     def get(self, request):
         guest = request.user.pin_guest
+        doors = _doors(request.user)
+        if len(doors) == 1:  # one place to work in: straight there (no page in between)
+            return redirect(doors[0]['url'])
         return render(request, T + 'home.html', {
-            'guest': guest, 'doors': _doors(request.user), 'left': guests.seconds_left(request, guest) // 60})
+            'guest': guest, 'doors': doors, 'left': guests.seconds_left(request, guest) // 60})
 
 
 class GuestChangeView(GuestMixin, View):
     def _page(self, request, **extra):
-        return render(request, T + 'change.html', {'min_length': guests.MIN_PIN_LENGTH, **extra})
+        return render(request, T + 'change.html', {'min_length': guests.min_length(), **extra})
 
     def get(self, request):
         return self._page(request)
@@ -248,12 +255,25 @@ class GuestListView(AreaViewMixin, View):
                 state = ('pause', _('Pause after a wrong PIN'))
             else:
                 state = ('active', _('Active'))
-            rows.append({'guest': guest, 'state': state, 'groups': guests.groups_of(guest)})
+            rows.append({'guest': guest, 'state': state, 'groups': guests.groups_of(guest),
+                         'wait': guests.pause_seconds(guest), 'activity': guests.activity(guest)})
+        now = timezone.now()
+        states = [r['state'][0] for r in rows]
+        stats = {
+            'total': len(rows), 'active': states.count('active'), 'invited': states.count('invited'),
+            'waiting': states.count('pause'), 'revoked': states.count('revoked') + states.count('ended'),
+            'today': sum(1 for r in rows if r['guest'].last_login and r['guest'].last_login > now - timedelta(hours=24)),
+        }
+        waiting = [r for r in rows if r['wait']]
         return render(request, self.template_name, {
-            'login_url': request.build_absolute_uri(guests.login_path()), 'guest_path': areas.guest_path(),
-            'is_keeper': areas.is_keeper(request.user),
+            'stats': stats, 'waiting': waiting,
+            'tiles': [(_('Accesses'), stats['total'], 'body'), (_('Active'), stats['active'], 'green'),
+                      (_('Invited'), stats['invited'], 'yellow'), (_('Waiting after wrong PINs'), stats['waiting'] + len(guests.blocked_computers()), 'orange'),
+                      (_('Revoked or ended'), stats['revoked'], 'red'), (_('Signed in in 24 h'), stats['today'], 'azure')], 'login_url': request.build_absolute_uri(guests.login_path()), 'guest_path': areas.guest_path(),
+            'is_keeper': areas.is_keeper(request.user), 'cfg': service.get_settings(),
+            'blocked': guests.blocked_computers(),
             'rows': rows, 'group_choices': self._groups(request.user), 'mail_ok': service.email_configured(),
-            'min_length': guests.MIN_PIN_LENGTH, **extra})
+            'min_length': guests.min_length(), **extra})
 
     def get(self, request):
         return self._render(request)
@@ -261,6 +281,15 @@ class GuestListView(AreaViewMixin, View):
     def post(self, request):
         action = request.POST.get('action')
         try:
+            if action == 'unblock-ip':
+                guests.unblock_computer(request.user, request.POST.get('pk') or 0, request=request)
+                messages.success(request, _('The computer was released.'))
+                return redirect('plugins:netbox_user_pin:guests')
+            if action == 'policy':
+                guests.set_policy(request.user, request.POST.get('free'), request.POST.get('pauses', ''),
+                                  request.POST.get('reset_after'), request.POST.get('minimum'), request=request)
+                messages.success(request, _('Saved.'))
+                return redirect('plugins:netbox_user_pin:guests')
             if action == 'path':
                 slug = areas.set_guest_path(request.user, request.POST.get('path'), request=request)
                 messages.success(request, _('The address is /%(slug)s/.') % {'slug': slug})
@@ -280,7 +309,10 @@ class GuestListView(AreaViewMixin, View):
                 return self._render(request, new_link=request.build_absolute_uri(guests.link_path(token)),
                                     new_guest=guest)  # no working e-mail: the link is shown once
             guest = get_object_or_404(PinGuest, pk=request.POST.get('pk') or 0)
-            if action == 'invite':
+            if action == 'unblock':
+                guests.unblock_guest(request.user, guest, request=request)
+                messages.success(request, _('Released: the access may try again.'))
+            elif action == 'invite':
                 token, sent = guests.invite(guest, request.user, request=request)
                 if sent:
                     messages.success(request, _('The invitation was sent.'))

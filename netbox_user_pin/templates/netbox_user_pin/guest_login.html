@@ -23,7 +23,8 @@
     <p class="text-secondary text-center mt-3">{% trans "Wait before the next attempt:" %} <strong id="left">{{ pause }}</strong> s</p>
     <script>var s={{ pause }},t=setInterval(function(){s--;document.getElementById('left').textContent=s;if(s<=0){clearInterval(t);location.reload();}},1000);</script>
   {% endif %}
-  {% if wrong or pause %}
+  {% if reset_offered %}
+  <div class="alert alert-warning mt-3">{% trans "Did you forget your PIN? A link for a new one goes to the e-mail address saved with your access." %}</div>
   <form method="post" action="{% url 'plugins:netbox_user_pin:guest_forgot' token %}" class="mt-3 text-center">{% csrf_token %}
     <button class="btn btn-outline-secondary btn-sm" type="submit">{% trans "I forgot my PIN – send me a link to set a new one" %}</button>
   </form>
