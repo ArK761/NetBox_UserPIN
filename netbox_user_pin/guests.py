@@ -13,6 +13,7 @@ import time
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.validators import validate_email
 from django.db import transaction
@@ -73,6 +74,33 @@ def find(token):
         return None
     guest = PinGuest.objects.select_related('user').filter(token_hash=_hash(token)).first()
     return guest if guest is not None and guest.is_active and guest.user.is_active else None
+
+
+def _client_ip(request):
+    try:
+        return ipaddress.ip_address(str(service.get_client_ip(request)))
+    except ValueError:
+        return None
+
+
+def _pin_matches(guest, pin):
+    """Does ``pin`` fit the PIN of the access (nothing is counted or changed)?"""
+    user_pin = UserPin.objects.filter(user=guest.user).first()
+    if user_pin is None or not user_pin.is_set:
+        return False
+    try:
+        stored = crypto.decrypt(user_pin.pin_hash, user_pin.aad)
+        return bool(service._hasher().verify(stored, pin or ''))
+    except Exception:  # noqa: BLE001 - a wrong PIN, a damaged hash: no match
+        return False
+
+
+def _take_pin_index(guest, pin):
+    """The PIN identifies the person on the shared page: two accesses never hold the same one."""
+    index = crypto.pin_lookup(pin)
+    if PinGuest.objects.exclude(pk=guest.pk).filter(pin_index__in=crypto.pin_lookups(pin)).exists():
+        raise ValidationError(_('Choose another PIN.'))
+    return index
 
 
 def _clean_pin(pin):
@@ -212,8 +240,10 @@ def invite(guest, actor, request=None):
         'Hello %(name)s,\n\nyou were given access to NetBox through a PIN.\n\nYour personal link:\n%(link)s\n\n'
         '%(first)s\nKeep the link to yourself: it works only together with your PIN.') % {
             'name': guest.name, 'link': link,
-            'first': _('Open it and choose your own PIN within %(days)d days.') % {'days': INVITE_DAYS}
-            if guest.invite_expires and not has_pin(guest) else _('Open it and enter your PIN.')})
+            'first': (_('Open it and choose your own PIN within %(days)d days.') % {'days': INVITE_DAYS}
+                      if guest.invite_expires and not has_pin(guest) else _('Open it and enter your PIN.'))
+            + '\n' + _('Afterwards save this page and sign in there with your PIN only: %(page)s') % {
+                'page': _absolute(request, reverse('plugins:netbox_user_pin:guest_pin'))}})
     _log(PinEventAction.GUEST_INVITED, guest, actor, request, 'sent' if sent else 'not sent')
     return token, sent
 
@@ -232,6 +262,7 @@ def pause_seconds(guest):
 def set_pin(guest, pin, request=None, first=False):
     """The person chooses a PIN (the first one, after a reset, or - ``first=False`` - a change)."""
     pin = _clean_pin(pin)
+    index = _take_pin_index(guest, pin)
     with transaction.atomic():
         user_pin = UserPin.objects.select_for_update().get(user=guest.user)
         user_pin.pin_hash = service._hash_and_encrypt(user_pin, pin)
@@ -242,8 +273,9 @@ def set_pin(guest, pin, request=None, first=False):
         user_pin.locked_until = None
         user_pin.save()
         guest.failed, guest.retry_after, guest.reset_hash, guest.reset_expires = 0, None, '', None
-        guest.invite_expires = None
-        guest.save(update_fields=['failed', 'retry_after', 'reset_hash', 'reset_expires', 'invite_expires'])
+        guest.invite_expires, guest.pin_index = None, index
+        guest.save(update_fields=['failed', 'retry_after', 'reset_hash', 'reset_expires', 'invite_expires',
+                                  'pin_index'])
     _log(PinEventAction.GUEST_PIN, guest, guest.user, request, 'first' if first else 'changed')
 
 
@@ -267,6 +299,10 @@ def check_pin(guest, pin, request=None):
         if service._check_hash(user_pin, stored, pin):
             guest = PinGuest.objects.select_for_update().get(pk=guest.pk)
             guest.failed, guest.retry_after = 0, None
+            if not guest.pin_index and not PinGuest.objects.exclude(pk=guest.pk).filter(
+                    pin_index__in=crypto.pin_lookups(pin)).exists():
+                guest.pin_index = crypto.pin_lookup(pin)
+                guest.save(update_fields=['pin_index'])
             guest.last_login = timezone.now()
             try:
                 guest.last_ip = str(service.get_client_ip(request)) or None
@@ -432,7 +468,7 @@ def guard(request, guest):
         if request.headers.get('HX-Request') == 'true' or path.startswith('/api/'):
             from django.http import HttpResponse
             return HttpResponse(status=401)
-        return redirect(link or reverse('plugins:netbox_user_pin:guest_ended'))
+        return redirect(return_url(guest, link))
     if path.startswith('/plugins/user-pin/guest/') and not path.startswith('/plugins/user-pin/guest/reset/'):
         return None
     if path == '/' or path.startswith('/plugins/user-pin/'):
@@ -445,3 +481,60 @@ def guard(request, guest):
         from .area_guard import denied_response
         return denied_response(request, None, right='view', target=None)
     return None
+
+
+#
+# The page that asks only for the PIN: the person is told by the address of the computer and the PIN
+#
+
+def _ip_key(address):
+    return f'userpin-guestpin-{address}'
+
+
+def ip_pause(request):
+    """Seconds the computer must still wait (wrong PINs from one address, whoever the person is)."""
+    address = _client_ip(request)
+    state = cache.get(_ip_key(address)) if address else None
+    return max(0, int(state['until'] - time.time()) + 1) if state else 0
+
+
+def pin_only_login(request, pin):
+    """
+    ``('ok', guest)``, ``('wrong', None)``, ``('pause', None)`` or ``('blocked', None)``. The PIN alone tells who the person
+    is (it is unique). A wrong PIN makes the whole computer wait (30 s, 1, 5, 15 min): the person cannot be named before
+    the PIN is right.
+    """
+    address = _client_ip(request)
+    if address is None:
+        return 'blocked', None
+    if ip_pause(request):
+        return 'pause', None
+    guest = None
+    if pin and MIN_PIN_LENGTH <= len(pin) <= MAX_PIN_LENGTH:
+        guest = PinGuest.objects.select_related('user').filter(pin_index__in=crypto.pin_lookups(pin)).first()
+    if guest is not None and _pin_matches(guest, pin):
+        if not guest.is_active or not guest.user.is_active or not ip_allowed(guest, request):
+            return 'blocked', None
+        if pause_seconds(guest):
+            return 'pause', None
+        cache.delete(_ip_key(address))
+        guest.failed, guest.retry_after, guest.last_login, guest.last_ip = 0, None, timezone.now(), str(address)
+        guest.save(update_fields=['failed', 'retry_after', 'last_login', 'last_ip'])
+        return 'ok', guest
+    state = cache.get(_ip_key(address)) or {'n': 0}
+    state['n'] += 1
+    state['until'] = time.time() + PAUSES[min(state['n'], len(PAUSES)) - 1]
+    cache.set(_ip_key(address), state, 3600)
+    service.log_event(PinEventAction.GUEST_FAILED, scope='guest', request=request,
+                      detail=f'PIN page, address {address}, attempt {state["n"]}')
+    if state['n'] % ALERT_EVERY == 0:
+        for keeper in areas.keepers():
+            service.send_user_mail(keeper, _('Wrong PINs from %(ip)s') % {'ip': address}, _(
+                '%(n)d wrong PINs on the PIN-only page from the address %(ip)s.') % {'n': state['n'], 'ip': address},
+                request=request)
+    return 'wrong', None
+
+
+def return_url(guest, link=''):
+    """Where a person goes after signing out / when the session ended: the shared PIN page."""
+    return reverse('plugins:netbox_user_pin:guest_pin')

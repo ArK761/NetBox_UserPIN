@@ -1,0 +1,22 @@
+{% extends 'netbox_user_pin/guest_base.html' %}
+{% load i18n %}
+{% block guest_title %}{% trans "Sign in with a PIN" %}{% endblock %}
+{% block guest_body %}
+<h2 class="text-center mb-3">{% trans "Sign in with a PIN" %}</h2>
+<form method="post" autocomplete="off">{% csrf_token %}
+  <div class="mb-3"><label class="form-label" for="pin">{% trans "PIN" %}</label><input class="form-control" type="password" id="pin" name="pin" autocomplete="current-password" required autofocus {% if pause %}disabled{% endif %}></div>
+  <button class="btn btn-primary w-100" type="submit" {% if pause %}disabled{% endif %}>{% trans "Sign in" %}</button>
+</form>
+{% if pause %}
+  <p class="text-secondary text-center mt-3">{% trans "Wait before the next attempt:" %} <strong id="left">{{ pause }}</strong> s</p>
+  <script>var s={{ pause }},t=setInterval(function(){s--;document.getElementById('left').textContent=s;if(s<=0){clearInterval(t);location.reload();}},1000);</script>
+{% endif %}
+<hr>
+<details><summary class="text-secondary">{% trans "I forgot my PIN" %}</summary>
+  <form method="post" action="{% url 'plugins:netbox_user_pin:guest_pin_forgot' %}" class="mt-2">{% csrf_token %}
+    <label class="form-label" for="email">{% trans "Your e-mail address" %}</label>
+    <input class="form-control mb-2" type="email" id="email" name="email" required>
+    <button class="btn btn-outline-secondary btn-sm" type="submit">{% trans "Send me a link to set a new PIN" %}</button>
+  </form>
+</details>
+{% endblock %}

@@ -2256,7 +2256,7 @@ class GuestAccessTest(AreaTestCase):
         session[self.guests.SESSION_KEY] = data
         session.save()
         response = client.get('/tenancy/tenants/')
-        self.assertRedirects(response, self.url, fetch_redirect_response=False)  # back to the link
+        self.assertRedirects(response, '/plugins/user-pin/pin/', fetch_redirect_response=False)  # back to the one page
         self.assertEqual(client.get('/tenancy/tenants/').status_code, 302)
         client = self.sign_in()
         session = client.session
@@ -2271,10 +2271,66 @@ class GuestAccessTest(AreaTestCase):
         self.assertNotEqual(client.get('/tenancy/tenants/').status_code, 200)
         self.assertContains(self.client.__class__().get(self.url), 'not valid', status_code=404)
 
-    def test_signing_out_returns_to_the_link_even_from_a_browser_with_another_user(self):
+    def test_signing_out_returns_to_the_pin_page_even_from_a_browser_with_another_user(self):
         self.client.force_login(self.master)  # the browser of an administrator
         self.sign_in()
-        self.assertRedirects(self.client.get('/plugins/user-pin/guest/logout/'), self.url, fetch_redirect_response=False)
+        self.assertRedirects(self.client.get('/plugins/user-pin/guest/logout/'), '/plugins/user-pin/pin/',
+                             fetch_redirect_response=False)
+
+    def test_the_pin_page_is_one_for_all_and_the_pin_tells_who_signs_in(self):
+        self.sign_in()  # Jan: Secret-pin-1
+        other, _token = self.guests.create('Eva', 'eva@example.com', self.group, self.keeper)
+        with self.assertRaises(ValidationError):  # the PIN names the person: two cannot share one
+            self.guests.set_pin(other, 'Secret-pin-1', first=True)
+        self.guests.set_pin(other, 'Different-pin-2', first=True)
+        cache = __import__('django.core.cache', fromlist=['cache']).cache
+        self.client.logout()
+        self.assertRedirects(self.client.get('/pin/'), '/plugins/user-pin/pin/', fetch_redirect_response=False)
+        for pin, who in (('Secret-pin-1', self.guest.pk), ('Different-pin-2', other.pk)):
+            cache.clear()
+            self.assertRedirects(self.client.post('/plugins/user-pin/pin/', {'pin': pin}),
+                                 '/plugins/user-pin/guest/', fetch_redirect_response=False)
+            self.assertEqual(self.client.session[self.guests.SESSION_KEY]['id'], who)
+            self.assertEqual(self.client.get('/tenancy/tenants/').status_code, 200)
+            # signing out leads back to the one page
+            self.assertRedirects(self.client.get('/plugins/user-pin/guest/logout/'), '/plugins/user-pin/pin/',
+                                 fetch_redirect_response=False)
+        cache.clear()
+        response = self.client.post('/plugins/user-pin/pin/', {'pin': 'Nobody-pin-3'})
+        self.assertContains(response, 'not correct')
+
+    def test_wrong_pins_from_a_computer_make_it_wait(self):
+        self.sign_in()
+        self.client.logout()
+        cache = __import__('django.core.cache', fromlist=['cache']).cache
+        cache.clear()
+        self.client.post('/plugins/user-pin/pin/', {'pin': 'wrong-wrong'}, REMOTE_ADDR='10.9.8.7')
+        response = self.client.post('/plugins/user-pin/pin/', {'pin': 'Secret-pin-1'}, REMOTE_ADDR='10.9.8.7')
+        self.assertNotEqual(response.status_code, 302)  # the right PIN, but the computer waits
+        self.assertContains(response, 'Wait')
+        self.assertEqual(self.client.post('/plugins/user-pin/pin/', {'pin': 'Secret-pin-1'}, REMOTE_ADDR='10.9.8.8'
+                                          ).status_code, 302)  # another computer is not held back
+
+    def test_a_pin_changed_or_cleared_no_longer_opens_the_page(self):
+        from netbox_user_pin.models import PinGuest
+        self.sign_in()
+        self.guests.set_pin(PinGuest.objects.get(pk=self.guest.pk), 'Another-pin-9')
+        self.client.logout()
+        cache = __import__('django.core.cache', fromlist=['cache']).cache
+        cache.clear()
+        self.assertEqual(self.client.post('/plugins/user-pin/pin/', {'pin': 'Secret-pin-1'}).status_code, 200)
+        cache.clear()
+        self.assertEqual(self.client.post('/plugins/user-pin/pin/', {'pin': 'Another-pin-9'}).status_code, 302)
+
+    def test_a_forgotten_pin_is_asked_for_by_the_e_mail_and_the_answer_is_always_the_same(self):
+        from unittest import mock
+        sent = []
+        with mock.patch.object(self.guests, '_mail', lambda guest, subject, body: sent.append(body) or True):
+            known = self.client.post('/plugins/user-pin/pin/forgot/', {'email': 'JAN@example.com'})
+            unknown = self.client.post('/plugins/user-pin/pin/forgot/', {'email': 'nobody@example.com'})
+        strip = lambda r: __import__('re').sub(rb'[A-Za-z0-9]{32,}', b'T', r.content)  # (the CSRF token differs)
+        self.assertEqual(strip(known), strip(unknown))
+        self.assertEqual(len(sent), 1)
 
     def test_the_address_list_and_the_end_of_the_access(self):
         from netbox_user_pin.models import PinGuest

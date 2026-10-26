@@ -6605,6 +6605,31 @@ msgstr "Smie exportovať"
 msgid "Hello %(name)s"
 msgstr "Ahoj %(name)s"
 
+msgid "Choose another PIN."
+msgstr "Vyber iný PIN."
+
+msgid "Wrong PINs from %(ip)s"
+msgstr "Zlé PIN-y z adresy %(ip)s"
+
+msgid "%(n)d wrong PINs on the PIN-only page from the address %(ip)s."
+msgstr "%(n)d zlých PIN-ov na stránke len s PIN-om z adresy %(ip)s."
+
+msgid ""
+"Afterwards save this page and sign in there with your PIN only: %(page)s"
+msgstr "Potom si tú stránku ulož a prihlasuj sa tam už len PIN-om: %(page)s"
+
+msgid "Sign in with a PIN"
+msgstr "Prihlásenie PIN-om"
+
+msgid "I forgot my PIN"
+msgstr "Zabudol som PIN"
+
+msgid "Your e-mail address"
+msgstr "Tvoja e-mailová adresa"
+
+msgid "Send me a link to set a new PIN"
+msgstr "Pošli mi odkaz na nastavenie nového PINu"
+
 #~ msgid ""
 #~ "There is no other administrator or delegate with PIN and 2FA who could "
 #~ "confirm."

@@ -1009,6 +1009,8 @@ class PinGuest(models.Model):
     name = models.CharField(verbose_name=_('Name'), max_length=150)
     email = models.EmailField(verbose_name=_('E-mail'), unique=True)
     token_hash = models.CharField(max_length=64, unique=True)  # the personal link; never stored in clear
+    # keyed scrypt index of the PIN: the page that asks only for the PIN finds the person by it (unique per PIN)
+    pin_index = models.CharField(max_length=140, null=True, blank=True, unique=True, default=None)
     invite_expires = models.DateTimeField(null=True, blank=True)  # the first setup of the PIN must happen before
     expires = models.DateTimeField(null=True, blank=True)  # the whole access ends (None: until revoked)
     revoked = models.DateTimeField(null=True, blank=True)

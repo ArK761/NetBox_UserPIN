@@ -156,3 +156,19 @@ def check_keyed_digest(value, purpose, digest):
         return False
     mac = hmac.new(keys[key_id], f'{purpose}:{value}'.encode(), hashlib.sha256).hexdigest()
     return hmac.compare_digest(f'{key_id}:{mac}', digest)
+
+
+def pin_lookup(pin, key_id=None):
+    """
+    A deterministic, slow (scrypt) and keyed index of a PIN: the page that asks only for the PIN finds the person by it.
+    ``'<key_id>:<hex>'``; ``key_id`` None = the active key.
+    """
+    key_id = key_id or active_key_id()
+    salt = hashlib.sha256(b'netbox_user_pin:pin-lookup:' + _keys()[key_id]).digest()
+    digest = hashlib.scrypt((pin or '').encode(), salt=salt, n=2 ** 14, r=8, p=1, dklen=32)
+    return f'{key_id}:{digest.hex()}'
+
+
+def pin_lookups(pin):
+    """The index under every configured key (a key may have been rotated since the PIN was set)."""
+    return [pin_lookup(pin, key_id) for key_id in configured_key_ids()]

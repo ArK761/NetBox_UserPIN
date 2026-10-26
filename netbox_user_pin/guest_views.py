@@ -15,7 +15,7 @@ from .area_views import AreaViewMixin, _target_label
 from .models import PinGuest
 
 __all__ = ('GuestChangeView', 'GuestEndedView', 'GuestForgotView', 'GuestHomeView', 'GuestListView',
-           'GuestLoginView', 'GuestLogoutView', 'GuestResetView')
+           'GuestLoginView', 'GuestLogoutView', 'GuestPinLoginView', 'GuestPinForgotView', 'GuestResetView')
 
 T = 'netbox_user_pin/guest_'
 
@@ -72,6 +72,39 @@ class GuestLoginView(View):
                  'blocked': _('This access is not usable now (ended, revoked or from another address).'),
                  'nopin': _('Choose your PIN first.')}.get(status, _('The PIN is not correct.'))
         return self._page(request, guest, token, error=error, wrong=status == 'wrong')
+
+
+class GuestPinLoginView(View):
+    """The stable address of the computers: only the PIN is asked, the person is told by the address + PIN."""
+
+    def _page(self, request, **extra):
+        return render(request, T + 'pin.html', {'pause': guests.ip_pause(request), **extra})
+
+    def get(self, request):
+        if request.user.is_authenticated and guests.guest_of(request.user) is not None:
+            return redirect('plugins:netbox_user_pin:guest_home')
+        return self._page(request)
+
+    def post(self, request):
+        status, guest = guests.pin_only_login(request, request.POST.get('pin', ''))
+        if status == 'ok':
+            guests.start_session(request, guest, reverse('plugins:netbox_user_pin:guest_pin'))
+            return redirect('plugins:netbox_user_pin:guest_home')
+        error = {'pause': _('Wait a moment before the next attempt.'),
+                 'blocked': _('This access is not usable now (ended, revoked or from another address).')
+                 }.get(status, _('The PIN is not correct.'))
+        return self._page(request, error=error, wrong=status == 'wrong')
+
+
+class GuestPinForgotView(View):
+    """Forgotten PIN: write the e-mail address; the answer is always the same."""
+
+    def post(self, request):
+        email = (request.POST.get('email') or '').strip().lower()
+        guest = PinGuest.objects.select_related('user').filter(email__iexact=email).first() if email else None
+        if guest is not None and guest.is_active:
+            guests.request_reset(guest, request=request)
+        return render(request, T + 'forgot.html', {'token': ''})
 
 
 class GuestForgotView(View):
@@ -163,14 +196,16 @@ class GuestChangeView(GuestMixin, View):
         except ValidationError as exc:
             return self._page(request, error=_error(exc))
         messages.success(request, _('Your PIN was changed. Sign in again.'))
+        guest = request.user.pin_guest
         link = guests.end_session(request)
-        return redirect(link or reverse('plugins:netbox_user_pin:guest_ended'))
+        return redirect(guests.return_url(guest, link))
 
 
 class GuestLogoutView(View):
     def get(self, request):
+        guest = guests.guest_of(request.user)
         link = guests.end_session(request) if request.user.is_authenticated else ''
-        return redirect(link or reverse('plugins:netbox_user_pin:guest_ended'))
+        return redirect(guests.return_url(guest, link))
 
     post = get
 
@@ -249,8 +284,8 @@ class GuestListView(AreaViewMixin, View):
             if action == 'reset':
                 from .models import UserPin
                 UserPin.objects.filter(user=guest.user).update(pin_hash='', version=guest.user.user_pin.version + 1)
-                guest.failed, guest.retry_after = 0, None
-                guest.save(update_fields=['failed', 'retry_after'])
+                guest.failed, guest.retry_after, guest.pin_index = 0, None, None
+                guest.save(update_fields=['failed', 'retry_after', 'pin_index'])
                 token, sent = guests.invite(guest, request.user, request=request)
                 messages.success(request, _('The PIN was cleared; the person chooses a new one through the new link.'))
                 if not sent:
