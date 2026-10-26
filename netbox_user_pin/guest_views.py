@@ -53,7 +53,7 @@ class GuestLoginView(View):
         guest = guests.find(token)
         if guest is None:
             return render(request, T + 'invalid.html', status=404)
-        request.session['userpin_guest_link'] = guests.link_path(token)
+        link = guests.link_path(token)
         if not guests.has_pin(guest):  # the person chooses the first PIN
             if not (guest.invite_expires and guest.invite_expires > timezone.now()):
                 return self._page(request, guest, token, error=_('The invitation has expired. Ask for a new one.'))
@@ -61,11 +61,11 @@ class GuestLoginView(View):
                 guests.set_pin(guest, _same(request), request=request, first=True)
             except ValidationError as exc:
                 return self._page(request, guest, token, error=_error(exc))
-            guests.start_session(request, guest)
+            guests.start_session(request, guest, link)
             return redirect('plugins:netbox_user_pin:guest_home')
         status = guests.check_pin(guest, request.POST.get('pin', ''), request=request)
         if status == 'ok':
-            guests.start_session(request, guest)
+            guests.start_session(request, guest, link)
             return redirect('plugins:netbox_user_pin:guest_home')
         guest.refresh_from_db()
         error = {'pause': _('Wait a moment before the next attempt.'),

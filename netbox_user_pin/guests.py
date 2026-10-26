@@ -369,14 +369,13 @@ def _backend():
     return wanted if wanted in backends else backends[-1]
 
 
-def start_session(request, guest):
+def start_session(request, guest, link=''):
     from django.contrib.auth import login
     login(request, guest.user, backend=_backend())  # also renews the session key
     version = UserPin.objects.get(user=guest.user).version
     now = time.time()
     request.session[SESSION_KEY] = {'id': guest.pk, 'start': now, 'last': now, 'ver': version,
-                                    'link': request.session.get('userpin_guest_link', '')}
-    request.session.pop('userpin_guest_link', None)
+                                    'link': link}  # (login() flushes the session of a browser that held another user)
     _log(PinEventAction.GUEST_LOGIN, guest, guest.user, request)
 
 

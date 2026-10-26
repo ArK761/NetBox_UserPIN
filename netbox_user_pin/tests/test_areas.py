@@ -2271,6 +2271,11 @@ class GuestAccessTest(AreaTestCase):
         self.assertNotEqual(client.get('/tenancy/tenants/').status_code, 200)
         self.assertContains(self.client.__class__().get(self.url), 'not valid', status_code=404)
 
+    def test_signing_out_returns_to_the_link_even_from_a_browser_with_another_user(self):
+        self.client.force_login(self.master)  # the browser of an administrator
+        self.sign_in()
+        self.assertRedirects(self.client.get('/plugins/user-pin/guest/logout/'), self.url, fetch_redirect_response=False)
+
     def test_the_address_list_and_the_end_of_the_access(self):
         from netbox_user_pin.models import PinGuest
         PinGuest.objects.filter(pk=self.guest.pk).update(allowed_ips='10.9.8.0/24')
