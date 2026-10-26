@@ -243,7 +243,7 @@ def invite(guest, actor, request=None):
             'first': (_('Open it and choose your own PIN within %(days)d days.') % {'days': INVITE_DAYS}
                       if guest.invite_expires and not has_pin(guest) else _('Open it and enter your PIN.'))
             + '\n' + _('Afterwards save this page and sign in there with your PIN only: %(page)s') % {
-                'page': _absolute(request, reverse('plugins:netbox_user_pin:guest_pin'))}})
+                'page': _absolute(request, login_path())}})
     _log(PinEventAction.GUEST_INVITED, guest, actor, request, 'sent' if sent else 'not sent')
     return token, sent
 
@@ -535,6 +535,12 @@ def pin_only_login(request, pin):
     return 'wrong', None
 
 
+def login_path():
+    """The address the people with a PIN only save: ``/<slug>/`` (``BASE_PATH`` of NetBox first, if it has one)."""
+    from django.conf import settings as django_settings
+    return f'/{django_settings.BASE_PATH}{areas.guest_path()}/'
+
+
 def return_url(guest, link=''):
     """Where a person goes after signing out / when the session ended: the shared PIN page."""
-    return reverse('plugins:netbox_user_pin:guest_pin')
+    return login_path()

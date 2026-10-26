@@ -6630,6 +6630,47 @@ msgstr "Tvoja e-mailová adresa"
 msgid "Send me a link to set a new PIN"
 msgstr "Pošli mi odkaz na nastavenie nového PINu"
 
+msgid "Address of the PIN-only sign-in"
+msgstr "Adresa prihlásenia len PIN-om"
+
+msgid ""
+"The one address where people with a PIN only sign in, e.g. /pin/ or "
+"/tenanti/."
+msgstr ""
+"Jedna adresa, kde sa ľudia len s PIN-om prihlasujú, napr. /pin/ alebo "
+"/tenanti/."
+
+msgid ""
+"Use 2 to 49 letters, digits or dashes, not a name NetBox uses (api, admin, "
+"login ...)."
+msgstr ""
+"Použi 2 až 49 písmen, číslic alebo pomlčiek, nie názov, ktorý používa NetBox"
+" (api, admin, login ...)."
+
+msgid "The address is /%(slug)s/."
+msgstr "Adresa je /%(slug)s/."
+
+msgid "Address for signing in with a PIN"
+msgstr "Adresa na prihlásenie PIN-om"
+
+msgid ""
+"Everybody with a PIN only signs in at this one address and enters only the "
+"PIN. Give it to them and let them save it as a bookmark; it does not change "
+"unless you change it."
+msgstr ""
+"Všetci ľudia len s PIN-om sa prihlasujú na tejto jednej adrese a zadávajú "
+"len PIN. Daj im ju a nech si ju uložia medzi záložky; nemení sa, kým ju "
+"nezmeníš."
+
+msgid "Address (after the server name)"
+msgstr "Adresa (za názvom servera)"
+
+msgid "Change the address"
+msgstr "Zmeniť adresu"
+
+msgid "After a change the people must save the new address."
+msgstr "Po zmene si ľudia musia uložiť novú adresu."
+
 #~ msgid ""
 #~ "There is no other administrator or delegate with PIN and 2FA who could "
 #~ "confirm."

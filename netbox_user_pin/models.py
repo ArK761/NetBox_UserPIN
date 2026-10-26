@@ -211,6 +211,10 @@ class PinSettings(models.Model):
         help_text=_('A key works with the NetBox permissions of its user and the PIN does not judge it: a superuser with '
                     'a key reads everything through a script. Allow it for users with narrow NetBox permissions.'),
     )
+    guest_path = models.SlugField(
+        verbose_name=_('Address of the PIN-only sign-in'), max_length=50, default='pin',
+        help_text=_('The one address where people with a PIN only sign in, e.g. /pin/ or /tenanti/.'),
+    )
     areas_enabled = models.BooleanField(
         verbose_name=_('Protect areas and objects'),
         default=False,

@@ -265,7 +265,7 @@ class AreaGuardMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
-        if request.path_info in ('/pin', '/pin/'):  # the short address of the PIN-only sign-in
+        if request.path_info.rstrip('/').lower() == guests.login_path().rstrip('/').lower():  # the address chosen for the PIN-only sign-in
             return redirect('plugins:netbox_user_pin:guest_pin')
         arm(request)
         response = self.get_response(request)

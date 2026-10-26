@@ -349,7 +349,7 @@ the pages answer "no access". Importing needs *add* as well. Groups made before 
 *User PIN > PIN-only access > People with a PIN only* (protection keepers and the owners of the area): enter a name,
 an e-mail address and a group. A technical user without a usable password stands behind it, in that group. The person
 gets a personal link by e-mail (valid 7 days for the first setup), chooses a PIN of their own (8+ characters) and
-signs in with link and PIN. From then on everybody uses **one shared page** (`/pin/`, to be saved as a bookmark) and
+signs in with link and PIN. From then on everybody uses **one shared page** (`/pin/` by default; a keeper chooses the address on the PIN-only page, e.g. `/tenanti/`; the address is case-insensitive; to be saved as a bookmark) and
 enters **only the PIN**: the PIN tells who the person is, so two people never hold the same PIN (the second is asked to
 choose another). A wrong PIN makes the computer wait (30 s, 1, 5, 15 min) and, after 5, the keepers get an e-mail; an
 address list per access restricts the computers.

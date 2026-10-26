@@ -55,7 +55,7 @@ CACHE_SECONDS = 5
 EVENT_TYPE = 'netbox_user_pin_area_request'
 
 _registry = {}
-_cache = {'at': 0.0, 'areas': None, 'deny': False, 'keepers': frozenset(), 'hide': False, 'requests': True, 'tokens': False, 'exempt': frozenset()}
+_cache = {'at': 0.0, 'areas': None, 'deny': False, 'keepers': frozenset(), 'hide': False, 'requests': True, 'tokens': False, 'exempt': frozenset(), 'guest_path': 'pin'}
 # Never refused by the default deny: technical data NetBox needs to draw its forms. Nothing else - the user may do what
 # a group allows him, and change his password (a view without objects, never refused).
 DEFAULT_DENY_EXEMPT = frozenset({'core.objecttype'})
@@ -158,6 +158,7 @@ def _refresh():
         _cache['hide'] = _settings.denied_view == 'hidden'
         _cache['requests'] = bool(_settings.allow_requests)
         _cache['tokens'] = bool(_settings.allow_own_tokens)
+        _cache['guest_path'] = _settings.guest_path or 'pin'
         _cache['keepers'] = keepers
         _cache['exempt'] = frozenset(PolicyException.objects.filter(
             Q(expires__isnull=True) | Q(expires__gt=timezone.now()), user__is_active=True).values_list('user_id', flat=True))
@@ -186,6 +187,36 @@ def own_rows_only(user, app_label, model):
             and not is_keeper(user) and not is_exempt(user):
         return 'user'
     return None
+
+
+RESERVED_PATHS = frozenset({
+    'api', 'admin', 'login', 'logout', 'static', 'media', 'plugins', 'user', 'core', 'extras', 'tenancy', 'dcim', 'ipam',
+    'virtualization', 'vpn', 'wireless', 'circuits', 'users', 'graphql', 'search', 'htmx', 'oauth', 'social-auth',
+    'metrics', 'account', 'home', 'tags', 'media-failure', 'authentication-check', 'status', 'ui', 'favicon', 'robots'})
+
+
+def guest_path():
+    """The slug of the one address where the people with a PIN only sign in."""
+    active_areas()
+    return _cache['guest_path']
+
+
+def set_guest_path(actor, slug, request=None):
+    """A protection keeper chooses the address (it stays what it was set to until changed)."""
+    import re
+    if not is_keeper(actor):
+        raise PermissionDenied
+    slug = (slug or '').strip().strip('/').lower()
+    if not re.fullmatch(r'[a-z0-9][a-z0-9-]{1,48}', slug) or slug in RESERVED_PATHS:
+        raise ValidationError(_('Use 2 to 49 letters, digits or dashes, not a name NetBox uses (api, admin, login ...).'))
+    settings = service.get_settings()
+    if settings.guest_path != slug:
+        settings.guest_path = slug
+        settings.save()
+        service.log_event(PinEventAction.SETTINGS_CHANGED, actor=actor, request=request,
+                          detail=f'address of the PIN-only sign-in: /{slug}/')
+        clear_cache()
+    return slug
 
 
 def requests_allowed():

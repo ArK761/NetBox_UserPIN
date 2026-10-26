@@ -88,7 +88,7 @@ class GuestPinLoginView(View):
     def post(self, request):
         status, guest = guests.pin_only_login(request, request.POST.get('pin', ''))
         if status == 'ok':
-            guests.start_session(request, guest, reverse('plugins:netbox_user_pin:guest_pin'))
+            guests.start_session(request, guest, guests.login_path())
             return redirect('plugins:netbox_user_pin:guest_home')
         error = {'pause': _('Wait a moment before the next attempt.'),
                  'blocked': _('This access is not usable now (ended, revoked or from another address).')
@@ -250,6 +250,8 @@ class GuestListView(AreaViewMixin, View):
                 state = ('active', _('Active'))
             rows.append({'guest': guest, 'state': state, 'groups': guests.groups_of(guest)})
         return render(request, self.template_name, {
+            'login_url': request.build_absolute_uri(guests.login_path()), 'guest_path': areas.guest_path(),
+            'is_keeper': areas.is_keeper(request.user),
             'rows': rows, 'group_choices': self._groups(request.user), 'mail_ok': service.email_configured(),
             'min_length': guests.MIN_PIN_LENGTH, **extra})
 
@@ -259,6 +261,10 @@ class GuestListView(AreaViewMixin, View):
     def post(self, request):
         action = request.POST.get('action')
         try:
+            if action == 'path':
+                slug = areas.set_guest_path(request.user, request.POST.get('path'), request=request)
+                messages.success(request, _('The address is /%(slug)s/.') % {'slug': slug})
+                return redirect('plugins:netbox_user_pin:guests')
             if action == 'create':
                 group = get_object_or_404(areas.AreaProfile, pk=request.POST.get('group') or 0)
                 guest, token = guests.create(

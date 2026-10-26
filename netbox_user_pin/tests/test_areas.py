@@ -2256,7 +2256,7 @@ class GuestAccessTest(AreaTestCase):
         session[self.guests.SESSION_KEY] = data
         session.save()
         response = client.get('/tenancy/tenants/')
-        self.assertRedirects(response, '/plugins/user-pin/pin/', fetch_redirect_response=False)  # back to the one page
+        self.assertRedirects(response, '/pin/', fetch_redirect_response=False)  # back to the one page
         self.assertEqual(client.get('/tenancy/tenants/').status_code, 302)
         client = self.sign_in()
         session = client.session
@@ -2274,7 +2274,7 @@ class GuestAccessTest(AreaTestCase):
     def test_signing_out_returns_to_the_pin_page_even_from_a_browser_with_another_user(self):
         self.client.force_login(self.master)  # the browser of an administrator
         self.sign_in()
-        self.assertRedirects(self.client.get('/plugins/user-pin/guest/logout/'), '/plugins/user-pin/pin/',
+        self.assertRedirects(self.client.get('/plugins/user-pin/guest/logout/'), '/pin/',
                              fetch_redirect_response=False)
 
     def test_the_pin_page_is_one_for_all_and_the_pin_tells_who_signs_in(self):
@@ -2285,7 +2285,7 @@ class GuestAccessTest(AreaTestCase):
         self.guests.set_pin(other, 'Different-pin-2', first=True)
         cache = __import__('django.core.cache', fromlist=['cache']).cache
         self.client.logout()
-        self.assertRedirects(self.client.get('/pin/'), '/plugins/user-pin/pin/', fetch_redirect_response=False)
+        self.assertRedirects(self.client.get('/pin/'), '/plugins/user-pin/pin/', fetch_redirect_response=False)  # (the chosen address)
         for pin, who in (('Secret-pin-1', self.guest.pk), ('Different-pin-2', other.pk)):
             cache.clear()
             self.assertRedirects(self.client.post('/plugins/user-pin/pin/', {'pin': pin}),
@@ -2293,7 +2293,7 @@ class GuestAccessTest(AreaTestCase):
             self.assertEqual(self.client.session[self.guests.SESSION_KEY]['id'], who)
             self.assertEqual(self.client.get('/tenancy/tenants/').status_code, 200)
             # signing out leads back to the one page
-            self.assertRedirects(self.client.get('/plugins/user-pin/guest/logout/'), '/plugins/user-pin/pin/',
+            self.assertRedirects(self.client.get('/plugins/user-pin/guest/logout/'), '/pin/',
                                  fetch_redirect_response=False)
         cache.clear()
         response = self.client.post('/plugins/user-pin/pin/', {'pin': 'Nobody-pin-3'})
@@ -2387,3 +2387,19 @@ class GuestAccessTest(AreaTestCase):
             self.guests.create('X', 'x@example.com', self.group, outsider)
         with self.assertRaises(ValidationError):
             self.guests.create('Dup', 'JAN@example.com', self.group, self.keeper)
+
+    def test_the_keeper_chooses_the_address_and_it_stays(self):
+        self.assertEqual(areas.guest_path(), 'pin')
+        for bad in ('x', 'api', 'Admin', 'a b', 'login'):
+            with self.assertRaises(ValidationError):
+                areas.set_guest_path(self.keeper, bad)
+        with self.assertRaises(PermissionDenied):
+            areas.set_guest_path(self.owner1, 'tenanti')
+        self.assertEqual(areas.set_guest_path(self.keeper, ' /Tenanti/ '), 'tenanti')
+        self.assertEqual(self.guests.login_path(), '/tenanti/')
+        self.assertRedirects(self.client.get('/tenanti/'), '/plugins/user-pin/pin/', fetch_redirect_response=False)
+        self.assertRedirects(self.client.get('/TENANTI'), '/plugins/user-pin/pin/', fetch_redirect_response=False)
+        self.assertEqual(self.client.get('/pin/').status_code, 404)  # the old one is gone
+        self.sign_in()
+        self.assertRedirects(self.client.get('/plugins/user-pin/guest/logout/'), '/tenanti/',
+                             fetch_redirect_response=False)
