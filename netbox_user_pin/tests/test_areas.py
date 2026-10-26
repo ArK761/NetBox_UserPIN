@@ -2304,6 +2304,20 @@ class GuestAccessTest(AreaTestCase):
         self.client.post('/plugins/user-pin/guest/change/', {'pin': 'Fresh-pin-55', 'pin2': 'Fresh-pin-55'})
         self.assertFalse(self.guests.must_change(PinGuest.objects.get(pk=self.guest.pk)))
 
+    def test_docs_api_footer_closed_and_netbox_language(self):
+        from netbox_user_pin.models import PinGuest
+        self.sign_in()
+        for url in ('/api/schema/swagger-ui/', '/api/', '/api/tenancy/tenants/', '/static/docs/', '/graphql/'):
+            self.assertTrue(self.denied(self.client.get(url)), url)
+        page = self.client.get('/tenancy/tenants/').content.decode()
+        self.assertIn('footer.footer{display:none', page)
+        guest = PinGuest.objects.get(pk=self.guest.pk)
+        self.guests.set_languages(guest, self.keeper, pin_language='sk', ui_language='en')
+        response = self.client.get('/tenancy/tenants/', HTTP_ACCEPT_LANGUAGE='cs')
+        self.assertEqual(response.headers.get('Content-Language'), 'en')
+        other, _t = self.guests.create('Eva N', 'evan@example.com', self.group, self.keeper, note='Peto')
+        self.assertEqual(other.description, 'Peto')
+
     def test_two_part_address_and_admin_page(self):
         with self.assertRaises(ValidationError):
             areas.set_guest_path(self.keeper, ('', 'x2'))

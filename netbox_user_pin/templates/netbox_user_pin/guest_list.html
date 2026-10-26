@@ -28,7 +28,7 @@
   {% if not mail_ok %}<div class="alert alert-warning">{% trans "E-mail is not set up (Mail page): the links are shown here for you to hand over." %}</div>{% endif %}
   <table class="table table-hover"><thead><tr><th>{% trans "Name" %}</th><th>{% trans "E-mail" %}</th><th>{% trans "Group" %}</th><th>{% trans "State" %}</th><th>{% trans "Last sign-in" %}</th><th>{% trans "Ends" %}</th><th></th></tr></thead><tbody>
   {% for r in rows %}<tr>
-    <td>{{ r.guest.name }} <code>{{ r.guest.user.username }}</code>{% if r.guest.alias %} <span class="badge text-bg-blue">{{ r.guest.alias }}</span>{% endif %}{% if r.guest.description %}<div class="small">{{ r.guest.description }}</div>{% endif %}{% if r.guest.note %}<div class="text-secondary small">{{ r.guest.note }}</div>{% endif %}</td>
+    <td>{{ r.guest.name }} <code>{{ r.guest.user.username }}</code>{% if r.guest.alias %} <span class="badge text-bg-blue">{{ r.guest.alias }}</span>{% endif %}{% if r.guest.description %}<div class="small">{{ r.guest.description }}</div>{% endif %}</td>
     <td>{{ r.guest.email }}</td>
     <td>{% for g in r.groups %}<div>{{ g.area.name }} › {{ g.profile.name }}</div>{% empty %}–{% endfor %}</td>
     <td><span class="badge bg-{% if r.state.0 == 'active' %}green{% elif r.state.0 == 'invited' or r.state.0 == 'pause' %}yellow{% else %}red{% endif %}">{{ r.state.1 }}</span>
@@ -94,7 +94,6 @@
   <div class="col-md-2"><label class="form-label">{% trans "PIN language" %}</label><select class="form-select" name="pin_language"><option value="">{% trans "default" %}</option>{% for code, label in languages %}<option value="{{ code }}">{{ label }}</option>{% endfor %}</select></div>
   <div class="col-md-2"><label class="form-label">{% trans "NetBox language" %}</label><select class="form-select" name="ui_language"><option value="">{% trans "default" %}</option>{% for code, label in languages %}<option value="{{ code }}">{{ label }}</option>{% endfor %}</select></div>
   <div class="col-md-5"><label class="form-label">{% trans "Description (optional)" %}</label><input class="form-control" name="description" maxlength="150" placeholder="{% trans 'e.g. technician of company XY' %}"></div>
-  <div class="col-12"><label class="form-label">{% trans "Note" %}</label><input class="form-control" name="note" maxlength="200"></div>
   <div class="col-12 text-end"><button class="btn btn-primary" type="submit">{% trans "Create and send the invitation" %}</button></div>
 </form>
 <div class="form-text mt-2">{% blocktrans with n=min_length %}The person chooses a PIN of {{ n }} or more characters at the first visit. The invitation link is valid for 7 days for the first setup; after that the same link serves for signing in until you revoke it.{% endblocktrans %}</div>

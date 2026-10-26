@@ -284,6 +284,14 @@ class AreaGuardMiddleware:
         guest = guests.guest_of(request.user)
         if guest is not None and (response := guests.guard(request, guest)) is not None:
             return response
+        if guest is not None and guest.ui_language and not request.path_info.startswith('/plugins/user-pin/'):
+            # the NetBox interface in the language chosen for this person (not the browser's)
+            translation.activate(guest.ui_language)
+            request.LANGUAGE_CODE = guest.ui_language
+            request._language_cookie = guest.ui_language  # NetBox's middleware renews the cookie with it
+        if _hides_menu_for(request.user) and request.path_info.startswith(HIDDEN_DOCS) \
+                and not _is_token_request(request):
+            return denied_response(request, None, right='view', target=None)
         if not getattr(request.user, 'is_authenticated', False) and getattr(view_func, '__module__', '').startswith(
                 'netbox_user_pin.'):
             return None  # the pages of this plugin ask for the sign-in themselves (the public link of a PIN-only access)
@@ -559,11 +567,17 @@ def _shape_html(request, text):
         return (match.group(1) + ''.join(made + kept) + '<hr class="dropdown-divider" />' + logout + match.group(3))
 
     text = _USER_MENU.sub(user_menu, text)  # the layout has the menu twice (small and large screens)
+    # the footer links (docs, REST API, API docs, GraphQL, GitHub, Slack) are not for them
+    text = text.replace('</head>', '<style>footer.footer{display:none!important}</style></head>', 1)
     text = _ACCOUNT_TAB.sub(lambda m: m.group(0) if _account_href_allowed(m.group(1)) else '', text)
     if not (roles.is_manager(user) or areas.administers_any(user)):  # no role: nothing to be told, nothing to search
         text = _BELL.sub('', text)
         text = _SEARCH.sub('', text)
     return text
+
+
+# Documentation of NetBox and of its API: closed for those who see only what is allowed (B) and PIN-only people.
+HIDDEN_DOCS = ('/api/schema', '/api/docs', '/api/redoc', '/static/docs', '/graphql')
 
 
 # What a user who is in no group still has (B): the pages of this plugin (PIN, 2FA, unlock), the password, the login,

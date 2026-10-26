@@ -291,7 +291,7 @@ def create(name, email, group, actor, expires=None, ips='', idle=30, hours=8, no
         raise ValidationError(_('Idle time is 5 to 240 minutes, the whole session 1 to 24 hours.'))
     ips = _parse_ips(ips)
     alias = (alias or '').strip()[:100]
-    description = (description or '').strip()[:150]
+    description = ' – '.join(x for x in ((description or '').strip(), (note or '').strip()) if x)[:150]
     valid = {code for code, _label in LANGUAGES}
     pin_language = pin_language if pin_language in valid else ''
     ui_language = ui_language if ui_language in valid else ''
@@ -305,7 +305,7 @@ def create(name, email, group, actor, expires=None, ips='', idle=30, hours=8, no
         UserPin.objects.create(user=user, access=PinAccess.ALLOWED)
         guest = PinGuest.objects.create(
             user=user, name=name, email=email, token_hash=_hash(token), expires=expires, allowed_ips=ips,
-            idle_minutes=idle, max_hours=hours, note=(note or '').strip()[:200], created_by_name=actor.username,
+            idle_minutes=idle, max_hours=hours, created_by_name=actor.username,
             description=description, alias=alias, pin_language=pin_language, ui_language=ui_language,
             invite_expires=timezone.now() + timedelta(days=INVITE_DAYS))
         _join(group, user, actor, request)
@@ -679,6 +679,9 @@ def guard(request, guest):
         return redirect('plugins:netbox_user_pin:guest_home')
     if path.startswith('/logout/'):
         return redirect('plugins:netbox_user_pin:guest_logout')
+    if path.startswith(('/static/docs', '/api/')):  # documentation and the whole API: never for a PIN-only person
+        from .area_guard import denied_response
+        return denied_response(request, None, right='view', target=None)
     if path.startswith(('/static/', '/media/', '/htmx/')):
         return None
     if path.startswith(CLOSED_PATHS):
