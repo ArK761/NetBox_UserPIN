@@ -114,7 +114,7 @@
                     {% elif row.has_2fa %}
                       {% trans "Reset PIN (user confirms with 2FA)" as l %}{% include 'netbox_user_pin/inc/user_action.html' with action='reset' label=l icon='restore' confirm=True %}
                       {% trans "Reset 2FA (user confirms with PIN)" as l %}{% include 'netbox_user_pin/inc/user_action.html' with action='reset-2fa' label=l icon='cellphone-remove' confirm=True %}
-                    {% else %}<span class="dropdown-item text-secondary small">{% trans "Reset needs the user's 2FA" %}</span>{% endif %}
+                    {% elif row.is_set %}{% trans "Remove PIN (no 2FA: user sets a new one)" as l %}{% include 'netbox_user_pin/inc/user_action.html' with action='clear-pin' label=l icon='restore' confirm=True %}{% endif %}
                     {% if row.has_2fa %}
                       <div class="dropdown-divider"></div>
                       <button type="button" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#cli-{{ row.user.pk }}"><i class="mdi mdi-console me-2"></i>{% trans "Emergency: server command (2FA)" %}</button>

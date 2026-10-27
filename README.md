@@ -50,7 +50,7 @@ Requires NetBox **4.7+** (Python 3.12+).
 
 ```bash
 source /opt/netbox/venv/bin/activate
-pip install git+https://github.com/ArK761/NetBox_UserPIN.git
+pip install "git+https://github.com/ArK761/NetBox_UserPIN.git@main"
 ```
 
 Generate an encryption key (the plugin is not active yet, so use plain Python):
@@ -75,7 +75,8 @@ PLUGINS_CONFIG = {
 ```
 
 > Keep an **offline backup** of the key and never put it into the same backup as the database.
-> If the key is lost no other data is lost – users simply set new PINs.
+> If the key is lost, NetBox data stays intact, but everything of this plugin stored under the key is gone: PINs,
+> 2FA, backup codes, the SMTP password and the sign-in of PIN-only people – everybody sets them up again.
 
 E-mails (recovery codes, notifications) are sent through the SMTP server configured on the **Mail** page
 (service account set by the administrator, password stored encrypted). If no server is set there, NetBox's own
@@ -112,7 +113,7 @@ Everything else is configured in the UI: **User PIN → Settings**.
 |---|---|---|---|---|---|
 | My PIN, My roles | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Users – PIN / 2FA / e-mail / expiry status | everybody | everybody | own department | own department | – |
-| Users – allow / deny, suspend, start resets, force change, clear lockout | all except self | all except master, CORE, self | members of the department except self | members without a role | – |
+| Users – allow / deny, suspend, start resets, force change, clear lockout | all except self | all except master, CORE, self | members of the department except self and other heads | members without a role | – |
 | Departments | all, create / dissolve, members, heads | same | own: invite delegates, hand over, ask for moves | own: view; with a 2nd delegate invite / hand over | – |
 | Audit log, Approvals | all | all | own department | own department | – |
 | Settings, Mail | ✅ edit | view (edit if allowed) | – | – | – |
@@ -168,11 +169,11 @@ Department  head + delegates (min. 2) + members        the PINs of the departmen
 | Unlock duration / extend on activity / scope | 15 min / on / one unlock for everything |
 | Require 2FA on every unlock | off |
 | Show first and last name | on |
-| Max failed attempts / lockout | 5 / 30 min (PIN and 2FA failures count together) |
+| Max failed attempts / lockout | 5 / 30 min (wrong PINs and wrong 2FA codes are counted separately; either one reaching the limit locks) |
 | PIN + 2FA for administrative actions / window | on / 5 min |
-| Self-service recovery (e-mail code + 2FA) / code validity | on / 15 min |
+| Self-service recovery (e-mail code + 2FA) / code validity (Mail page) | on / 15 min |
 | Allowed e-mail domains (Mail page) | none – add and **verify** each domain (code sent to an address in it) |
-| Security notifications by e-mail | on |
+| Security notifications by e-mail (Mail page) | on |
 
 ### Administrator resets (no meeting needed)
 
@@ -183,7 +184,8 @@ Department  head + delegates (min. 2) + members        the PINs of the departmen
 | **Reset 2FA** (lost phone) | starts the reset | confirms with the **PIN** and enrolls the new phone |
 
 Until the user confirms, the old PIN keeps working; the administrator can cancel a pending reset. A reset
-requires the user to have 2FA.
+needs the user's 2FA. A user **without 2FA** cannot confirm anything: for them the administrator uses **Remove PIN**
+(PIN + 2FA of the administrator) and the user sets a new PIN the next time it is asked for.
 
 ### Four-eyes approval
 
@@ -285,7 +287,7 @@ user            asks for access with a reason (+ what exactly) → owners grant 
   `delete` + rights a plugin defines), optionally only the **rows** matching a filter (e.g. `name__istartswith=PRINTER`)
   and a duration. Chosen directly on the area page; there is nothing to name or reuse. Several entries add up.
   (Profiles are still what plugins register with `areas.register(... profiles=...)`; they are not shown to owners.)
-- **A grant** is for 1 hour … 30 days (limit per area) or without a time limit. A grantee is allowed to use a PIN
+- **A grant** is for 1 hour up to the limit of the area (default 24 h, at most 30 days) or without a time limit. A grantee is allowed to use a PIN
   automatically (unless an administrator denied it) and **unlocks the PIN to enter** the area.
 - **Requests** need a reason (and optionally what exactly is needed); the owners get a bell notification and an
   e-mail with both. Nobody decides about his own request; owners cannot grant themselves anything.
@@ -293,7 +295,7 @@ user            asks for access with a reason (+ what exactly) → owners grant 
   not granted anything is denied). Lists can be sorted by ID or alphabetically and searched; the drop-downs for
   users have a search box. Object types are added one by one from a grouped list (like in NetBoxSelf Audit).
 - **Deny everything not allowed** (Protected areas page): what no active area covers is denied to everybody
-  except the **protection keepers**. It is switched on by hand and only when a keeper exists. A keeper needs a PIN
+  except the **protection keepers**. **Appointing the first keeper switches it on**; afterwards the keepers switch it off and on by hand (never without a keeper). A keeper needs a PIN
   and 2FA, is exempt from the deny (NetBox's own permissions apply to him), cannot turn 2FA off and cannot leave
   alone – another keeper has to take over; the last keeper cannot be removed. Login, the own profile, bookmarks,
   notifications and the user's own preferences stay open - but only the user's **own** bookmarks, notifications
@@ -308,7 +310,9 @@ user            asks for access with a reason (+ what exactly) → owners grant 
   CORE deputy and neither a superuser nor a keeper.
   Once owners exist the master cannot change them, grant access or deactivate the area. The last owner cannot be
   removed; the protection cannot be switched off while areas with owners are active.
-- **Emergency** (server shell, audited): `python manage.py userpin_area_owners <area-key> --set user1 user2`.
+- **Emergency** (server shell, audited): `python manage.py userpin_area_owners <area-key> --set user1 user2`. The command
+  refuses users who could not act as owners (no head / delegate / CORE role, no PIN and 2FA, a superuser or a keeper)
+  unless `--force` is given.
 - Everything is written to the audit log (requests, grants, revocations, refused accesses, owner changes).
 
 ### What is enforced
@@ -351,16 +355,23 @@ an e-mail address and a group. A technical user without a usable password stands
 gets a personal link by e-mail (valid 7 days for the first setup), chooses a PIN of their own (8+ characters) and
 signs in with link and PIN. From then on everybody uses **one shared page** (`/pin/` by default; a keeper chooses the address on the PIN-only page, e.g. `/tenanti/`; the address is case-insensitive; to be saved as a bookmark) and
 enters **only the PIN**: the PIN tells who the person is, so two people never hold the same PIN (the second is asked to
-choose another). A wrong PIN makes the computer wait (30 s, 1, 5, 15 min) and, after 5, the keepers get an e-mail; an
-address list per access restricts the computers.
+choose another). An address list per access restricts the computers. E-mails to PIN-only people go to their own
+address whatever the allowed domains are.
 
 * No password, no 2FA, no API, no token; never a keeper, an owner or an exception; the account pages and the pages of
   this plugin are closed to them (only *My access*, *Change my PIN*, *Sign out*).
-* A wrong PIN never locks the account: it only makes the person wait (30 s, 1 min, 5 min, 15 min). After 5 wrong PINs
-  the person and the keepers get an e-mail. "I forgot my PIN" e-mails a link for a new one (1 hour, once).
-* Session: idle 30 min and 8 h at most (settable per access), optional list of IP addresses / networks, optional end.
+* **Wrong PINs** (rules on the PIN-only page, own rules per access possible; default 5 per step, waits 10, 20, 30 s):
+  * on the **personal link** the person is known: after every 5 wrong PINs a wait, after the last step the access is
+    **blocked** (the person and the keepers get an e-mail; only an administrator unblocks);
+  * on the **shared page** a wrong PIN cannot be put down to a person: the computer (its address) waits by the same
+    steps, the last wait repeats, nobody is blocked, and the keepers get an e-mail after every full round (15).
+* "I forgot my PIN" e-mails a link for a new one (1 hour, once) – not for a disabled or ended access.
+* Disable / enable (with "disabled by X since …" on the stop page and an "ask the administrator" button, at most
+  once an hour), validity of the access changeable later (e-mails 30 days and 1 day before the end), forced PIN change,
+  own language for the PIN pages and for NetBox, a stable ID `PinUser0001` with a free alias and description.
+* Session: idle 30 min (5–240) and 8 h at most (1–24), settable per access, optional list of IP addresses / networks, optional end.
 * A keeper can send a new link (the old one stops), clear the PIN, revoke (ends every session), restore and delete.
-* Everything is in the audit log; the change log of NetBox shows the technical user (`pin-…`, whose first name is the person's name).
+* Everything is in the audit log; the change log of NetBox shows the technical user (`PinUser0001` …).
 
 ### Using it from a plugin
 
@@ -402,7 +413,9 @@ PIN ──Argon2id + salt──► hash ──AES-256-GCM (key from configuratio
 1. Add the new key next to the old one and make it active:
    `'encryption_keys': {'k1': '<old>', 'k2': '<new>'}, 'active_key_id': 'k2'`
 2. Restart NetBox and run `python manage.py userpin_rotate_key`
-3. Verify with `python manage.py userpin_check`, then remove the old key.
+3. Verify with `python manage.py userpin_check`. The rotation re-encrypts PIN hashes, 2FA secrets, backup codes and
+   the SMTP password. The index of the PIN-only page moves to the new key only when each PIN-only person signs in
+   again: **remove the old key only when `userpin_check` says so** (it shows how many still wait).
 
 The plugin never generates or switches keys by itself – a missing or wrong key is reported as an error.
 

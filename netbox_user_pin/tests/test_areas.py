@@ -489,11 +489,22 @@ class CommandTest(AreaTestCase):
         from django.core.management import call_command
         area = self.make_area()
         out = StringIO()
-        call_command('userpin_area_owners', area.key, '--set', 'appadmin', stdout=out)
+        call_command('userpin_area_owners', area.key, '--set', 'appadmin', '--force', stdout=out)
         self.assertEqual([o.user.username for o in area.owners.all()], ['appadmin'])
         out = StringIO()
         call_command('userpin_area_owners', area.key, stdout=out)
         self.assertIn('appadmin', out.getvalue())
+
+    def test_emergency_owner_reset_refuses_owners_on_paper(self):
+        from io import StringIO
+
+        from django.core.management import CommandError, call_command
+        area = self.make_area()
+        User.objects.create_superuser('root2', password='pw')
+        with self.assertRaises(CommandError):
+            call_command('userpin_area_owners', area.key, '--set', 'root2', stdout=StringIO())
+        call_command('userpin_area_owners', area.key, '--set', 'root2', '--force', stdout=StringIO())
+        self.assertEqual([o.user.username for o in area.owners.all()], ['root2'])
 
 
 class BuildBadgeTest(AreaTestCase):

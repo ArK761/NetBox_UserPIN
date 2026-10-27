@@ -666,6 +666,26 @@ def _backup_aad(user_pin):
     return f'netbox_user_pin:backup:{user_pin.user_id}'.encode()
 
 
+def encrypted_values(lock=False):
+    """
+    Everything stored under a key of the configuration, as ``(label, obj, field, aad)``: PIN hashes, TOTP secrets,
+    backup codes and the SMTP password. (The index of the PIN-only page is a keyed digest, not encrypted: it moves to
+    the active key at the person's next sign-in.)
+    """
+    from .mail import SMTP_AAD
+    pins = UserPin.objects.select_related('user')
+    if lock:
+        pins = pins.select_for_update()
+    for user_pin in pins:
+        for field, aad in (('pin_hash', user_pin.aad), ('totp_secret', _totp_aad(user_pin)),
+                           ('backup_codes_encrypted', _backup_aad(user_pin))):
+            if getattr(user_pin, field):
+                yield f'{user_pin.user} {field}', user_pin, field, aad
+    settings = get_settings()
+    if settings.smtp_password:
+        yield 'SMTP password', settings, 'smtp_password', SMTP_AAD
+
+
 def _encrypt_backup_codes(user_pin, codes):
     import json
     return crypto.encrypt(json.dumps(codes), _backup_aad(user_pin))

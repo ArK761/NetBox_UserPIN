@@ -7468,6 +7468,19 @@ msgstr "Overovací kód bol odoslaný na {email}."
 msgid "Please verify again."
 msgstr "Overte sa prosím znova."
 
+msgid "Remove PIN (no 2FA: user sets a new one)"
+msgstr "Odstrániť PIN (bez 2FA: užívateľ si nastaví nový)"
+
+msgid "{user} has 2FA: start a PIN reset that the user confirms."
+msgstr "{user} má 2FA: spusti reset PIN, ktorý užívateľ potvrdí."
+
+msgid ""
+"PIN of {user} removed. The user sets a new PIN the next time it is asked "
+"for."
+msgstr ""
+"PIN užívateľa {user} bol odstránený. Užívateľ si nastaví nový PIN, keď si ho"
+" systém nabudúce vypýta."
+
 #, python-format
 #~ msgid ""
 #~ "The e-mail address %(email)s belongs to the NetBox user %(user)s. A PIN-only"

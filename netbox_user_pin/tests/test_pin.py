@@ -308,6 +308,17 @@ class ViewTest(PinTestCase):
         self.client.post(reverse('plugins:netbox_user_pin:user_action', kwargs={'pk': self.user.pk, 'action': 'reset'}))
         self.assertTrue(service.has_pin(self.user))
         self.assertEqual(UserPin.objects.get(user=self.user).reset_pending, '')
+        # ... but without 2FA the administrator can remove the PIN; the user sets a new one at the next use
+        self.client.post(reverse('plugins:netbox_user_pin:user_action',
+                                 kwargs={'pk': self.user.pk, 'action': 'clear-pin'}))
+        self.assertFalse(service.has_pin(self.user))
+        self.assertTrue(PinEvent.objects.filter(user=self.user, action=PinEventAction.RESET).exists())
+        # with 2FA it stays a reset the user confirms
+        service.set_pin(self.user, GOOD_PIN)
+        enable_2fa(self.user)
+        self.client.post(reverse('plugins:netbox_user_pin:user_action',
+                                 kwargs={'pk': self.user.pk, 'action': 'clear-pin'}))
+        self.assertTrue(service.has_pin(self.user))
 
         data = {
             'language': 'en', 'access_mode': 'all', 'pin_length': 8, 'block_weak_pins': 'on', 'blocked_pins': '', 'max_age_days': 180,
@@ -363,6 +374,50 @@ class KeyRotationTest(PinTestCase):
             self.assertTrue(service.verify_pin(user, GOOD_PIN))
             call_command('userpin_check', stdout=open('/dev/null', 'w'))
         self.assertTrue(PinEvent.objects.filter(action=PinEventAction.KEY_ROTATED).exists())
+
+    def test_rotation_covers_2fa_backup_codes_smtp_and_pin_only_index(self):
+        from io import StringIO
+
+        from django.conf import settings as dj_settings
+        from django.core.management import call_command
+        from netbox_user_pin import mail as pin_mail
+        from netbox_user_pin.models import PinGuest
+
+        user = User.objects.create_user('dave')
+        service.set_pin(user, GOOD_PIN)
+        secret = enable_2fa(user)
+        codes = service.new_backup_codes(user)
+        settings = PinSettings.load()
+        settings.smtp_password = pin_mail.encrypt_password('S3cret!')
+        settings.save()
+        guest_user = User.objects.create_user('PinUser9001')
+        guest = PinGuest.objects.create(user=guest_user, name='G', email='g@example.com', token_hash='x' * 64,
+                                        pin_index=crypto.pin_lookup('guest-pin-1234'))
+        old = dict(dj_settings.PLUGINS_CONFIG['netbox_user_pin'])
+        k2 = {**old, 'encryption_keys': {**old['encryption_keys'], 'k2': crypto.generate_key()}, 'active_key_id': 'k2'}
+        only_k2 = {**k2, 'encryption_keys': {'k2': k2['encryption_keys']['k2']}}
+        with override_settings(PLUGINS_CONFIG={**dj_settings.PLUGINS_CONFIG, 'netbox_user_pin': k2}):
+            call_command('userpin_rotate_key', stdout=StringIO())
+            user_pin = UserPin.objects.get(user=user)
+            for token in (user_pin.pin_hash, user_pin.totp_secret, user_pin.backup_codes_encrypted,
+                          PinSettings.load().smtp_password):
+                self.assertTrue(token.startswith('k2:'), token[:4])
+            out = StringIO()
+            call_command('userpin_check', stdout=out)
+            self.assertIn('PIN-only accesses still on an old key: 1', out.getvalue())
+            self.assertIn('Do NOT remove the old key', out.getvalue())
+            # the PIN-only index moves at the next right PIN
+            from netbox_user_pin import guests
+            guests._refresh_pin_index(guest, 'guest-pin-1234')
+            out = StringIO()
+            call_command('userpin_check', stdout=out)
+            self.assertIn('old keys can be removed', out.getvalue())
+        with override_settings(PLUGINS_CONFIG={**dj_settings.PLUGINS_CONFIG, 'netbox_user_pin': only_k2}):
+            self.assertTrue(service.verify_pin(user, GOOD_PIN))
+            self.assertTrue(service.verify_second_factor(user, current_code(secret)).ok)
+            self.assertEqual(pin_mail.decrypt_password(PinSettings.load().smtp_password), 'S3cret!')
+            self.assertEqual(PinGuest.objects.filter(pin_index__in=crypto.pin_lookups('guest-pin-1234')).count(), 1)
+            self.assertEqual(len(codes), 10)
 
 
 class KeyFormatTest(PinTestCase):

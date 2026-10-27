@@ -3,7 +3,7 @@ PIN-only access: a person without a NetBox account works through a personal link
 
 A technical user without a usable password stands behind the access (the groups of the protected areas give it rights,
 exactly as for any user). What is different: no 2FA, no password, no API, never a keeper, an owner or an exception, a
-PIN that is chosen by the person alone, a pause after a wrong PIN instead of a lock, and a short session.
+PIN that is chosen by the person alone, waits after wrong PINs (on the personal link a block after the last step), and a short session.
 """
 import hashlib
 import ipaddress
@@ -184,6 +184,14 @@ def _client_ip(request):
         return ipaddress.ip_address(str(service.get_client_ip(request)))
     except ValueError:
         return None
+
+
+def _refresh_pin_index(guest, pin):
+    """After a key rotation the index moves to the active key at the first right PIN."""
+    index = crypto.pin_lookup(pin)
+    if guest.pin_index != index:
+        guest.pin_index = index
+        guest.save(update_fields=['pin_index'])
 
 
 def _pin_matches(guest, pin):
@@ -620,8 +628,9 @@ def check_pin(guest, pin, request=None):
         if service._check_hash(user_pin, stored, pin):
             guest = PinGuest.objects.select_for_update().get(pk=guest.pk)
             guest.failed, guest.retry_after = 0, None
-            if not guest.pin_index and not PinGuest.objects.exclude(pk=guest.pk).filter(
-                    pin_index__in=crypto.pin_lookups(pin)).exists():
+            if guest.pin_index:
+                _refresh_pin_index(guest, pin)
+            elif not PinGuest.objects.exclude(pk=guest.pk).filter(pin_index__in=crypto.pin_lookups(pin)).exists():
                 guest.pin_index = crypto.pin_lookup(pin)
                 guest.save(update_fields=['pin_index'])
             guest.last_login = timezone.now()
@@ -820,8 +829,8 @@ def ip_pause(request):
 def pin_only_login(request, pin):
     """
     ``('ok', guest)``, ``('wrong', None)``, ``('pause', None)`` or ``('blocked', None)``. The PIN alone tells who the person
-    is (it is unique). A wrong PIN makes the whole computer wait (30 s, 1, 5, 15 min): the person cannot be named before
-    the PIN is right.
+    is (it is unique). A wrong PIN cannot be put down to a person, so the computer (its address) waits by the steps of the
+    default rules; the last wait repeats and nobody is blocked. The keepers get an e-mail after every full round.
     """
     address = _client_ip(request)
     if address is None:
@@ -843,6 +852,7 @@ def pin_only_login(request, pin):
         if pause_seconds(guest):
             return 'pause', None
         cache.delete(_ip_key(address))
+        _refresh_pin_index(guest, pin)
         guest.failed, guest.retry_after, guest.last_login, guest.last_ip = 0, None, timezone.now(), str(address)
         guest.save(update_fields=['failed', 'retry_after', 'last_login', 'last_ip'])
         return 'ok', guest

@@ -732,7 +732,7 @@ class UserPinActionView(AdminViewMixin, View):
     permission_required = 'netbox_user_pin.change_userpin'
     actions = (
         'allow', 'deny', 'default', 'reset', 'reset-2fa', 'cancel-reset', 'suspend', 'unsuspend',
-        'clear-lockout', 'force-change',
+        'clear-lockout', 'force-change', 'clear-pin',
     )
 
     # everyday actions need only the PIN; resets and suspension need PIN + 2FA
@@ -769,6 +769,14 @@ class UserPinActionView(AdminViewMixin, View):
             service.request_reset(user, 'pin', actor=actor, request=request)
             messages.success(request, _('PIN reset of {user} started. The user confirms it with 2FA in their own '
                                         'session and chooses a new PIN.').format(user=user))
+        elif action == 'clear-pin':
+            # without 2FA the user cannot confirm a reset: the PIN is removed and they set a new one at the next use
+            if service.has_2fa(user):
+                messages.error(request, _('{user} has 2FA: start a PIN reset that the user confirms.').format(user=user))
+                return
+            service.reset_pin(user, actor=actor, request=request)
+            messages.success(request, _('PIN of {user} removed. The user sets a new PIN the next time it is asked '
+                                        'for.').format(user=user))
         elif action == 'reset-2fa':
             service.request_reset(user, '2fa', actor=actor, request=request)
             messages.success(request, _('2FA reset of {user} started. The user confirms it with the PIN and sets up '
