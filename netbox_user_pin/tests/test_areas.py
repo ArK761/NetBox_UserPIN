@@ -654,6 +654,14 @@ class DefaultDenyTest(AreaTestCase):
         area_guard.arm_user(plain)
         self.assertTrue(plain.has_perm('dcim.view_site'))  # the door stays: the page behind it explains and offers a request
         self.assertFalse(plain.has_perm('dcim.add_site'))
+        # while there is no CORE deputy the master still manages the PINs (otherwise nobody could) ...
+        self.assertTrue(plain.has_perm('netbox_user_pin.view_userpin'))
+        # ... with a CORE deputy a superuser is no PIN authority by being a superuser
+        from netbox_user_pin.models import PinDelegate, RoleKind, RoleStatus
+        PinDelegate.objects.create(user=User.objects.create_user('deputy', 'dep@example.com'), role=RoleKind.CORE,
+                                   status=RoleStatus.ACTIVE)
+        plain = User.objects.get(pk=plain.pk)
+        area_guard.arm_user(plain)
         self.assertFalse(plain.has_perm('netbox_user_pin.view_userpin'))  # no administration of PIN for him
         self.login(plain, unlock=False)
         response = self.client.get(reverse('plugins:netbox_user_pin:areas'))

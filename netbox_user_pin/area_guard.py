@@ -62,7 +62,9 @@ def _plugin_perm(user, perm):
         if model == 'pintest':
             return not nothing
         return areas.administers_any(user)
-    if areas.keepers():  # with protection keepers a superuser is no PIN authority by being a superuser
+    # with protection keepers and CORE deputies a superuser is no PIN authority by being a superuser; while there is
+    # no CORE deputy, the master still manages the PINs (otherwise nobody could)
+    if areas.keepers() and roles.core_roles().exists():
         if user.is_superuser and not roles.core_roles().filter(user=user).exists():
             if model in ('userpin', 'pinevent'):
                 return roles.managed_departments(user).exists()
