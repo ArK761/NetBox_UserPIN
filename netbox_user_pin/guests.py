@@ -137,6 +137,9 @@ def set_expiry(guest, actor, expires, request=None):
     guest.save(update_fields=['expires', 'expiry_warned'])
     _log(PinEventAction.GUEST_EXPIRES, guest, actor, request,
          timezone.localtime(expires).strftime('%Y-%m-%d %H:%M') if expires else 'unlimited')
+    _tell(guest, actor, lambda: _('Your access is valid until %(time)s.') % {
+        'time': timezone.localtime(expires).strftime('%d.%m.%Y %H:%M')} if expires else
+        _('Your access is valid without a time limit.'))
     areas.clear_cache()
 
 
@@ -262,7 +265,7 @@ def _mail(guest, subject, body):
     want the person's language build the texts inside ``translation.override(language_of(guest))``.
     """
     settings = service.get_settings()
-    if not service.email_configured(settings):
+    if not mails_person(guest, settings) or not service.email_configured(settings):
         return False
     try:
         service._deliver(settings, [guest.email], subject, body)
@@ -272,6 +275,23 @@ def _mail(guest, subject, body):
         return False
     service.log_event(PinEventAction.MAIL_SENT, user=guest.user, scope='guest', detail=subject)
     return True
+
+
+def mails_person(guest, settings=None):
+    """E-mails to the person: switched on on the PIN-only page and for this access."""
+    return (settings or service.get_settings()).guest_mail_person and guest.mail_person
+
+
+def mails_changes(guest, settings=None):
+    """Summary of what the person changed to the administrators: on the PIN-only page and for this access."""
+    return (settings or service.get_settings()).guest_mail_changes and guest.mail_changes
+
+
+def _tell(guest, actor, what):
+    """One e-mail to the person about an action of an administrator; ``what`` is built in the person's language."""
+    _say(guest, lambda: (_('Your NetBox access was changed'), _(
+        'Hello %(name)s,\n\nthe administrator %(admin)s changed your access to NetBox:\n\n%(what)s') % {
+            'name': guest.name, 'admin': actor.get_full_name() or actor.username, 'what': what()}))
 
 
 def _say(guest, make):
@@ -337,10 +357,10 @@ def set_languages(guest, actor, pin_language=None, ui_language=None, request=Non
         raise PermissionDenied
     valid = {code for code, _label in LANGUAGES}
     fields = []
-    if pin_language is not None and pin_language in valid:
+    if pin_language is not None and pin_language in valid and pin_language != guest.pin_language:
         guest.pin_language = pin_language
         fields.append('pin_language')
-    if ui_language is not None and ui_language in valid:
+    if ui_language is not None and ui_language in valid and ui_language != guest.ui_language:
         guest.ui_language = ui_language
         fields.append('ui_language')
     if fields:
@@ -349,17 +369,43 @@ def set_languages(guest, actor, pin_language=None, ui_language=None, request=Non
             _set_ui_language(guest)
         _log(PinEventAction.GUEST_RULES, guest, actor or guest.user, request,
              f'languages: PIN {guest.pin_language or "default"}, NetBox {guest.ui_language or "default"}')
+        if actor is not None:
+            names = dict(LANGUAGES)
+            _tell(guest, actor, lambda: _('Language of the PIN pages and e-mails: %(pin)s; of NetBox: %(ui)s.') % {
+                'pin': names.get(guest.pin_language, '-'), 'ui': names.get(guest.ui_language, '-')})
 
 
 def set_alias(guest, actor, alias, description='', request=None):
     """Alias and description are texts only: the account keeps its ID (username), nothing in NetBox is renamed."""
     if not _may_manage(actor):
         raise PermissionDenied
-    guest.alias = (alias or '').strip()[:100]
-    guest.description = (description or '').strip()[:150]
+    alias, description = (alias or '').strip()[:100], (description or '').strip()[:150]
+    if (alias, description) == (guest.alias, guest.description):
+        return guest.alias
+    guest.alias, guest.description = alias, description
     guest.save(update_fields=['alias', 'description'])
     _log(PinEventAction.GUEST_RULES, guest, actor, request, f'alias: {guest.alias}; description: {guest.description}')
+    _tell(guest, actor, lambda: _('Name shown with your account: %(alias)s; description: %(description)s.') % {
+        'alias': guest.alias or '-', 'description': guest.description or '-'})
     return guest.alias
+
+
+def set_mails(guest, actor, person, changes, request=None):
+    """E-mails of one access (``guest``) or on the PIN-only page (``guest=None``): to the person / to the administrators."""
+    if not _may_manage(actor):
+        raise PermissionDenied
+    person, changes = bool(person), bool(changes)
+    if guest is None:
+        settings = service.get_settings()
+        settings.guest_mail_person, settings.guest_mail_changes = person, changes
+        settings.save()
+        service.log_event(PinEventAction.GUEST_RULES, actor=actor, request=request, scope='guest',
+                          detail=f'e-mails: to the people {person}, to the administrators {changes}')
+        return
+    guest.mail_person, guest.mail_changes = person, changes
+    guest.save(update_fields=['mail_person', 'mail_changes'])
+    _log(PinEventAction.GUEST_RULES, guest, actor, request,
+         f'e-mails: to the person {person}, to the administrators {changes}')
 
 
 def display(guest):
@@ -503,6 +549,7 @@ def set_rules(guest, actor, step, waits, request=None):
     guest.step_attempts, guest.waits = step, waits
     guest.save(update_fields=['step_attempts', 'waits'])
     _log(PinEventAction.GUEST_RULES, guest, actor, request, f'{step or "default"} / {waits or "default"}')
+    _tell(guest, actor, lambda: _('Rules for wrong PINs: %(rules)s.') % {'rules': rules_text(guest)})
 
 
 def unblock(guest, actor, request=None):
@@ -684,6 +731,11 @@ def revoke(guest, actor, request=None):
     guest.user.is_active = False  # every session of the account ends at the next request
     guest.user.save(update_fields=['is_active'])
     _log(PinEventAction.GUEST_REVOKED, guest, actor, request)
+    _say(guest, lambda: (_('Your NetBox access was disabled'), _(
+        'Hello %(name)s,\n\nthe administrator %(admin)s disabled your access to NetBox on %(time)s. Signing in with '
+        'your PIN shows a page where you can ask the administrator to enable it again.') % {
+            'name': guest.name, 'admin': actor.get_full_name() or actor.username,
+            'time': timezone.localtime(guest.revoked).strftime('%d.%m.%Y %H:%M')}))
     areas.clear_cache()
 
 
@@ -705,6 +757,9 @@ def delete(guest, actor, request=None):
     if not _may_manage(actor):
         raise PermissionDenied
     _log(PinEventAction.GUEST_DELETED, guest, actor, request)
+    _say(guest, lambda: (_('Your NetBox access was deleted'), _(
+        'Hello %(name)s,\n\nthe administrator %(admin)s deleted your access to NetBox. Your PIN does not work any '
+        'more.') % {'name': guest.name, 'admin': actor.get_full_name() or actor.username}))
     guest.user.delete()  # takes the access, the PIN and the grants along; the changelog keeps the name
     areas.clear_cache()
 
@@ -918,3 +973,70 @@ def install_user_email_check():
 
     user_model.clean = clean
     user_model._userpin_email_check = True
+
+
+#
+# E-mails both ways: the person hears about their groups, the administrators about what the person changed
+#
+
+def _grant_saved(sender, instance, created, **kwargs):
+    """Added to / removed from a group: the person is told (not while the access is still being set up)."""
+    guest = PinGuest.objects.select_related('user').filter(user_id=instance.user_id).first()
+    if guest is None or not has_pin(guest):
+        return
+    group = f'{instance.profile.name} ({instance.area.name})'
+    if created:
+        who = instance.granted_by_name
+        what = lambda: _('You were added to the group %(group)s.') % {'group': group}  # noqa: E731
+    elif instance.revoked is not None and timezone.now() - instance.revoked < timedelta(minutes=1):
+        who = getattr(instance, 'revoked_by_name', '') or instance.granted_by_name
+        what = lambda: _('You were removed from the group %(group)s.') % {'group': group}  # noqa: E731
+    else:
+        return
+    actor = get_user_model().objects.filter(username=who).first()
+    _say(guest, lambda: (_('Your NetBox access was changed'), _(
+        'Hello %(name)s,\n\nthe administrator %(admin)s changed your access to NetBox:\n\n%(what)s') % {
+            'name': guest.name, 'admin': (actor.get_full_name() or actor.username) if actor else who, 'what': what()}))
+
+
+def install_signals():
+    from django.db.models.signals import post_save
+    post_save.connect(_grant_saved, sender=AreaGrant, dispatch_uid='userpin_guest_grant_mail')
+
+
+def _change_line(change):
+    action = {'create': _('added'), 'update': _('changed'), 'delete': _('deleted')}.get(
+        str(change.action), str(change.action))
+    model = change.changed_object_type.name if change.changed_object_type_id else ''
+    return f'{timezone.localtime(change.time).strftime("%d.%m.%Y %H:%M")}  {action}  {model}: {change.object_repr}'
+
+
+def report_changes():
+    """Hourly: what each person with a PIN only added, changed or deleted, to the creator and the keepers."""
+    from core.models import ObjectChange
+    settings = service.get_settings()
+    now = timezone.now()
+    for guest in PinGuest.objects.select_related('user'):
+        since = guest.changes_mailed or guest.created
+        if not mails_changes(guest, settings):
+            guest.changes_mailed = now  # nothing piles up while it is switched off
+            guest.save(update_fields=['changes_mailed'])
+            continue
+        changes = list(ObjectChange.objects.filter(user=guest.user, time__gt=since, time__lte=now)
+                       .select_related('changed_object_type').order_by('time')[:500])
+        if changes:
+            recipients = list(areas.keepers())
+            creator = get_user_model().objects.filter(username=guest.created_by_name, is_active=True).first()
+            if creator is not None and creator not in recipients:
+                recipients.insert(0, creator)
+            with translation.override(settings.language or 'en'):
+                subject = _('What %(id)s changed in NetBox') % {'id': display(guest)}
+                body = _('%(name)s (%(id)s, %(email)s) made %(n)d change(s) since %(since)s:') % {
+                    'name': guest.name, 'id': guest.user.username, 'email': guest.email, 'n': len(changes),
+                    'since': timezone.localtime(since).strftime('%d.%m.%Y %H:%M')}
+                body += '\n\n' + '\n'.join(_change_line(c) for c in changes)
+            for recipient in recipients:
+                service.send_user_mail(recipient, subject, body)
+            _log(PinEventAction.MAIL_SENT, guest, detail=f'{len(changes)} change(s) reported')
+        guest.changes_mailed = now
+        guest.save(update_fields=['changes_mailed'])

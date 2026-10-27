@@ -352,7 +352,7 @@ class GuestListView(AreaViewMixin, View):
             'rows': rows, 'group_choices': self._groups(request.user), 'mail_ok': service.email_configured(),
             'min_length': guests.MIN_PIN_LENGTH, 'default_step': service.get_settings().guest_step_attempts,
             'default_waits': service.get_settings().guest_waits, 'default_rules': guests.rules_text(),
-            'languages': guests.LANGUAGES[1:], **extra})
+            'languages': guests.LANGUAGES[1:], 'pin_settings': service.get_settings(), **extra})
 
     def get(self, request):
         return self._render(request)
@@ -370,6 +370,11 @@ class GuestListView(AreaViewMixin, View):
                                  request=request)
                 messages.success(request, _('The rules for wrong PINs were saved.'))
                 return redirect('plugins:netbox_user_pin:guests')
+            if action == 'mails-default':
+                guests.set_mails(None, request.user, request.POST.get('mail_person'), request.POST.get('mail_changes'),
+                                 request=request)
+                messages.success(request, _('Saved.'))
+                return redirect('plugins:netbox_user_pin:guests')
             if action == 'create':
                 group = get_object_or_404(areas.AreaProfile, pk=request.POST.get('group') or 0)
                 guest, token = guests.create(
@@ -379,6 +384,9 @@ class GuestListView(AreaViewMixin, View):
                     request=request, alias=request.POST.get('alias', ''),
                     description=request.POST.get('description', ''),
                     pin_language=request.POST.get('pin_language', ''), ui_language=request.POST.get('ui_language', ''))
+                if not (request.POST.get('mail_person') and request.POST.get('mail_changes')):
+                    guests.set_mails(guest, request.user, request.POST.get('mail_person'),
+                                     request.POST.get('mail_changes'), request=request)
                 token, sent = guests.invite(guest, request.user, request=request)
                 if sent:
                     messages.success(request, _('The access was created and the invitation sent to %(email)s.') % {
@@ -423,6 +431,10 @@ class GuestListView(AreaViewMixin, View):
                                  request=request)
                 guests.set_languages(guest, request.user, request.POST.get('pin_language'),
                                      request.POST.get('ui_language'), request=request)
+                messages.success(request, _('Saved.'))
+            elif action == 'mails':
+                guests.set_mails(guest, request.user, request.POST.get('mail_person'), request.POST.get('mail_changes'),
+                                 request=request)
                 messages.success(request, _('Saved.'))
             elif action == 'rules':
                 guests.set_rules(guest, request.user, request.POST.get('step'), request.POST.get('waits'),

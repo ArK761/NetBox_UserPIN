@@ -225,6 +225,17 @@ class PinSettings(models.Model):
         help_text=_('E.g. 10,20,30: 5 wrong PINs, wait 10 s; 5 more, 20 s; 5 more, 30 s; the next wrong PIN blocks '
                     'the access until an administrator unblocks it or sends a reset e-mail.'),
     )
+    guest_mail_person = models.BooleanField(
+        verbose_name=_('E-mail the person about changes of the access'), default=True,
+        help_text=_('PIN-only access: every action of an administrator (groups, disable / enable, PIN reset, validity '
+                    '...) is e-mailed to the person. Can also be switched off per access.'),
+    )
+    guest_mail_changes = models.BooleanField(
+        verbose_name=_('E-mail the administrators what the person changed'), default=True,
+        help_text=_('PIN-only access: once an hour a summary of what the person added, changed or deleted goes to the '
+                    'administrator who created the access and to the protection keepers. Can also be switched off per '
+                    'access.'),
+    )
     areas_enabled = models.BooleanField(
         verbose_name=_('Protect areas and objects'),
         default=False,
@@ -1057,6 +1068,9 @@ class PinGuest(models.Model):
     ui_language = models.CharField(max_length=5, blank=True)  # language of the NetBox interface ('' = default)
     created_by_name = models.CharField(max_length=150, blank=True)
     created = models.DateTimeField(default=timezone.now)
+    mail_person = models.BooleanField(default=True)  # e-mail the person about changes of the access
+    mail_changes = models.BooleanField(default=True)  # e-mail the administrators what the person changed
+    changes_mailed = models.DateTimeField(null=True, blank=True)  # the changes up to this moment were reported
 
     class Meta:
         verbose_name = _('PIN-only access')

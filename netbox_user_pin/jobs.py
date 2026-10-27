@@ -14,3 +14,4 @@ class RoleHousekeepingJob(JobRunner):
         from . import guests, roles
         roles.process_due()
         guests.announce_expiry()
+        guests.report_changes()

@@ -1,6 +1,6 @@
 from netbox.plugins import PluginConfig
 
-__version__ = '2.0.2'
+__version__ = '2.0.3'
 
 
 class UserPinConfig(PluginConfig):
@@ -43,6 +43,7 @@ class UserPinConfig(PluginConfig):
         fieldrules.install()
         from . import guests
         guests.install_user_email_check()
+        guests.install_signals()
 
     @staticmethod
     def _register_event_types():

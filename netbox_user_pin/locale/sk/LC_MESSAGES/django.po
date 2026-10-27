@@ -7481,6 +7481,159 @@ msgstr ""
 "PIN užívateľa {user} bol odstránený. Užívateľ si nastaví nový PIN, keď si ho"
 " systém nabudúce vypýta."
 
+msgid "E-mail the person about changes of the access"
+msgstr "Posielať človeku e-maily o zmenách prístupu"
+
+msgid ""
+"PIN-only access: every action of an administrator (groups, disable / enable,"
+" PIN reset, validity ...) is e-mailed to the person. Can also be switched "
+"off per access."
+msgstr ""
+"Prístup len cez PIN: každá akcia administrátora (skupiny, zakázanie / "
+"povolenie, reset PIN, platnosť …) príde človeku e-mailom. Dá sa vypnúť aj "
+"pre jednotlivý prístup."
+
+msgid "E-mail the administrators what the person changed"
+msgstr "Posielať administrátorom, čo človek zmenil"
+
+msgid ""
+"PIN-only access: once an hour a summary of what the person added, changed or"
+" deleted goes to the administrator who created the access and to the "
+"protection keepers. Can also be switched off per access."
+msgstr ""
+"Prístup len cez PIN: raz za hodinu príde súhrn toho, čo človek pridal, "
+"zmenil alebo zmazal, administrátorovi, ktorý prístup vytvoril, a strážcom "
+"ochrany. Dá sa vypnúť aj pre jednotlivý prístup."
+
+msgid "Your NetBox access was changed"
+msgstr "Tvoj prístup do NetBoxu bol zmenený"
+
+#, python-format
+msgid ""
+"Hello %(name)s,\n"
+"\n"
+"the administrator %(admin)s changed your access to NetBox:\n"
+"\n"
+"%(what)s"
+msgstr ""
+"Ahoj %(name)s,\n"
+"\n"
+"administrátor %(admin)s zmenil tvoj prístup do NetBoxu:\n"
+"\n"
+"%(what)s"
+
+#, python-format
+msgid "Your access is valid until %(time)s."
+msgstr "Tvoj prístup platí do %(time)s."
+
+msgid "Your access is valid without a time limit."
+msgstr "Tvoj prístup platí bez časového obmedzenia."
+
+#, python-format
+msgid "Language of the PIN pages and e-mails: %(pin)s; of NetBox: %(ui)s."
+msgstr "Jazyk PIN stránok a e-mailov: %(pin)s; NetBoxu: %(ui)s."
+
+#, python-format
+msgid "Name shown with your account: %(alias)s; description: %(description)s."
+msgstr "Meno pri tvojom účte: %(alias)s; popis: %(description)s."
+
+#, python-format
+msgid "Rules for wrong PINs: %(rules)s."
+msgstr "Pravidlá pre zlý PIN: %(rules)s."
+
+msgid "Your NetBox access was deleted"
+msgstr "Tvoj prístup do NetBoxu bol zrušený"
+
+#, python-format
+msgid ""
+"Hello %(name)s,\n"
+"\n"
+"the administrator %(admin)s deleted your access to NetBox. Your PIN does not work any more."
+msgstr ""
+"Ahoj %(name)s,\n"
+"\n"
+"administrátor %(admin)s zrušil tvoj prístup do NetBoxu. Tvoj PIN už nefunguje."
+
+msgid "Your NetBox access was disabled"
+msgstr "Tvoj prístup do NetBoxu bol zakázaný"
+
+#, python-format
+msgid ""
+"Hello %(name)s,\n"
+"\n"
+"the administrator %(admin)s disabled your access to NetBox on %(time)s. Signing in with your PIN shows a page where you can ask the administrator to enable it again."
+msgstr ""
+"Ahoj %(name)s,\n"
+"\n"
+"administrátor %(admin)s ti %(time)s zakázal prístup do NetBoxu. Keď sa prihlásiš PIN-om, zobrazí sa stránka, kde môžeš administrátora požiadať o opätovné povolenie."
+
+#, python-format
+msgid "You were added to the group %(group)s."
+msgstr "Bol si pridaný do skupiny %(group)s."
+
+#, python-format
+msgid "You were removed from the group %(group)s."
+msgstr "Bol si odobratý zo skupiny %(group)s."
+
+msgid "added"
+msgstr "pridal"
+
+msgid "changed"
+msgstr "zmenil"
+
+msgid "deleted"
+msgstr "zmazal"
+
+#, python-format
+msgid "What %(id)s changed in NetBox"
+msgstr "Čo %(id)s zmenil v NetBoxe"
+
+#, python-format
+msgid "%(name)s (%(id)s, %(email)s) made %(n)d change(s) since %(since)s:"
+msgstr "%(name)s (%(id)s, %(email)s) urobil od %(since)s zmien: %(n)d"
+
+msgid "E-mails"
+msgstr "E-maily"
+
+msgid "Send to the person (every change of the access)"
+msgstr "Posielať človeku (každá zmena prístupu)"
+
+msgid "Send to the administrators (what the person changed)"
+msgstr "Posielať administrátorom (čo človek zmenil)"
+
+msgid "Switched off for everybody on this page – that wins."
+msgstr "Pre všetkých je to vypnuté na tejto stránke – to má prednosť."
+
+msgid "E-mails (for everybody)"
+msgstr "E-maily (pre všetkých)"
+
+msgid "Send to the person with a PIN only"
+msgstr "Posielať človeku s PIN-om"
+
+msgid ""
+"Every action of an administrator: groups, disable / enable, PIN reset, "
+"unblock, validity, languages, deletion."
+msgstr ""
+"Každá akcia administrátora: skupiny, zakázanie / povolenie, reset PIN, "
+"odblokovanie, platnosť, jazyky, zrušenie."
+
+msgid "Send to the administrators"
+msgstr "Posielať administrátorom"
+
+msgid ""
+"Once an hour: what the person added, changed or deleted – to the "
+"administrator who created the access and to the protection keepers."
+msgstr ""
+"Raz za hodinu: čo človek pridal, zmenil alebo zmazal – administrátorovi, "
+"ktorý prístup vytvoril, a strážcom ochrany."
+
+msgid ""
+"Each access can switch them off for itself (Activity and rules). Without "
+"e-mails to the person, the links for the PIN are shown to you on the screen."
+msgstr ""
+"Každý prístup si ich môže vypnúť zvlášť (Aktivita a pravidlá). Bez e-mailov "
+"človeku sa odkazy na PIN zobrazia tebe na obrazovke."
+
 #, python-format
 #~ msgid ""
 #~ "The e-mail address %(email)s belongs to the NetBox user %(user)s. A PIN-only"

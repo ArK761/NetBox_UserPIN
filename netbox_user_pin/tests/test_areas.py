@@ -1,4 +1,5 @@
 from datetime import timedelta
+from uuid import uuid4
 
 from django.contrib.auth import get_user_model
 from django.db.models import Q
@@ -2380,6 +2381,69 @@ class GuestAccessTest(AreaTestCase):
         with override_settings(EMAIL={'SERVER': 'localhost', 'FROM_EMAIL': 'netbox@example.com'}):
             self.guests.announce_expiry()
         self.assertEqual(get().expiry_warned, '30')
+
+    def test_e_mails_both_ways_and_their_switches(self):
+        from django.core import mail
+        from netbox_user_pin.models import AllowedDomain, PinGuest
+        AllowedDomain.objects.create(domain='example.com', verified=timezone.now())
+        self.sign_in()
+        get = lambda: PinGuest.objects.get(pk=self.guest.pk)  # noqa: E731
+        to_person = lambda: [m for m in mail.outbox if m.to == ['jan@example.com']]  # noqa: E731
+        with override_settings(EMAIL={'SERVER': 'localhost', 'FROM_EMAIL': 'netbox@example.com'}):
+            # every action of an administrator reaches the person
+            self.guests.revoke(get(), self.keeper)
+            self.assertIn('disabled your access', to_person()[-1].body)
+            self.guests.restore(get(), self.keeper)
+            self.assertIn('enabled your access again', to_person()[-1].body)
+            self.guests.set_expiry(get(), self.keeper, timezone.now() + timedelta(days=5))
+            self.assertIn('valid until', to_person()[-1].body)
+            self.guests.set_alias(get(), self.keeper, 'Technik', 'firma XY')
+            self.assertIn('Technik', to_person()[-1].body)
+            sent = len(to_person())
+            self.guests.set_alias(get(), self.keeper, 'Technik', 'firma XY')  # nothing changed: no e-mail
+            self.assertEqual(len(to_person()), sent)
+            other = areas.create_group(self.area, 'tenancy.tenant', 'Readers', ['view'], self.owner1, records='all')
+            areas.add_member(other, self.guest.user, None, self.owner1)
+            bodies = ' '.join(m.body for m in to_person()[sent:])
+            self.assertIn('added to the group Readers', bodies)
+            self.assertIn('removed from the group Editors', bodies)
+            # switched off for this access
+            self.guests.set_mails(get(), self.keeper, False, True)
+            sent = len(to_person())
+            self.guests.revoke(get(), self.keeper)
+            self.assertEqual(len(to_person()), sent)
+            self.guests.restore(get(), self.keeper)
+            # switched off for everybody: that wins
+            self.guests.set_mails(get(), self.keeper, True, True)
+            self.guests.set_mails(None, self.keeper, False, True)
+            self.guests.revoke(get(), self.keeper)
+            self.assertEqual(len(to_person()), sent)
+            self.guests.set_mails(None, self.keeper, True, True)
+            self.guests.restore(get(), self.keeper)
+            # what the person changed goes to the administrators once an hour
+            from core.models import ObjectChange
+            from django.contrib.contenttypes.models import ContentType
+            from tenancy.models import Tenant
+            tenant = Tenant.objects.get(slug='t1')
+            ObjectChange.objects.create(user=self.guest.user, user_name=self.guest.user.username, request_id=uuid4(),
+                                        action='update', changed_object_type=ContentType.objects.get_for_model(Tenant),
+                                        changed_object_id=tenant.pk, object_repr='T1')
+            mail.outbox.clear()
+            self.guests.report_changes()
+            report = [m for m in mail.outbox if 'kg@example.com' in m.to]
+            self.assertEqual(len(report), 1)
+            self.assertIn('T1', report[0].body)
+            self.assertIn(self.guest.user.username, report[0].subject)
+            mail.outbox.clear()
+            self.guests.report_changes()  # reported once
+            self.assertEqual(mail.outbox, [])
+            # switched off: nothing piles up
+            self.guests.set_mails(get(), self.keeper, True, False)
+            ObjectChange.objects.create(user=self.guest.user, user_name=self.guest.user.username, request_id=uuid4(),
+                                        action='delete', changed_object_type=ContentType.objects.get_for_model(Tenant),
+                                        changed_object_id=tenant.pk, object_repr='T1')
+            self.guests.report_changes()
+            self.assertEqual(mail.outbox, [])
 
     def test_netbox_user_cannot_take_the_address_of_a_pin_only_access(self):
         user = User.objects.create_user('plainx', 'plainx@example.com', 'x')
