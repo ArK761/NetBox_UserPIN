@@ -1,0 +1,13 @@
+{% extends 'netbox_user_pin/guest_base.html' %}
+{% load i18n %}
+{% block guest_title %}{% trans "Signing in is not possible" %}{% endblock %}
+{% block guest_body %}
+<h2 class="text-center mb-3"><i class="mdi mdi-account-lock"></i> {% trans "Signing in is not possible" %}</h2>
+{% if info %}<div class="alert alert-success">{{ info }}</div>{% endif %}
+{% if not sent %}
+  <p class="text-secondary">{% trans "Neither signing in nor setting a new PIN works now. The administrator can give the access back." %}</p>
+  <form method="post" action="{% url 'plugins:netbox_user_pin:guest_unblock_request' %}">{% csrf_token %}
+    <button class="btn btn-primary w-100" type="submit"><i class="mdi mdi-email-fast"></i> {% trans "Ask the administrator to unblock my account" %}</button>
+  </form>
+{% endif %}
+{% endblock %}

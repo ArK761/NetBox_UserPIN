@@ -265,8 +265,25 @@ class AreaGuardMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
-        if request.path_info.rstrip('/').lower() == guests.login_path().rstrip('/').lower():  # the address chosen for the PIN-only sign-in
-            return redirect('plugins:netbox_user_pin:guest_pin')
+        path = request.path_info
+        chosen = guests.login_path()
+        if path.rstrip('/').lower() == chosen.rstrip('/').lower():
+            # the address chosen for the PIN-only sign-in serves the page itself (no redirect into the plugin)
+            if not path.endswith('/'):
+                return redirect(chosen)
+            from django.views.decorators.csrf import csrf_protect
+            from .guest_views import GuestPinLoginView
+            return csrf_protect(GuestPinLoginView.as_view())(request)
+        if not getattr(getattr(request, 'user', None), 'is_authenticated', False) and not path.startswith(OPEN_ANONYMOUS):
+            # nobody signed in sees nothing of NetBox (no menu, no plugin, no 'page not found'): only a sign-in
+            if path.startswith(('/api/', '/graphql')):
+                if not _is_token_request(request):
+                    return JsonResponse({'detail': 'Authentication credentials were not provided.'}, status=403)
+            elif request.headers.get('HX-Request'):
+                from django.http import HttpResponse
+                return HttpResponse(status=401)
+            else:
+                return redirect(f"{django_settings.LOGIN_URL}?{urlencode({'next': request.get_full_path()})}")
         arm(request)
         response = self.get_response(request)
         user = getattr(request, 'user', None)
@@ -569,11 +586,50 @@ def _shape_html(request, text):
     text = _USER_MENU.sub(user_menu, text)  # the layout has the menu twice (small and large screens)
     # the footer links (docs, REST API, API docs, GraphQL, GitHub, Slack) are not for them
     text = text.replace('</head>', '<style>footer.footer{display:none!important}</style></head>', 1)
+    guest = guests.guest_of(user)
+    if guest is not None:  # a PIN-only person always sees until when the PIN and the account are valid
+        badges = _guest_badges(guest)
+        text = text.replace('<div class="navbar-nav flex-row align-items-center order-md-last">',
+                            '<div class="navbar-nav flex-row align-items-center order-md-last">' + badges)
+        text = text.replace('<div class="navbar-nav flex-row align-items-center d-lg-none">',
+                            '<div class="navbar-nav flex-row align-items-center d-lg-none">' + badges)
     text = _ACCOUNT_TAB.sub(lambda m: m.group(0) if _account_href_allowed(m.group(1)) else '', text)
     if not (roles.is_manager(user) or areas.administers_any(user)):  # no role: nothing to be told, nothing to search
         text = _BELL.sub('', text)
         text = _SEARCH.sub('', text)
     return text
+
+
+def _guest_badges(guest):
+    """'PIN: 54 d 14 h' and 'Account until …' for the top bar of a PIN-only person (in the language of the page)."""
+    from django.urls import reverse
+    from django.utils import timezone
+    from django.utils.html import escape
+    settings = service.get_settings()
+    now = timezone.now()
+    parts = []
+    until = guests.pin_valid_until(guest)
+    if guests.must_change(guest):
+        parts.append(('red', 'mdi-dialpad', _('PIN: change it'), _('Your PIN must be changed now.')))
+    elif until:
+        left = until - now
+        color = 'yellow' if left.days <= settings.warn_days else 'green'
+        parts.append((color, 'mdi-dialpad', _('PIN: %(d)d d %(h)d h') % {'d': left.days, 'h': left.seconds // 3600},
+                      _('Your PIN expires on %(time)s – change it under My access > Change my PIN.') % {
+                          'time': timezone.localtime(until).strftime('%d.%m.%Y %H:%M')}))
+    if guest.expires:
+        color = 'yellow' if guest.expires - now <= timezone.timedelta(days=7) else 'secondary'
+        when = timezone.localtime(guest.expires).strftime('%d.%m.%Y %H:%M')
+        parts.append((color, 'mdi-timer-sand', _('Account until %(time)s') % {'time': when},
+                      _('Your account is switched off on %(time)s.') % {'time': when}))
+    link = reverse('plugins:netbox_user_pin:guest_home')
+    return ''.join(f'<a href="{link}" class="badge text-bg-{c} me-2 text-decoration-none" title="{escape(t)}">'
+                   f'<i class="mdi {i}"></i> {escape(label)}</a>' for c, i, label, t in parts)
+
+
+# What somebody who is not signed in may reach: the sign-in pages (classic and PIN-only) and the files they need.
+OPEN_ANONYMOUS = ('/login', '/logout', '/static/', '/media-failure/', '/oauth/', '/social-auth/',
+                  '/plugins/user-pin/pin/', '/plugins/user-pin/guest/')
 
 
 # Documentation of NetBox and of its API: closed for those who see only what is allowed (B) and PIN-only people.

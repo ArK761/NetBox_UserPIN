@@ -1,6 +1,6 @@
 from netbox.plugins import PluginConfig
 
-__version__ = '0.38.3'
+__version__ = '0.38.4'
 
 
 class UserPinConfig(PluginConfig):
@@ -41,6 +41,8 @@ class UserPinConfig(PluginConfig):
         area_guard.install()
         from . import fieldrules
         fieldrules.install()
+        from . import guests
+        guests.install_user_email_check()
 
     @staticmethod
     def _register_event_types():

@@ -70,11 +70,92 @@ def link_path(token):
 
 
 def find_disabled(token):
-    """The access of a link when it is disabled by an administrator (to say so instead of 'invalid link')."""
+    """The access of a link that is disabled or whose validity ended (to say so instead of 'invalid link')."""
     if not token:
         return None
     guest = PinGuest.objects.select_related('user').filter(token_hash=_hash(token)).first()
-    return guest if guest is not None and guest.revoked else None
+    if guest is not None and (guest.revoked or (guest.expires and guest.expires <= timezone.now())):
+        return guest
+    return None
+
+
+def stop_message(guest):
+    """Why the person cannot sign in: disabled (by whom, since when) or the validity ended."""
+    if guest.revoked:
+        return disabled_message(guest)
+    return _('The validity of your account ended on %(time)s. Contact the administrator.') % {
+        'time': timezone.localtime(guest.expires).strftime('%d.%m.%Y %H:%M')}
+
+
+UNBLOCK_EVERY = 3600  # seconds between two requests of one person
+
+
+def request_unblock(guest, request=None):
+    """
+    The person asks for the access back (disabled or ended): an e-mail to the administrator who disabled it (or the
+    protection keepers). At most once an hour. Returns the usernames told, or [] when nothing was sent now.
+    """
+    key = f'userpin-unblock-{guest.pk}'
+    if cache.get(key):
+        return []
+    user_model = get_user_model()
+    recipients = []
+    if guest.revoked:
+        who, _when = disabled_by(guest)
+        admin = user_model.objects.filter(username=who, is_active=True).first()
+        if admin is not None:
+            recipients.append(admin)
+    if not recipients:
+        recipients = areas.keepers()
+    link = _absolute(request, reverse('plugins:netbox_user_pin:guests'))
+    with translation.override(service.get_settings().language or 'en'):
+        if guest.revoked:
+            state = _('disabled since %(time)s') % {'time': timezone.localtime(guest.revoked).strftime('%d.%m.%Y %H:%M')}
+        elif guest.expires and guest.expires <= timezone.now():
+            state = _('its validity ended on %(time)s') % {
+                'time': timezone.localtime(guest.expires).strftime('%d.%m.%Y %H:%M')}
+        else:
+            state = _('blocked after %(n)d wrong PINs') % {'n': guest.failed}
+        subject = _('Request to unblock the PIN-only access %(id)s') % {'id': guest.user.username}
+        body = _('%(name)s (%(id)s%(alias)s, %(email)s) asks to get the access back – %(state)s.\n\n'
+                 'Enable it or extend its validity here: %(link)s') % {
+            'name': guest.name, 'id': guest.user.username, 'alias': f', {guest.alias}' if guest.alias else '',
+            'email': guest.email, 'state': state, 'link': link}
+        sent = [r.username for r in recipients if service.send_user_mail(r, subject, body, request=request)]
+    cache.set(key, True, UNBLOCK_EVERY)
+    _log(PinEventAction.GUEST_UNBLOCK_ASKED, guest, guest.user, request, ', '.join(sent) or 'nobody reachable')
+    return sent or [r.username for r in recipients]
+
+
+def set_expiry(guest, actor, expires, request=None):
+    """The end of the whole access (None = unlimited); a later end re-arms the e-mails before it."""
+    if not _may_manage(actor):
+        raise PermissionDenied
+    if expires is not None and expires <= timezone.now():
+        raise ValidationError(_('The end of the access must be in the future.'))
+    guest.expires, guest.expiry_warned = expires, ''
+    guest.save(update_fields=['expires', 'expiry_warned'])
+    _log(PinEventAction.GUEST_EXPIRES, guest, actor, request,
+         timezone.localtime(expires).strftime('%Y-%m-%d %H:%M') if expires else 'unlimited')
+    areas.clear_cache()
+
+
+def announce_expiry():
+    """Hourly: e-mail the person 30 days and 1 day before the end of the access (in their language)."""
+    now = timezone.now()
+    for guest in PinGuest.objects.select_related('user').filter(revoked__isnull=True, expires__gt=now):
+        left = guest.expires - now
+        step = '1' if left <= timedelta(days=1) else ('30' if left <= timedelta(days=30) else '')
+        if not step or guest.expiry_warned == step or (step == '30' and guest.expiry_warned == '1'):
+            continue
+        guest.expiry_warned = step
+        guest.save(update_fields=['expiry_warned'])
+        _say(guest, lambda: (_('Your NetBox access ends on %(time)s') % {
+            'time': timezone.localtime(guest.expires).strftime('%d.%m.%Y %H:%M')}, _(
+            'Hello %(name)s,\n\nyour access to NetBox ends on %(time)s. If you still need it, ask the administrator '
+            'to extend it.') % {'name': guest.name,
+                                'time': timezone.localtime(guest.expires).strftime('%d.%m.%Y %H:%M')}))
+        _log(PinEventAction.GUEST_EXPIRY_WARNED, guest, detail=f'{step} day(s) before')
 
 
 def disabled_by(guest):
@@ -301,8 +382,13 @@ def create(name, email, group, actor, expires=None, ips='', idle=30, hours=8, no
         raise ValidationError(_('An access with this e-mail address exists.'))
     owner = get_user_model().objects.filter(email__iexact=email).first()
     if owner is not None:
-        raise ValidationError(_('The e-mail address %(email)s belongs to the NetBox user %(user)s. A PIN-only access '
-                                'needs an address nobody in NetBox uses.') % {'email': email, 'user': owner.username})
+        raise ValidationError(_(
+            'The PIN-only access cannot be created. The address %(email)s already belongs to the NetBox account '
+            '%(user)s. This person signs in to NetBox with their own account, so a PIN-only access is not needed: add '
+            'the account to the group as a regular user. If they really need a PIN-only access, first delete the '
+            'account %(user)s or change its e-mail to another address (Admin > Users > %(user)s: %(url)s), then '
+            'create the access again.') % {'email': email, 'user': owner.username,
+                                            'url': reverse('users:user', kwargs={'pk': owner.pk})})
     if group.private or not group.target:
         raise ValidationError(_('Choose a group.'))
     if expires is not None and expires <= timezone.now():
@@ -515,6 +601,8 @@ def check_pin(guest, pin, request=None):
     """
     if guest.revoked:
         return 'disabled'
+    if guest.expires and guest.expires <= timezone.now():
+        return 'ended'
     if not guest.is_active or not guest.user.is_active or not ip_allowed(guest, request):
         return 'blocked'
     if guest.blocked:
@@ -555,7 +643,7 @@ def request_reset(guest, request=None, actor=None):
     now = timezone.now()
     if actor is not None and not _may_manage(actor):
         raise PermissionDenied
-    if not guest.is_active or (actor is None and guest.reset_sent and guest.reset_sent > now - timedelta(seconds=60)):
+    if guest.revoked or not guest.is_active or (actor is None and guest.reset_sent and guest.reset_sent > now - timedelta(seconds=60)):
         return False
     token = _new_token()
     guest.reset_hash, guest.reset_expires, guest.reset_sent = _hash(token), now + timedelta(minutes=RESET_MINUTES), now
@@ -597,6 +685,9 @@ def restore(guest, actor, request=None):
     guest.save(update_fields=['revoked'])
     guest.user.is_active = True
     guest.user.save(update_fields=['is_active'])
+    _say(guest, lambda: (_('Your NetBox access works again'), _(
+        'Hello %(name)s,\n\nthe administrator enabled your access again. You can sign in with your PIN.') % {
+            'name': guest.name}))
     _log(PinEventAction.GUEST_INVITED, guest, actor, request, 'restored')
     areas.clear_cache()
 
@@ -743,6 +834,8 @@ def pin_only_login(request, pin):
     if guest is not None and _pin_matches(guest, pin):
         if guest.revoked:
             return 'disabled', guest  # the right PIN of a disabled account: say who disabled it
+        if guest.expires and guest.expires <= timezone.now():
+            return 'ended', guest
         if not guest.is_active or not guest.user.is_active or not ip_allowed(guest, request):
             return 'blocked', None
         if guest.blocked:
@@ -779,3 +872,39 @@ def login_path():
 def return_url(guest, link=''):
     """Where a person goes after signing out / when the session ended: the shared PIN page."""
     return login_path()
+
+
+#
+# A NetBox user may not take the e-mail address of a PIN-only access
+#
+
+def email_taken_by_guest(email, user=None):
+    """The PIN-only access that uses ``email`` (other than the one of ``user``), or None."""
+    email = (email or '').strip()
+    if not email:
+        return None
+    qs = PinGuest.objects.select_related('user').filter(email__iexact=email)
+    if user is not None and user.pk:
+        qs = qs.exclude(user_id=user.pk)
+    return qs.first()
+
+
+def install_user_email_check():
+    """User.clean (forms, REST API, import) refuses an address that a PIN-only access uses."""
+    user_model = get_user_model()
+    if getattr(user_model, '_userpin_email_check', False):
+        return
+    original = user_model.clean
+
+    def clean(self):
+        original(self)
+        guest = email_taken_by_guest(self.email, self)
+        if guest is not None:
+            raise ValidationError({'email': _(
+                'The address %(email)s is used by the PIN-only access %(id)s%(alias)s. Use another address, or delete '
+                'that PIN-only access first (User PIN > People with a PIN only).') % {
+                    'email': self.email, 'id': guest.user.username,
+                    'alias': f' ({guest.alias})' if guest.alias else ''}})
+
+    user_model.clean = clean
+    user_model._userpin_email_check = True

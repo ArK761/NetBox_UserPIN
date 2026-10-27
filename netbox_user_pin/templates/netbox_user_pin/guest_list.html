@@ -36,7 +36,7 @@
       {% if r.guest.failed %}<div class="small text-secondary">{% blocktrans with n=r.guest.failed %}{{ n }} wrong PINs{% endblocktrans %}</div>{% endif %}
       {% if r.pin_until %}<div class="small text-secondary">{% trans "PIN valid until" %} {{ r.pin_until|date:"Y-m-d" }}</div>{% endif %}</td>
     <td>{{ r.guest.last_login|date:"Y-m-d H:i"|default:"–" }}</td>
-    <td>{{ r.guest.expires|date:"Y-m-d H:i"|default:"–" }}</td>
+    <td>{% if r.guest.expires %}<span class="badge text-bg-{% if r.ended %}red{% elif r.ends_soon %}yellow{% else %}secondary{% endif %}">{{ r.guest.expires|date:"Y-m-d H:i" }}</span>{% else %}{% trans "unlimited" %}{% endif %}</td>
     <td class="text-end text-nowrap"><form method="post" class="d-inline">{% csrf_token %}<input type="hidden" name="pk" value="{{ r.guest.pk }}">
       {% if r.guest.blocked %}<button class="btn btn-sm btn-success" name="action" value="unblock">{% trans "Unblock" %}</button>
       <button class="btn btn-sm btn-warning" name="action" value="reset-mail">{% trans "Send a reset e-mail" %}</button>{% endif %}
@@ -63,6 +63,11 @@
           <label class="small">{% trans "Language of the NetBox interface" %}</label>
           <select class="form-select form-select-sm mb-1" name="ui_language"><option value="">{% trans "default" %}</option>{% for code, label in languages %}<option value="{{ code }}"{% if r.guest.ui_language == code %} selected{% endif %}>{{ label }}</option>{% endfor %}</select>
           <button class="btn btn-sm btn-outline-primary" type="submit">{% trans "Save" %}</button></form>
+        <div class="fw-bold small">{% trans "Account valid until" %}</div>
+        <form method="post" class="d-flex gap-1 mb-2">{% csrf_token %}<input type="hidden" name="pk" value="{{ r.guest.pk }}"><input type="hidden" name="action" value="expires">
+          <input class="form-control form-control-sm" type="datetime-local" name="expires" value="{{ r.guest.expires|date:'Y-m-d\TH:i' }}">
+          <button class="btn btn-sm btn-outline-primary" type="submit">{% trans "Save" %}</button></form>
+        <div class="form-text mb-2">{% trans "Empty = unlimited. After this time the person cannot sign in." %}</div>
         <div class="fw-bold small">{% trans "Rules for wrong PINs" %}</div>
         <div class="small text-secondary mb-1">{{ r.rules }}</div>
         <form method="post" class="d-flex gap-1">{% csrf_token %}<input type="hidden" name="pk" value="{{ r.guest.pk }}"><input type="hidden" name="action" value="rules">

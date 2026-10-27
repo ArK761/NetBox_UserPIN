@@ -42,6 +42,7 @@ urlpatterns = [
     path('guests/', guest_views.GuestListView.as_view(), name='guests'),
     path('pin/', guest_views.GuestPinLoginView.as_view(), name='guest_pin'),
     path('pin/forgot/', guest_views.GuestPinForgotView.as_view(), name='guest_pin_forgot'),
+    path('pin/unblock/', guest_views.GuestUnblockRequestView.as_view(), name='guest_unblock_request'),
     path('guest/', guest_views.GuestHomeView.as_view(), name='guest_home'),
     path('guest/change/', guest_views.GuestChangeView.as_view(), name='guest_change'),
     path('guest/logout/', guest_views.GuestLogoutView.as_view(), name='guest_logout'),

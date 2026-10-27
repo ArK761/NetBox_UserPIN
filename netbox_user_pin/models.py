@@ -476,6 +476,9 @@ class PinEventAction(models.TextChoices):
     GUEST_BLOCKED = 'guest_blocked', _('PIN-only access blocked after wrong PINs')
     GUEST_UNBLOCKED = 'guest_unblocked', _('PIN-only access unblocked')
     GUEST_RULES = 'guest_rules', _('PIN-only access: rules for wrong PINs changed')
+    GUEST_UNBLOCK_ASKED = 'guest_unblock_asked', _('PIN-only access: unblocking asked for')
+    GUEST_EXPIRES = 'guest_expires', _('PIN-only access: validity changed')
+    GUEST_EXPIRY_WARNED = 'guest_expiry_warned', _('PIN-only access: end of validity announced')
     ERROR = 'error', _('Error')
 
 
@@ -1049,6 +1052,7 @@ class PinGuest(models.Model):
     note = models.CharField(max_length=200, blank=True)
     description = models.CharField(max_length=150, blank=True)  # e.g. technician of company XY
     alias = models.CharField(max_length=100, blank=True)  # free text shown next to the account ID (PinUser0001)
+    expiry_warned = models.CharField(max_length=10, blank=True)  # '30' / '1': the e-mails before the end were sent
     pin_language = models.CharField(max_length=5, blank=True)  # language of the PIN pages / e-mails ('' = default)
     ui_language = models.CharField(max_length=5, blank=True)  # language of the NetBox interface ('' = default)
     created_by_name = models.CharField(max_length=150, blank=True)

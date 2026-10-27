@@ -2219,7 +2219,7 @@ class GuestAccessTest(AreaTestCase):
         self.assertEqual(self.guests.check_pin(get(), 'nope-nope'), 'locked')  # 16th: blocked
         self.assertIsNotNone(get().blocked)
         self.assertEqual(self.guests.check_pin(get(), 'Secret-pin-1'), 'locked')  # even the right PIN
-        self.assertContains(self.client.post(self.url, {'pin': 'Secret-pin-1'}), 'blocked')
+        self.assertContains(self.client.post(self.url, {'pin': 'Secret-pin-1'}), 'blocked', status_code=403)
         # the administrator unblocks: the old PIN works again
         self.guests.unblock(get(), self.keeper)
         self.assertEqual(self.guests.check_pin(get(), 'Secret-pin-1'), 'ok')
@@ -2293,7 +2293,7 @@ class GuestAccessTest(AreaTestCase):
         self.assertEqual(self.guests.check_pin(PinGuest.objects.get(pk=self.guest.pk), 'Secret-pin-1'), 'disabled')
         __import__('django.core.cache', fromlist=['cache']).cache.clear()
         page = self.client.post('/plugins/user-pin/pin/', {'pin': 'Secret-pin-1'})
-        self.assertContains(page, 'temporarily disabled by the administrator keepg')
+        self.assertContains(page, 'temporarily disabled by the administrator keepg', status_code=403)
         self.assertContains(self.client.get(self.url), 'temporarily disabled by the administrator keepg', status_code=403)
         self.guests.restore(PinGuest.objects.get(pk=self.guest.pk), self.keeper)
         # forced change of a signed-in person: no current PIN, and an e-mail
@@ -2320,12 +2320,78 @@ class GuestAccessTest(AreaTestCase):
         other, _t = self.guests.create('Eva N', 'evan@example.com', self.group, self.keeper, note='Peto')
         self.assertEqual(other.description, 'Peto')
 
+    def test_disabled_ended_blocked_no_reset_and_ask_the_admin(self):
+        from django.core import mail
+        from netbox_user_pin.models import PinGuest
+        cache = __import__('django.core.cache', fromlist=['cache']).cache
+        self.sign_in()
+        self.client.logout()
+        get = lambda: PinGuest.objects.get(pk=self.guest.pk)  # noqa: E731
+        from netbox_user_pin.models import AllowedDomain
+        AllowedDomain.objects.create(domain='example.com', verified=timezone.now())
+        self.guests.revoke(get(), self.keeper)
+        cache.clear()
+        page = self.client.post('/pin/', {'pin': 'Secret-pin-1'})
+        self.assertContains(page, 'temporarily disabled by the administrator keepg', status_code=403)
+        self.assertNotContains(page, 'name="pin"', status_code=403)  # no sign-in form
+        self.assertNotContains(page, 'name="email"', status_code=403)  # no "forgot PIN"
+        with override_settings(EMAIL={'SERVER': 'localhost', 'FROM_EMAIL': 'netbox@example.com'}):
+            self.assertFalse(self.guests.request_reset(get()))  # no reset link for a disabled account
+            response = self.client.post('/plugins/user-pin/pin/unblock/')
+            self.assertContains(response, 'keepg')
+            self.assertIn('asks to get the access back', mail.outbox[-1].body)
+            self.assertIn(self.keeper.email, mail.outbox[-1].to)
+            self.assertContains(self.client.post('/plugins/user-pin/pin/unblock/'), 'in an hour')  # once an hour
+        # the validity ended
+        self.guests.restore(get(), self.keeper)
+        PinGuest.objects.filter(pk=self.guest.pk).update(expires=timezone.now() - timedelta(minutes=1))
+        cache.clear()
+        self.assertContains(self.client.post('/pin/', {'pin': 'Secret-pin-1'}), 'validity of your account ended',
+                            status_code=403)
+        # the administrator extends it
+        with self.assertRaises(ValidationError):
+            self.guests.set_expiry(get(), self.keeper, timezone.now() - timedelta(days=1))
+        self.guests.set_expiry(get(), self.keeper, timezone.now() + timedelta(days=3))
+        cache.clear()
+        self.assertEqual(self.client.post('/pin/', {'pin': 'Secret-pin-1'}).status_code, 302)
+        page = self.client.get('/tenancy/tenants/').content.decode()
+        self.assertIn('mdi-timer-sand', page)  # account until ... in the top bar
+        self.assertIn('PIN: ', page)  # days of the PIN in the top bar
+        self.assertNotIn('User PIN v', page)  # the version is for the administrators only
+        with override_settings(EMAIL={'SERVER': 'localhost', 'FROM_EMAIL': 'netbox@example.com'}):
+            self.guests.announce_expiry()
+        self.assertEqual(get().expiry_warned, '30')
+
+    def test_netbox_user_cannot_take_the_address_of_a_pin_only_access(self):
+        user = User.objects.create_user('plainx', 'plainx@example.com', 'x')
+        user.email = 'JAN@example.com'
+        with self.assertRaises(ValidationError) as ctx:
+            user.full_clean()
+        self.assertIn('email', ctx.exception.message_dict)
+        self.assertIn(self.guest.user.username, str(ctx.exception))
+        with self.assertRaises(ValidationError) as ctx:
+            self.guests.create('X', 'kg@example.com', self.group, self.keeper)
+        self.assertIn('delete the account keepg or change its e-mail', str(ctx.exception))
+
+    def test_nothing_for_somebody_not_signed_in(self):
+        self.client.logout()
+        for url in ('/aa/', '/dcim/devices/', '/plugins/user-pin/guests/', '/'):
+            response = self.client.get(url)
+            self.assertEqual(response.status_code, 302, url)
+            self.assertTrue(response.url.startswith('/login/'), url)
+        self.assertEqual(self.client.get('/api/dcim/devices/').status_code, 403)
+        self.assertEqual(self.client.get('/login/').status_code, 200)
+        self.assertContains(self.client.get('/pin/'), 'name="pin"')
+        self.assertNotContains(self.client.get('/pin/'), 'User PIN v')
+
     def test_two_part_address_and_admin_page(self):
         with self.assertRaises(ValidationError):
             areas.set_guest_path(self.keeper, ('', 'x2'))
         self.assertEqual(areas.set_guest_path(self.keeper, ('AQER', 'x2')), 'aqer/x2')
         self.assertEqual(self.guests.login_path(), '/aqer/x2/')
-        self.assertRedirects(self.client.get('/aqer/x2/'), '/plugins/user-pin/pin/', fetch_redirect_response=False)
+        page = self.client.get('/aqer/x2/')  # the page itself, on the chosen address (no redirect)
+        self.assertEqual(page.status_code, 200)
+        self.assertContains(page, 'name="pin"')
         areas.set_guest_path(self.keeper, ('pin', ''))
         self.client.force_login(self.keeper)
         session = self.client.session
@@ -2401,7 +2467,7 @@ class GuestAccessTest(AreaTestCase):
         self.guests.set_pin(other, 'Different-pin-2', first=True)
         cache = __import__('django.core.cache', fromlist=['cache']).cache
         self.client.logout()
-        self.assertRedirects(self.client.get('/pin/'), '/plugins/user-pin/pin/', fetch_redirect_response=False)  # (the chosen address)
+        self.assertContains(self.client.get('/pin/'), 'name="pin"')  # served on the chosen address itself
         for pin, who in (('Secret-pin-1', self.guest.pk), ('Different-pin-2', other.pk)):
             cache.clear()
             self.assertRedirects(self.client.post('/plugins/user-pin/pin/', {'pin': pin}),
@@ -2459,7 +2525,7 @@ class GuestAccessTest(AreaTestCase):
         self.assertEqual(self.client.post(self.url, {'pin': 'Secret-pin-1'}, REMOTE_ADDR='10.9.8.7').status_code, 302)
         self.client.logout()
         PinGuest.objects.filter(pk=self.guest.pk).update(expires=timezone.now() - timedelta(minutes=1))
-        self.assertEqual(self.client.get(self.url).status_code, 404)
+        self.assertContains(self.client.get(self.url), 'validity of your account ended', status_code=403)
 
     def test_a_forgotten_pin_is_reset_by_an_e_mailed_link_once(self):
         from unittest import mock
@@ -2514,9 +2580,9 @@ class GuestAccessTest(AreaTestCase):
             areas.set_guest_path(self.owner1, 'tenanti')
         self.assertEqual(areas.set_guest_path(self.keeper, ' /Tenanti/ '), 'tenanti')
         self.assertEqual(self.guests.login_path(), '/tenanti/')
-        self.assertRedirects(self.client.get('/tenanti/'), '/plugins/user-pin/pin/', fetch_redirect_response=False)
-        self.assertRedirects(self.client.get('/TENANTI'), '/plugins/user-pin/pin/', fetch_redirect_response=False)
-        self.assertEqual(self.client.get('/pin/').status_code, 404)  # the old one is gone
+        self.assertContains(self.client.get('/tenanti/'), 'name="pin"')  # the page itself on the chosen address
+        self.assertRedirects(self.client.get('/TENANTI'), '/tenanti/', fetch_redirect_response=False)
+        self.assertNotContains(self.client.get('/pin/'), 'name="pin"', status_code=self.client.get('/pin/').status_code)
         self.sign_in()
         self.assertRedirects(self.client.get('/plugins/user-pin/guest/logout/'), '/tenanti/',
                              fetch_redirect_response=False)

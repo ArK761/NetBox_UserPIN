@@ -7,6 +7,8 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import NoReverseMatch, reverse
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
+from datetime import timedelta
+
 from django.utils.translation import gettext as _
 from django.views import View
 
@@ -15,13 +17,23 @@ from .area_views import AreaViewMixin, _target_label
 from .models import PinGuest
 
 __all__ = ('GuestChangeView', 'GuestEndedView', 'GuestForgotView', 'GuestHomeView', 'GuestLanguageView', 'GuestListView',
-           'GuestLoginView', 'GuestLogoutView', 'GuestPinLoginView', 'GuestPinForgotView', 'GuestResetView')
+           'GuestLoginView', 'GuestLogoutView', 'GuestPinLoginView', 'GuestPinForgotView', 'GuestResetView', 'GuestUnblockRequestView')
 
 T = 'netbox_user_pin/guest_'
 
 
 def _error(exc):
     return ' '.join(exc.messages) if isinstance(exc, ValidationError) else str(exc)
+
+
+STOP_KEY = 'userpin_guest_stop'
+
+
+def _stopped(request, guest, message):
+    """The account may not sign in (disabled, ended, blocked): no PIN form, no reset – only 'ask the administrator'."""
+    import time
+    request.session[STOP_KEY] = {'id': guest.pk, 't': time.time()}
+    return render(request, T + 'stopped.html', {'error': message, 'guest_name': guest.name}, status=403)
 
 
 def _same(request):
@@ -46,7 +58,7 @@ class GuestLoginView(View):
         if guest is None:
             disabled = guests.find_disabled(token)
             if disabled is not None:
-                return render(request, T + 'invalid.html', {'error': guests.disabled_message(disabled)}, status=403)
+                return _stopped(request, disabled, guests.stop_message(disabled))
             return render(request, T + 'invalid.html', status=404)
         if request.user.is_authenticated and request.session.get(guests.SESSION_KEY, {}).get('id') == guest.pk:
             return redirect('plugins:netbox_user_pin:guest_home')
@@ -57,7 +69,7 @@ class GuestLoginView(View):
         if guest is None:
             disabled = guests.find_disabled(token)
             if disabled is not None:
-                return render(request, T + 'invalid.html', {'error': guests.disabled_message(disabled)}, status=403)
+                return _stopped(request, disabled, guests.stop_message(disabled))
             return render(request, T + 'invalid.html', status=404)
         link = guests.link_path(token)
         if not guests.has_pin(guest):  # the person chooses the first PIN
@@ -69,11 +81,15 @@ class GuestLoginView(View):
                 return self._page(request, guest, token, error=_error(exc))
             guests.start_session(request, guest, link)
             return redirect('plugins:netbox_user_pin:guest_home')
+        if guest.blocked:
+            return _stopped(request, guest, LOCKED_TEXT())
         status = guests.check_pin(guest, request.POST.get('pin', ''), request=request)
         if status == 'ok':
             guests.start_session(request, guest, link)
             return redirect('plugins:netbox_user_pin:guest_home')
         guest.refresh_from_db()
+        if status == 'locked':
+            return _stopped(request, guest, LOCKED_TEXT())
         error = {'pause': _('Wait a moment before the next attempt.'),
                  'blocked': _('This access is not usable now (ended, revoked or from another address).'),
                  'disabled': _('Your account is disabled (suspended). Contact the administrator.'),
@@ -95,8 +111,10 @@ class GuestPinLoginView(View):
 
     def post(self, request):
         status, guest = guests.pin_only_login(request, request.POST.get('pin', ''))
-        if status == 'disabled' and guest is not None:
-            return self._page(request, error=guests.disabled_message(guest))
+        if status in ('disabled', 'ended') and guest is not None:
+            return _stopped(request, guest, guests.stop_message(guest))
+        if status == 'locked' and guest is not None:
+            return _stopped(request, guest, LOCKED_TEXT())
         if status == 'ok':
             guests.start_session(request, guest, guests.login_path())
             return redirect('plugins:netbox_user_pin:guest_home')
@@ -108,13 +126,35 @@ class GuestPinLoginView(View):
         return self._page(request, error=error, wrong=status == 'wrong')
 
 
+def LOCKED_TEXT():  # noqa: N802 - a translated text built when used
+    return _('Your access is blocked after too many wrong PINs. Ask the administrator to unblock it.')
+
+
+class GuestUnblockRequestView(View):
+    """'Ask the administrator': an e-mail to who disabled the account (or the keepers), at most once an hour."""
+
+    def post(self, request):
+        import time
+        data = request.session.get(STOP_KEY) or {}
+        guest = PinGuest.objects.select_related('user').filter(pk=data.get('id') or 0).first()
+        if guest is None or time.time() - data.get('t', 0) > 1800:
+            return render(request, T + 'invalid.html', status=404)
+        sent = guests.request_unblock(guest, request=request)
+        if sent:
+            text = _('Your request was sent to: %(admins)s. You will get an e-mail when the access works again.') % {
+                'admins': ', '.join(sent)}
+        else:
+            text = _('Your request was sent already. You can ask again in an hour.')
+        return render(request, T + 'stopped.html', {'info': text, 'sent': True, 'guest_name': guest.name})
+
+
 class GuestPinForgotView(View):
     """Forgotten PIN: write the e-mail address; the answer is always the same."""
 
     def post(self, request):
         email = (request.POST.get('email') or '').strip().lower()
         guest = PinGuest.objects.select_related('user').filter(email__iexact=email).first() if email else None
-        if guest is not None and guest.is_active:
+        if guest is not None and guest.is_active and not guest.revoked:
             guests.request_reset(guest, request=request)
         return render(request, T + 'forgot.html', {'token': ''})
 
@@ -301,7 +341,9 @@ class GuestListView(AreaViewMixin, View):
             rows.append({'guest': guest, 'state': state, 'groups': guests.groups_of(guest),
                          'must_change': guests.has_pin(guest) and guests.must_change(guest),
                          'pin_until': guests.pin_valid_until(guest), 'rules': guests.rules_text(guest),
-                         'activity': _activity(guest)})
+                         'activity': _activity(guest),
+                         'ended': bool(guest.expires and guest.expires <= timezone.now()),
+                         'ends_soon': bool(guest.expires and guest.expires - timezone.now() <= timedelta(days=7))})
         return render(request, self.template_name, {
             'login_url': request.build_absolute_uri(guests.login_path()), 'guest_path': areas.guest_path(),
             'path_a': areas.guest_path().split('/')[0],
@@ -362,6 +404,9 @@ class GuestListView(AreaViewMixin, View):
                 if not sent:
                     return self._render(request, new_link=request.build_absolute_uri(guests.link_path(token)),
                                         new_guest=guest)
+            elif action == 'expires':
+                guests.set_expiry(guest, request.user, _time(request.POST.get('expires')), request=request)
+                messages.success(request, _('The validity of the access was saved.'))
             elif action == 'unblock':
                 guests.unblock(guest, request.user, request=request)
                 messages.success(request, _('The access is unblocked; the old PIN works again.'))

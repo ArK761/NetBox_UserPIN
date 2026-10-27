@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-26 16:29+0000\n"
+"POT-Creation-Date: 2026-10-27 07:36+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -107,7 +107,7 @@ msgstr "individuálne"
 msgid "Show %(blocked)s - the value of the field %(field)s of %(type)s"
 msgstr "Zobraziť %(blocked)s – hodnotu poľa %(field)s v objekte %(type)s"
 
-#: area_guard.py:365
+#: area_guard.py:382
 #, python-format
 msgid ""
 "You have access to \"%(area)s\". To enter you need a PIN: set it here and "
@@ -116,29 +116,58 @@ msgstr ""
 "Máš prístup do „%(area)s“. Na vstup potrebuješ PIN: nastav si ho tu a budeš "
 "pokračovať."
 
-#: area_guard.py:553 navigation.py:12
+#: area_guard.py:570 navigation.py:12
 #: templates/netbox_user_pin/my_access.html:4
 msgid "My access"
 msgstr "Môj prístup"
 
-#: area_guard.py:554 templates/netbox_user_pin/guest_change.html:4
+#: area_guard.py:571 templates/netbox_user_pin/guest_change.html:4
 #: templates/netbox_user_pin/guest_home.html:27
 msgid "Change my PIN"
 msgstr "Zmeniť môj PIN"
 
-#: area_guard.py:560 templates/netbox_user_pin/area_denied.html:46
+#: area_guard.py:577 templates/netbox_user_pin/area_denied.html:46
 msgid "Change the password"
 msgstr "Zmeniť heslo"
 
-#: area_guard.py:561 navigation.py:8 navigation.py:9
+#: area_guard.py:578 navigation.py:8 navigation.py:9
 #: templates/netbox_user_pin/area_denied.html:47
 #: templates/netbox_user_pin/my_pin.html:4
 msgid "My PIN"
 msgstr "Môj PIN"
 
-#: area_guard.py:563 templates/netbox_user_pin/area_denied.html:48
+#: area_guard.py:580 templates/netbox_user_pin/area_denied.html:48
 msgid "My API keys"
 msgstr "Moje API kľúče"
+
+#: area_guard.py:613
+msgid "PIN: change it"
+msgstr "PIN: zmeniť"
+
+#: area_guard.py:613
+msgid "Your PIN must be changed now."
+msgstr "PIN si musíš zmeniť hneď."
+
+#: area_guard.py:617
+#, python-format
+msgid "PIN: %(d)d d %(h)d h"
+msgstr "PIN: %(d)d d %(h)d h"
+
+#: area_guard.py:618
+#, python-format
+msgid ""
+"Your PIN expires on %(time)s – change it under My access > Change my PIN."
+msgstr "Tvoj PIN vyprší %(time)s – zmeníš ho v Môj prístup > Zmeniť môj PIN."
+
+#: area_guard.py:623
+#, python-format
+msgid "Account until %(time)s"
+msgstr "Účet do %(time)s"
+
+#: area_guard.py:624
+#, python-format
+msgid "Your account is switched off on %(time)s."
+msgstr "Tvoj účet bude vypnutý %(time)s."
 
 #: area_views.py:34
 msgid ""
@@ -170,7 +199,7 @@ msgstr "Vypnuté (vlastníci ju deaktivovali)"
 msgid "Off (\"Protect areas and objects\" is not switched on in the settings)"
 msgstr "Vypnuté („Chrániť oblasti a objekty“ nie je v nastaveniach zapnuté)"
 
-#: area_views.py:195 guest_views.py:270
+#: area_views.py:195 guest_views.py:310
 msgid "Write the end as a date and a time."
 msgstr "Zadaj koniec ako dátum a čas."
 
@@ -184,7 +213,7 @@ msgid "The exception was taken away: the protection applies to him again."
 msgstr "Výnimka bola odobratá: ochrana sa naňho vzťahuje znova."
 
 #: area_views.py:213 area_views.py:342 area_views.py:398 area_views.py:428
-#: area_views.py:526 area_views.py:774 area_views.py:791 guest_views.py:381
+#: area_views.py:526 area_views.py:774 area_views.py:791 guest_views.py:426
 msgid "Saved."
 msgstr "Uložené."
 
@@ -923,13 +952,13 @@ msgstr "Do"
 msgid "Then the rights return automatically."
 msgstr "Potom sa práva automaticky vrátia."
 
-#: forms.py:211 forms.py:467 models.py:532 models.py:810 models.py:1026
+#: forms.py:211 forms.py:467 models.py:535 models.py:813 models.py:1029
 #: templates/netbox_user_pin/guest_list.html:29
-#: templates/netbox_user_pin/guest_list.html:86
+#: templates/netbox_user_pin/guest_list.html:91
 msgid "Name"
 msgstr "Názov"
 
-#: forms.py:212 forms.py:468 models.py:533 models.py:811
+#: forms.py:212 forms.py:468 models.py:536 models.py:814
 msgid "Description"
 msgstr "Popis"
 
@@ -1031,11 +1060,11 @@ msgstr "Chránený typ objektu"
 msgid "The first object type of the area; more are added on the area page."
 msgstr "Prvý typ objektu oblasti; ďalšie sa pridávajú na stránke oblasti."
 
-#: forms.py:475 models.py:816
+#: forms.py:475 models.py:819
 msgid "Longest temporary access (hours)"
 msgstr "Najdlhší dočasný prístup (hodiny)"
 
-#: forms.py:477 guest_views.py:300 models.py:570 models.py:814
+#: forms.py:477 guest_views.py:340 models.py:573 models.py:817
 #: templates/netbox_user_pin/department.html:85
 #: templates/netbox_user_pin/my_pin.html:41
 #: templates/netbox_user_pin/user_list.html:82
@@ -1078,7 +1107,7 @@ msgstr ""
 "Vedúci a delegáti oddelení (a zástupcovia CORE). Nie superuseri a správcovia"
 " ochrany: o tých rozhodujú vlastníci."
 
-#: forms.py:534 models.py:853 templates/netbox_user_pin/my_access.html:11
+#: forms.py:534 models.py:856 templates/netbox_user_pin/my_access.html:11
 msgid "Profile"
 msgstr "Profil"
 
@@ -1166,30 +1195,30 @@ msgstr "Prečo prístup potrebujete?"
 msgid "What exactly (section, group, object …)"
 msgstr "Čo presne (sekcia, skupina, objekt …)"
 
-#: guest_views.py:30
+#: guest_views.py:42
 msgid "The two PINs differ."
 msgstr "Oba PIN-y sa líšia."
 
-#: guest_views.py:65
+#: guest_views.py:77
 msgid "The invitation has expired. Ask for a new one."
 msgstr "Pozvánka vypršala. Požiadaj o novú."
 
-#: guest_views.py:77 guest_views.py:103
+#: guest_views.py:93 guest_views.py:121
 msgid "Wait a moment before the next attempt."
 msgstr "Počkaj chvíľu pred ďalším pokusom."
 
-#: guest_views.py:78 guest_views.py:104
+#: guest_views.py:94 guest_views.py:122
 msgid ""
 "This access is not usable now (ended, revoked or from another address)."
 msgstr ""
 "Tento prístup sa teraz nedá použiť (skončil, bol odvolaný alebo ide z inej "
 "adresy)."
 
-#: guest_views.py:79 guest_views.py:105
+#: guest_views.py:95 guest_views.py:123
 msgid "Your account is disabled (suspended). Contact the administrator."
 msgstr "Tvoj účet je zakázaný (pozastavený). Kontaktuj správcu."
 
-#: guest_views.py:80 guest_views.py:106
+#: guest_views.py:96 guest_views.py:124
 msgid ""
 "Your access is blocked after too many wrong PINs. Ask the administrator to "
 "unblock it or to send you a link for a new PIN."
@@ -1197,116 +1226,198 @@ msgstr ""
 "Tvoj prístup je zablokovaný po príliš veľa chybných PINoch. Požiadaj "
 "správcu, aby ho odblokoval alebo ti poslal odkaz na nový PIN."
 
-#: guest_views.py:81
+#: guest_views.py:97
 msgid "Choose your PIN first."
 msgstr "Najprv si vyber PIN."
 
-#: guest_views.py:81 guest_views.py:107 service.py:721 service.py:1270
+#: guest_views.py:97 guest_views.py:125 service.py:721 service.py:1270
 msgid "The PIN is not correct."
 msgstr "PIN nie je správny."
 
-#: guest_views.py:164
+#: guest_views.py:130
+msgid ""
+"Your access is blocked after too many wrong PINs. Ask the administrator to "
+"unblock it."
+msgstr ""
+"Tvoj prístup je zablokovaný po príliš veľa chybných PINoch. Požiadaj správcu"
+" o odblokovanie."
+
+#: guest_views.py:144
+#, python-format
+msgid ""
+"Your request was sent to: %(admins)s. You will get an e-mail when the access"
+" works again."
+msgstr ""
+"Tvoja žiadosť bola odoslaná správcovi: %(admins)s. Keď bude prístup znova "
+"fungovať, dostaneš e-mail."
+
+#: guest_views.py:147
+msgid "Your request was sent already. You can ask again in an hour."
+msgstr "Žiadosť už bola odoslaná. Znova môžeš požiadať o hodinu."
+
+#: guest_views.py:204
 msgid "read"
 msgstr "čítať"
 
-#: guest_views.py:164
+#: guest_views.py:204
 msgid "add"
 msgstr "pridávať"
 
-#: guest_views.py:164
+#: guest_views.py:204
 msgid "edit"
 msgstr "upravovať"
 
-#: guest_views.py:164
+#: guest_views.py:204
 msgid "delete"
 msgstr "mazať"
 
-#: guest_views.py:227
+#: guest_views.py:267
 msgid "The current PIN is not correct, or you must wait a moment."
 msgstr "Aktuálny PIN nie je správny, alebo musíš chvíľu počkať."
 
-#: guest_views.py:232
+#: guest_views.py:272
 msgid "Your PIN was changed. Sign in again."
 msgstr "Tvoj PIN bol zmenený. Prihlás sa znova."
 
-#: guest_views.py:290
+#: guest_views.py:330
 msgid "Disabled"
 msgstr "Zakázaný"
 
-#: guest_views.py:292
+#: guest_views.py:332
 msgid "Blocked (wrong PINs)"
 msgstr "Zablokovaný (chybné PINy)"
 
-#: guest_views.py:294 models.py:573
+#: guest_views.py:334 models.py:576
 msgid "Ended"
 msgstr "Ukončená"
 
-#: guest_views.py:296 templates/netbox_user_pin/delegates.html:19
+#: guest_views.py:336 templates/netbox_user_pin/delegates.html:19
 #: templates/netbox_user_pin/department.html:29
 msgid "Invited"
 msgstr "Pozvaný"
 
-#: guest_views.py:298
+#: guest_views.py:338
 msgid "Pause after a wrong PIN"
 msgstr "Pauza po zlom PINe"
 
-#: guest_views.py:324
+#: guest_views.py:366
 #, python-format
 msgid "The address is /%(slug)s/."
 msgstr "Adresa je /%(slug)s/."
 
-#: guest_views.py:329 guest_views.py:385
+#: guest_views.py:371 guest_views.py:430
 msgid "The rules for wrong PINs were saved."
 msgstr "Pravidlá pre chybné PINy sú uložené."
 
-#: guest_views.py:342
+#: guest_views.py:384
 #, python-format
 msgid "The access was created and the invitation sent to %(email)s."
 msgstr "Prístup bol vytvorený a pozvánka odoslaná na %(email)s."
 
-#: guest_views.py:351
+#: guest_views.py:393
 msgid "The invitation was sent."
 msgstr "Pozvánka bola odoslaná."
 
-#: guest_views.py:361
+#: guest_views.py:403
 msgid ""
 "The PIN was cleared; the person chooses a new one through the new link."
 msgstr "PIN bol zrušený; osoba si vyberie nový cez nový odkaz."
 
-#: guest_views.py:367
+#: guest_views.py:409
+msgid "The validity of the access was saved."
+msgstr "Platnosť prístupu bola uložená."
+
+#: guest_views.py:412
 msgid "The access is unblocked; the old PIN works again."
 msgstr "Prístup je odblokovaný; starý PIN opäť funguje."
 
-#: guest_views.py:370
+#: guest_views.py:415
 #, python-format
 msgid "A link for a new PIN was sent to %(email)s."
 msgstr "Odkaz na nový PIN bol odoslaný na %(email)s."
 
-#: guest_views.py:372
+#: guest_views.py:417
 msgid "The e-mail could not be sent – see the audit log."
 msgstr "E-mail sa nepodarilo odoslať – pozri audit log."
 
-#: guest_views.py:375
+#: guest_views.py:420
 msgid "The person must choose a new PIN at the next sign-in."
 msgstr "Pri ďalšom prihlásení si musí zvoliť nový PIN."
 
-#: guest_views.py:388
+#: guest_views.py:433
 msgid "The access was revoked."
 msgstr "Prístup bol odvolaný."
 
-#: guest_views.py:391
+#: guest_views.py:436
 msgid "The access works again."
 msgstr "Prístup opäť funguje."
 
-#: guest_views.py:394
+#: guest_views.py:439
 msgid "The access was deleted."
 msgstr "Prístup bol zmazaný."
 
-#: guest_views.py:398
+#: guest_views.py:443
 msgid "You may not do this."
 msgstr "Toto nesmieš urobiť."
 
-#: guests.py:89
+#: guests.py:86
+#, python-format
+msgid ""
+"The validity of your account ended on %(time)s. Contact the administrator."
+msgstr "Platnosť tvojho účtu skončila %(time)s. Kontaktuj správcu."
+
+#: guests.py:113
+#, python-format
+msgid "disabled since %(time)s"
+msgstr "zakázaný od %(time)s"
+
+#: guests.py:115
+#, python-format
+msgid "its validity ended on %(time)s"
+msgstr "jeho platnosť skončila %(time)s"
+
+#: guests.py:118
+#, python-format
+msgid "blocked after %(n)d wrong PINs"
+msgstr "zablokovaný po %(n)d chybných PINoch"
+
+#: guests.py:119
+#, python-format
+msgid "Request to unblock the PIN-only access %(id)s"
+msgstr "Žiadosť o odblokovanie prístupu iba s PINom %(id)s"
+
+#: guests.py:120
+#, python-format
+msgid ""
+"%(name)s (%(id)s%(alias)s, %(email)s) asks to get the access back – %(state)s.\n"
+"\n"
+"Enable it or extend its validity here: %(link)s"
+msgstr ""
+"%(name)s (%(id)s%(alias)s, %(email)s) žiada o vrátenie prístupu – %(state)s.\n"
+"\n"
+"Povoľ ho alebo predĺž jeho platnosť tu: %(link)s"
+
+#: guests.py:135 guests.py:395
+msgid "The end of the access must be in the future."
+msgstr "Koniec prístupu musí byť v budúcnosti."
+
+#: guests.py:153
+#, python-format
+msgid "Your NetBox access ends on %(time)s"
+msgstr "Tvoj prístup do NetBoxu končí %(time)s"
+
+#: guests.py:155
+#, python-format
+msgid ""
+"Hello %(name)s,\n"
+"\n"
+"your access to NetBox ends on %(time)s. If you still need it, ask the administrator to extend it."
+msgstr ""
+"Ahoj %(name)s,\n"
+"\n"
+"tvoj prístup do NetBoxu končí %(time)s. Ak ho ešte potrebuješ, požiadaj správcu o predĺženie."
+
+#: guests.py:170
 #, python-format
 msgid ""
 "Your account is temporarily disabled by the administrator %(admin)s (since "
@@ -1315,62 +1426,66 @@ msgstr ""
 "Tvoj účet je dočasne zablokovaný – zakázal ho správca %(admin)s (od "
 "%(time)s). Kontaktuj ho."
 
-#: guests.py:124
+#: guests.py:205
 msgid "Choose another PIN."
 msgstr "Vyber iný PIN."
 
-#: guests.py:131
+#: guests.py:212
 #, python-format
 msgid "The PIN must have %(min)d to %(max)d characters."
 msgstr "PIN musí mať %(min)d až %(max)d znakov."
 
-#: guests.py:134
+#: guests.py:215
 msgid "This PIN is too easy to guess. Use at least four different characters."
 msgstr "Tento PIN sa dá ľahko uhádnuť. Použi aspoň štyri rôzne znaky."
 
-#: guests.py:146
+#: guests.py:227
 #, python-format
 msgid "\"%(value)s\" is not an IP address or a network."
 msgstr "„%(value)s“ nie je IP adresa ani sieť."
 
-#: guests.py:295
+#: guests.py:376
 msgid "Write the name of the person."
 msgstr "Napíš meno osoby."
 
-#: guests.py:299
+#: guests.py:380
 msgid "Write a valid e-mail address."
 msgstr "Napíš platnú e-mailovú adresu."
 
-#: guests.py:301
+#: guests.py:382
 msgid "An access with this e-mail address exists."
 msgstr "Prístup s touto e-mailovou adresou už existuje."
 
-#: guests.py:304
+#: guests.py:386
 #, python-format
 msgid ""
-"The e-mail address %(email)s belongs to the NetBox user %(user)s. A PIN-only"
-" access needs an address nobody in NetBox uses."
+"The PIN-only access cannot be created. The address %(email)s already belongs"
+" to the NetBox account %(user)s. This person signs in to NetBox with their "
+"own account, so a PIN-only access is not needed: add the account to the "
+"group as a regular user. If they really need a PIN-only access, first delete"
+" the account %(user)s or change its e-mail to another address (Admin > Users"
+" > %(user)s: %(url)s), then create the access again."
 msgstr ""
-"E-mailová adresa %(email)s patrí používateľovi NetBoxu %(user)s. Prístup iba"
-" s PINom potrebuje adresu, ktorú v NetBoxe nikto nepoužíva."
+"Prístup iba s PINom sa nedá vytvoriť. Adresa %(email)s už patrí účtu NetBoxu"
+" %(user)s. Tento človek sa do NetBoxu prihlasuje vlastným účtom, takže "
+"prístup iba s PINom nepotrebuje: pridaj ho do skupiny ako bežného "
+"používateľa. Ak naozaj potrebuje prístup iba s PINom, najprv zmaž účet "
+"%(user)s alebo mu zmeň e-mail na inú adresu (Admin > Používatelia > "
+"%(user)s: %(url)s) a potom vytvor prístup znova."
 
-#: guests.py:307
+#: guests.py:393
 msgid "Choose a group."
 msgstr "Vyber skupinu."
 
-#: guests.py:309
-msgid "The end of the access must be in the future."
-msgstr "Koniec prístupu musí byť v budúcnosti."
-
-#: guests.py:312
+#: guests.py:398
 msgid "Idle time is 5 to 240 minutes, the whole session 1 to 24 hours."
 msgstr "Nečinnosť je 5 až 240 minút, celá relácia 1 až 24 hodín."
 
-#: guests.py:353
+#: guests.py:439
 msgid "Your access to NetBox"
 msgstr "Tvoj prístup do NetBoxu"
 
-#: guests.py:354
+#: guests.py:440
 #, python-format
 msgid ""
 "Hello %(name)s,\n"
@@ -1393,43 +1508,43 @@ msgstr ""
 "%(first)s\n"
 "Odkaz nikomu nedávaj: funguje len spolu s tvojím PIN-om."
 
-#: guests.py:357
+#: guests.py:443
 #, python-format
 msgid "Open it and choose your own PIN within %(days)d days."
 msgstr "Otvor ho a do %(days)d dní si vyber vlastný PIN."
 
-#: guests.py:358
+#: guests.py:444
 msgid "Open it and enter your PIN."
 msgstr "Otvor ho a zadaj svoj PIN."
 
-#: guests.py:359
+#: guests.py:445
 #, python-format
 msgid ""
 "Afterwards save this page and sign in there with your PIN only: %(page)s"
 msgstr "Potom si tú stránku ulož a prihlasuj sa tam už len PIN-om: %(page)s"
 
-#: guests.py:370
+#: guests.py:456
 msgid "Write the waits as whole seconds separated by commas, e.g. 10,20,30."
 msgstr "Čakania napíš v celých sekundách oddelených čiarkou, napr. 10,20,30."
 
-#: guests.py:372
+#: guests.py:458
 msgid "1 to 10 waits, each 1 to 3600 seconds."
 msgstr "1 až 10 čakaní, každé 1 až 3600 sekúnd."
 
-#: guests.py:390
+#: guests.py:476
 #, python-format
 msgid "%(n)d wrong PINs, wait %(waits)s s; then blocked"
 msgstr "%(n)d chybných PINov → čakanie %(waits)s s; potom blokovanie"
 
-#: guests.py:399
+#: guests.py:485
 msgid "Wrong PINs per step: 1 to 50."
 msgstr "Chybných PINov na krok: 1 až 50."
 
-#: guests.py:421
+#: guests.py:507 guests.py:688
 msgid "Your NetBox access works again"
 msgstr "Tvoj prístup do NetBoxu opäť funguje"
 
-#: guests.py:422
+#: guests.py:508
 #, python-format
 msgid ""
 "Hello %(name)s,\n"
@@ -1440,11 +1555,11 @@ msgstr ""
 "\n"
 "správca odblokoval tvoj prístup. Môžeš sa znova prihlásiť svojím PINom."
 
-#: guests.py:433
+#: guests.py:519
 msgid "You must change your PIN"
 msgstr "Musíš si zmeniť PIN"
 
-#: guests.py:434
+#: guests.py:520
 #, python-format
 msgid ""
 "Hello %(name)s,\n"
@@ -1455,11 +1570,11 @@ msgstr ""
 "\n"
 "správca %(admin)s žiada, aby si si zvolil nový PIN. Ak si prihlásený, vyzve ťa hneď; inak pri najbližšom prihlásení."
 
-#: guests.py:452
+#: guests.py:538
 msgid "Your NetBox access is blocked"
 msgstr "Tvoj prístup do NetBoxu je zablokovaný"
 
-#: guests.py:453
+#: guests.py:539
 #, python-format
 msgid ""
 "Hello %(name)s,\n"
@@ -1470,12 +1585,12 @@ msgstr ""
 "\n"
 "po %(n)d chybných PINoch bol tvoj prístup zablokovaný. Požiadaj správcu, aby ho odblokoval alebo ti poslal odkaz na nový PIN."
 
-#: guests.py:456
+#: guests.py:542
 #, python-format
 msgid "PIN-only access blocked: %(name)s"
 msgstr "Prístup iba s PINom zablokovaný: %(name)s"
 
-#: guests.py:457
+#: guests.py:543
 #, python-format
 msgid ""
 "The PIN-only access of %(name)s (%(email)s) was blocked after %(n)d wrong "
@@ -1485,15 +1600,15 @@ msgstr ""
 "%(n)d chybných PINoch. Odblokuj ho alebo pošli resetovací e-mail na stránke "
 "Ľudia len s PIN-om."
 
-#: guests.py:493 service.py:293
+#: guests.py:579 service.py:293
 msgid "The new PIN must differ from the current one."
 msgstr "Nový PIN sa musí líšiť od súčasného."
 
-#: guests.py:564
+#: guests.py:652
 msgid "New PIN for your NetBox access"
 msgstr "Nový PIN pre tvoj prístup do NetBoxu"
 
-#: guests.py:565
+#: guests.py:653
 #, python-format
 msgid ""
 "Hello %(name)s,\n"
@@ -1510,15 +1625,36 @@ msgstr ""
 "\n"
 "Ak si to nebol ty, správu ignoruj."
 
-#: guests.py:767
+#: guests.py:689
+#, python-format
+msgid ""
+"Hello %(name)s,\n"
+"\n"
+"the administrator enabled your access again. You can sign in with your PIN."
+msgstr ""
+"Ahoj %(name)s,\n"
+"\n"
+"správca ti znova povolil prístup. Môžeš sa prihlásiť svojím PINom."
+
+#: guests.py:860
 #, python-format
 msgid "Wrong PINs from %(ip)s"
 msgstr "Zlé PIN-y z adresy %(ip)s"
 
-#: guests.py:768
+#: guests.py:861
 #, python-format
 msgid "%(n)d wrong PINs on the PIN-only page from the address %(ip)s."
 msgstr "%(n)d zlých PIN-ov na stránke len s PIN-om z adresy %(ip)s."
+
+#: guests.py:904
+#, python-format
+msgid ""
+"The address %(email)s is used by the PIN-only access %(id)s%(alias)s. Use "
+"another address, or delete that PIN-only access first (User PIN > People "
+"with a PIN only)."
+msgstr ""
+"Adresu %(email)s používa prístup iba s PINom %(id)s%(alias)s. Použi inú "
+"adresu alebo najprv zmaž ten PIN prístup (User PIN > Ľudia len s PIN-om)."
 
 #: models.py:39
 msgid "One unlock for everything"
@@ -1544,7 +1680,7 @@ msgstr "Predvolené"
 msgid "Allowed"
 msgstr "Povolené"
 
-#: models.py:51 models.py:914
+#: models.py:51 models.py:917
 #: templates/netbox_user_pin/inc/group_filter.html:23
 msgid "Denied"
 msgstr "Zakázané"
@@ -1830,8 +1966,8 @@ msgstr ""
 "Jediná adresa, kde sa ľudia len s PIN-om prihlasujú, napr. /pin/, /tenanti/ "
 "alebo /aqer/x2/."
 
-#: models.py:219 templates/netbox_user_pin/guest_list.html:69
-#: templates/netbox_user_pin/guest_list.html:79
+#: models.py:219 templates/netbox_user_pin/guest_list.html:74
+#: templates/netbox_user_pin/guest_list.html:84
 msgid "Wrong PINs per step"
 msgstr "Chybných PINov na krok"
 
@@ -1843,7 +1979,7 @@ msgstr ""
 "Prístup iba s PINom: po toľkých chybných PINoch musí človek čakať (pozri "
 "čakania)."
 
-#: models.py:224 templates/netbox_user_pin/guest_list.html:80
+#: models.py:224 templates/netbox_user_pin/guest_list.html:85
 msgid "Waits after each step (seconds)"
 msgstr "Čakanie po každom kroku (sekundy)"
 
@@ -2347,241 +2483,253 @@ msgid "PIN-only access: rules for wrong PINs changed"
 msgstr "Prístup iba s PINom: zmenené pravidlá / alias"
 
 #: models.py:479
+msgid "PIN-only access: unblocking asked for"
+msgstr "Prístup iba s PINom: žiadosť o odblokovanie"
+
+#: models.py:480
+msgid "PIN-only access: validity changed"
+msgstr "Prístup iba s PINom: zmenená platnosť"
+
+#: models.py:481
+msgid "PIN-only access: end of validity announced"
+msgstr "Prístup iba s PINom: oznámený koniec platnosti"
+
+#: models.py:482
 msgid "Error"
 msgstr "Chyba"
 
-#: models.py:514
+#: models.py:517
 msgid "PIN event"
 msgstr "Udalosť PINu"
 
-#: models.py:515
+#: models.py:518
 msgid "PIN events"
 msgstr "Udalosti PINu"
 
-#: models.py:538
+#: models.py:541
 msgid "department"
 msgstr "oddelenie"
 
-#: models.py:539
+#: models.py:542
 msgid "departments"
 msgstr "oddelenia"
 
-#: models.py:554
+#: models.py:557
 msgid "department member"
 msgstr "člen oddelenia"
 
-#: models.py:555
+#: models.py:558
 msgid "department members"
 msgstr "členovia oddelenia"
 
-#: models.py:563 roles.py:266
+#: models.py:566 roles.py:266
 msgid "CORE deputy"
 msgstr "zástupca CORE"
 
-#: models.py:564
+#: models.py:567
 msgid "Department head"
 msgstr "Správca oddelenia"
 
-#: models.py:565
+#: models.py:568
 msgid "Department delegate"
 msgstr "Delegát oddelenia"
 
-#: models.py:569
+#: models.py:572
 msgid "Waiting for acceptance"
 msgstr "Čaká na prijatie"
 
-#: models.py:571
+#: models.py:574
 msgid "Handed over temporarily"
 msgstr "Dočasne odovzdané"
 
-#: models.py:572
+#: models.py:575
 msgid "Resigning (until replaced)"
 msgstr "Odstupuje (do náhrady)"
 
-#: models.py:574
+#: models.py:577
 msgid "Declined"
 msgstr "Odmietnutá"
 
-#: models.py:575 models.py:649 models.py:702
+#: models.py:578 models.py:652 models.py:705
 msgid "Expired"
 msgstr "Vypršané"
 
-#: models.py:614
+#: models.py:617
 msgid "PIN role"
 msgstr "rola PIN"
 
-#: models.py:615
+#: models.py:618
 msgid "PIN roles"
 msgstr "roly PIN"
 
-#: models.py:645 models.py:698 models.py:912
+#: models.py:648 models.py:701 models.py:915
 #: templates/netbox_user_pin/approval_list.html:9
 msgid "Waiting"
 msgstr "Čaká"
 
-#: models.py:646
+#: models.py:649
 msgid "Approved"
 msgstr "Schválené"
 
-#: models.py:647 models.py:700
+#: models.py:650 models.py:703
 msgid "Rejected"
 msgstr "Zamietnuté"
 
-#: models.py:648 models.py:701 models.py:915
+#: models.py:651 models.py:704 models.py:918
 msgid "Cancelled"
 msgstr "Zrušené"
 
-#: models.py:670
+#: models.py:673
 msgid "department move"
 msgstr "presun medzi oddeleniami"
 
-#: models.py:671
+#: models.py:674
 msgid "department moves"
 msgstr "presuny medzi oddeleniami"
 
-#: models.py:687
+#: models.py:690
 msgid "Invite to a role"
 msgstr "Pozvať do role"
 
-#: models.py:688
+#: models.py:691
 msgid "End or replace a role"
 msgstr "Ukončiť alebo vymeniť rolu"
 
-#: models.py:689
+#: models.py:692
 msgid "Change delegate settings permission"
 msgstr "Zmeniť oprávnenie delegáta na nastavenia"
 
-#: models.py:690
+#: models.py:693
 msgid "Dissolve a department"
 msgstr "Zrušiť oddelenie"
 
-#: models.py:691
+#: models.py:694
 msgid "Change PIN settings"
 msgstr "Zmeniť nastavenia PINu"
 
-#: models.py:692
+#: models.py:695
 msgid "Change mail settings"
 msgstr "Zmeniť nastavenia mailu"
 
-#: models.py:693
+#: models.py:696
 msgid "Allow / deny PIN use"
 msgstr "Povoliť / zakázať PIN"
 
-#: models.py:694
+#: models.py:697
 msgid "Add allowed e-mail domain"
 msgstr "Pridať povolenú e-mailovú doménu"
 
-#: models.py:699
+#: models.py:702
 msgid "Approved and executed"
 msgstr "Schválené a vykonané"
 
-#: models.py:703
+#: models.py:706
 msgid "Failed"
 msgstr "Zlyhalo"
 
-#: models.py:735
+#: models.py:738
 msgid "four-eyes request"
 msgstr "žiadosť na štyri oči"
 
-#: models.py:736
+#: models.py:739
 msgid "four-eyes requests"
 msgstr "žiadosti na štyri oči"
 
-#: models.py:783
+#: models.py:786
 msgid "allowed e-mail domain"
 msgstr "povolená e-mailová doména"
 
-#: models.py:784
+#: models.py:787
 msgid "allowed e-mail domains"
 msgstr "povolené e-mailové domény"
 
-#: models.py:809
+#: models.py:812
 msgid "Plugin areas use the name of the plugin."
 msgstr "Oblasti pluginov používajú názov pluginu."
 
-#: models.py:827
+#: models.py:830
 msgid "protected area"
 msgstr "chránená oblasť"
 
-#: models.py:828
+#: models.py:831
 msgid "protected areas"
 msgstr "chránené oblasti"
 
-#: models.py:842
+#: models.py:845
 msgid "area owner"
 msgstr "vlastník oblasti"
 
-#: models.py:843
+#: models.py:846
 msgid "area owners"
 msgstr "vlastníci oblasti"
 
-#: models.py:867 templates/netbox_user_pin/department.html:85
+#: models.py:870 templates/netbox_user_pin/department.html:85
 #: templates/netbox_user_pin/inc/tree_person.html:2
 #: templates/netbox_user_pin/my_pin.html:41
 #: templates/netbox_user_pin/user_list.html:82
 msgid "Not set"
 msgstr "Nenastavený"
 
-#: models.py:867 templates/netbox_user_pin/inc/group_filter.html:7
+#: models.py:870 templates/netbox_user_pin/inc/group_filter.html:7
 msgid "All records"
 msgstr "Všetky záznamy"
 
-#: models.py:867
+#: models.py:870
 msgid "By conditions"
 msgstr "Podľa podmienok"
 
-#: models.py:874
+#: models.py:877
 msgid "area profile"
 msgstr "profil oblasti"
 
-#: models.py:875
+#: models.py:878
 msgid "area profiles"
 msgstr "profily oblasti"
 
-#: models.py:899
+#: models.py:902
 msgid "area grant"
 msgstr "prístup do oblasti"
 
-#: models.py:900
+#: models.py:903
 msgid "area grants"
 msgstr "prístupy do oblasti"
 
-#: models.py:913
+#: models.py:916
 msgid "Granted"
 msgstr "Udelené"
 
-#: models.py:935
+#: models.py:938
 msgid "area access request"
 msgstr "žiadosť o prístup do oblasti"
 
-#: models.py:936
+#: models.py:939
 msgid "area access requests"
 msgstr "žiadosti o prístup do oblasti"
 
-#: models.py:953
+#: models.py:956
 msgid "protection keeper"
 msgstr "správca ochrany"
 
-#: models.py:954
+#: models.py:957
 msgid "protection keepers"
 msgstr "správcovia ochrany"
 
-#: models.py:974
+#: models.py:977
 msgid "protection exception"
 msgstr "výnimka z ochrany"
 
-#: models.py:975
+#: models.py:978
 msgid "protection exceptions"
 msgstr "výnimky z ochrany"
 
-#: models.py:987 templates/netbox_user_pin/area_fields.html:30
+#: models.py:990 templates/netbox_user_pin/area_fields.html:30
 #: templates/netbox_user_pin/area_fields.html:46
 #: templates/netbox_user_pin/inc/group_fields.html:9
 #: templates/netbox_user_pin/inc/group_fields.html:19
 msgid "By rights"
 msgstr "Podľa práv"
 
-#: models.py:988 templates/netbox_user_pin/area_fields.html:31
+#: models.py:991 templates/netbox_user_pin/area_fields.html:31
 #: templates/netbox_user_pin/area_fields.html:47
 #: templates/netbox_user_pin/inc/group_access.html:28
 #: templates/netbox_user_pin/inc/group_fields.html:10
@@ -2589,7 +2737,7 @@ msgstr "Podľa práv"
 msgid "Hidden"
 msgstr "Skryté"
 
-#: models.py:989 templates/netbox_user_pin/area_fields.html:33
+#: models.py:992 templates/netbox_user_pin/area_fields.html:33
 #: templates/netbox_user_pin/area_fields.html:49
 #: templates/netbox_user_pin/inc/group_access.html:11
 #: templates/netbox_user_pin/inc/group_fields.html:11
@@ -2597,7 +2745,7 @@ msgstr "Skryté"
 msgid "Read only"
 msgstr "Len čítať"
 
-#: models.py:990 templates/netbox_user_pin/area_fields.html:34
+#: models.py:993 templates/netbox_user_pin/area_fields.html:34
 #: templates/netbox_user_pin/area_fields.html:50
 #: templates/netbox_user_pin/inc/group_access.html:12
 #: templates/netbox_user_pin/inc/group_fields.html:12
@@ -2605,27 +2753,27 @@ msgstr "Len čítať"
 msgid "Read and write"
 msgstr "Čítať a zapisovať"
 
-#: models.py:1009
+#: models.py:1012
 msgid "field rule"
 msgstr "pravidlo poľa"
 
-#: models.py:1010
+#: models.py:1013
 msgid "field rules"
 msgstr "pravidlá polí"
 
-#: models.py:1027 templates/netbox_user_pin/department.html:80
+#: models.py:1030 templates/netbox_user_pin/department.html:80
 #: templates/netbox_user_pin/guest_list.html:29
-#: templates/netbox_user_pin/guest_list.html:87
+#: templates/netbox_user_pin/guest_list.html:92
 #: templates/netbox_user_pin/my_pin.html:97
 #: templates/netbox_user_pin/user_list.html:64
 msgid "E-mail"
 msgstr "E-mail"
 
-#: models.py:1058 navigation.py:17
+#: models.py:1062 navigation.py:17
 msgid "PIN-only access"
 msgstr "Prístup len cez PIN"
 
-#: models.py:1059
+#: models.py:1063
 msgid "PIN-only accesses"
 msgstr "Prístupy len cez PIN"
 
@@ -3841,7 +3989,7 @@ msgstr "Vytvoriť skupinu"
 #: templates/netbox_user_pin/area_denied.html:20
 #: templates/netbox_user_pin/group.html:8
 #: templates/netbox_user_pin/guest_list.html:29
-#: templates/netbox_user_pin/guest_list.html:88
+#: templates/netbox_user_pin/guest_list.html:93
 msgid "Group"
 msgstr "Skupina"
 
@@ -3857,7 +4005,7 @@ msgid "Remove"
 msgstr "Odobrať"
 
 #: templates/netbox_user_pin/area.html:73
-#: templates/netbox_user_pin/guest_list.html:74
+#: templates/netbox_user_pin/guest_list.html:79
 msgid "Nobody yet."
 msgstr "Zatiaľ nikto."
 
@@ -3891,8 +4039,9 @@ msgstr "Nastavenia oblasti"
 #: templates/netbox_user_pin/area.html:115
 #: templates/netbox_user_pin/areas.html:66
 #: templates/netbox_user_pin/guest_list.html:65
-#: templates/netbox_user_pin/guest_list.html:71
-#: templates/netbox_user_pin/guest_list.html:81
+#: templates/netbox_user_pin/guest_list.html:69
+#: templates/netbox_user_pin/guest_list.html:76
+#: templates/netbox_user_pin/guest_list.html:86
 #: templates/netbox_user_pin/inc/pin_form.html:15
 #: templates/netbox_user_pin/mail.html:36
 #: templates/netbox_user_pin/settings.html:63
@@ -5115,6 +5264,7 @@ msgid "until %(date)s"
 msgstr "do %(date)s"
 
 #: templates/netbox_user_pin/guest_home.html:17
+#: templates/netbox_user_pin/guest_list.html:39
 msgid "unlimited"
 msgstr "neobmedzená"
 
@@ -5317,8 +5467,8 @@ msgstr "Jazyk PIN stránok a e-mailov"
 
 #: templates/netbox_user_pin/guest_list.html:62
 #: templates/netbox_user_pin/guest_list.html:64
-#: templates/netbox_user_pin/guest_list.html:94
-#: templates/netbox_user_pin/guest_list.html:95
+#: templates/netbox_user_pin/guest_list.html:99
+#: templates/netbox_user_pin/guest_list.html:100
 msgid "default"
 msgstr "predvolený"
 
@@ -5327,22 +5477,30 @@ msgid "Language of the NetBox interface"
 msgstr "Jazyk rozhrania NetBoxu"
 
 #: templates/netbox_user_pin/guest_list.html:66
+msgid "Account valid until"
+msgstr "Účet platí do"
+
+#: templates/netbox_user_pin/guest_list.html:70
+msgid "Empty = unlimited. After this time the person cannot sign in."
+msgstr "Prázdne = neobmedzene. Po tomto čase sa človek neprihlási."
+
+#: templates/netbox_user_pin/guest_list.html:71
 msgid "Rules for wrong PINs"
 msgstr "Pravidlá pre chybné PINy"
 
-#: templates/netbox_user_pin/guest_list.html:70
+#: templates/netbox_user_pin/guest_list.html:75
 msgid "Waits (seconds)"
 msgstr "Čakania (sekundy)"
 
-#: templates/netbox_user_pin/guest_list.html:72
+#: templates/netbox_user_pin/guest_list.html:77
 msgid "Empty = the defaults."
 msgstr "Prázdne = predvolené."
 
-#: templates/netbox_user_pin/guest_list.html:77
+#: templates/netbox_user_pin/guest_list.html:82
 msgid "Rules for wrong PINs (defaults)"
 msgstr "Pravidlá pre chybné PINy (predvolené)"
 
-#: templates/netbox_user_pin/guest_list.html:82
+#: templates/netbox_user_pin/guest_list.html:87
 #, python-format
 msgid ""
 "Now: %(r)s. A blocked access works again only when an administrator unblocks"
@@ -5353,62 +5511,62 @@ msgstr ""
 " alebo si človek nastaví nový PIN cez resetovací e-mail. Každý človek môže "
 "mať vlastné pravidlá (Aktivita a pravidlá)."
 
-#: templates/netbox_user_pin/guest_list.html:84
+#: templates/netbox_user_pin/guest_list.html:89
 msgid "New access"
 msgstr "Nový prístup"
 
-#: templates/netbox_user_pin/guest_list.html:88
+#: templates/netbox_user_pin/guest_list.html:93
 msgid "— choose a group —"
 msgstr "— vyber skupinu —"
 
-#: templates/netbox_user_pin/guest_list.html:89
+#: templates/netbox_user_pin/guest_list.html:94
 msgid "Access ends (optional)"
 msgstr "Prístup končí (voliteľné)"
 
-#: templates/netbox_user_pin/guest_list.html:90
+#: templates/netbox_user_pin/guest_list.html:95
 msgid "Idle (minutes)"
 msgstr "Nečinnosť (minúty)"
 
-#: templates/netbox_user_pin/guest_list.html:91
+#: templates/netbox_user_pin/guest_list.html:96
 msgid "Session (hours)"
 msgstr "Relácia (hodiny)"
 
-#: templates/netbox_user_pin/guest_list.html:92
+#: templates/netbox_user_pin/guest_list.html:97
 msgid "Allowed IP addresses (optional)"
 msgstr "Povolené IP adresy (voliteľné)"
 
-#: templates/netbox_user_pin/guest_list.html:93
+#: templates/netbox_user_pin/guest_list.html:98
 msgid "Alias (optional)"
 msgstr "Alias (nepovinný)"
 
-#: templates/netbox_user_pin/guest_list.html:93
+#: templates/netbox_user_pin/guest_list.html:98
 msgid ""
 "Any text. The account gets its own ID (PinUser0001 ...) that never changes."
 msgstr ""
 "Ľubovoľný text. Účet dostane vlastné ID (PinUser0001 …), ktoré sa nikdy "
 "nemení."
 
-#: templates/netbox_user_pin/guest_list.html:94
+#: templates/netbox_user_pin/guest_list.html:99
 msgid "PIN language"
 msgstr "Jazyk PIN"
 
-#: templates/netbox_user_pin/guest_list.html:95
+#: templates/netbox_user_pin/guest_list.html:100
 msgid "NetBox language"
 msgstr "Jazyk NetBoxu"
 
-#: templates/netbox_user_pin/guest_list.html:96
+#: templates/netbox_user_pin/guest_list.html:101
 msgid "Description (optional)"
 msgstr "Popis (nepovinný)"
 
-#: templates/netbox_user_pin/guest_list.html:96
+#: templates/netbox_user_pin/guest_list.html:101
 msgid "e.g. technician of company XY"
 msgstr "napr. technik firmy XY"
 
-#: templates/netbox_user_pin/guest_list.html:97
+#: templates/netbox_user_pin/guest_list.html:102
 msgid "Create and send the invitation"
 msgstr "Vytvoriť a poslať pozvánku"
 
-#: templates/netbox_user_pin/guest_list.html:99
+#: templates/netbox_user_pin/guest_list.html:104
 #, python-format
 msgid ""
 "The person chooses a PIN of %(n)s or more characters at the first visit. The"
@@ -5472,6 +5630,23 @@ msgstr "Pošli mi odkaz na nastavenie nového PINu"
 #, python-format
 msgid "Choose a PIN of %(n)s or more characters."
 msgstr "Vyber si PIN s %(n)s alebo viac znakmi."
+
+#: templates/netbox_user_pin/guest_stopped.html:3
+#: templates/netbox_user_pin/guest_stopped.html:5
+msgid "Signing in is not possible"
+msgstr "Prihlásenie nie je možné"
+
+#: templates/netbox_user_pin/guest_stopped.html:8
+msgid ""
+"Neither signing in nor setting a new PIN works now. The administrator can "
+"give the access back."
+msgstr ""
+"Prihlásiť sa ani nastaviť nový PIN teraz nejde. Prístup ti môže vrátiť "
+"správca."
+
+#: templates/netbox_user_pin/guest_stopped.html:10
+msgid "Ask the administrator to unblock my account"
+msgstr "Požiadať správcu o odblokovanie účtu"
 
 #: templates/netbox_user_pin/inc/approval_status.html:5
 msgid "requested"
@@ -7292,6 +7467,14 @@ msgstr "Overovací kód bol odoslaný na {email}."
 #: views.py:1722
 msgid "Please verify again."
 msgstr "Overte sa prosím znova."
+
+#, python-format
+#~ msgid ""
+#~ "The e-mail address %(email)s belongs to the NetBox user %(user)s. A PIN-only"
+#~ " access needs an address nobody in NetBox uses."
+#~ msgstr ""
+#~ "E-mailová adresa %(email)s patrí používateľovi NetBoxu %(user)s. Prístup iba"
+#~ " s PINom potrebuje adresu, ktorú v NetBoxe nikto nepoužíva."
 
 #~ msgid "Note"
 #~ msgstr "Poznámka"

@@ -11,5 +11,6 @@ class RoleHousekeepingJob(JobRunner):
         name = 'User PIN role housekeeping'
 
     def run(self, *args, **kwargs):
-        from . import roles
+        from . import guests, roles
         roles.process_due()
+        guests.announce_expiry()
