@@ -162,6 +162,14 @@ def _refresh():
         _cache['keepers'] = keepers
         _cache['exempt'] = frozenset(PolicyException.objects.filter(
             Q(expires__isnull=True) | Q(expires__gt=timezone.now()), user__is_active=True).values_list('user_id', flat=True))
+        _cache['scope'] = _settings.protect_scope or 'all'
+        if _cache['scope'] == 'pin':
+            # who the PIN rules: the PIN-only accesses, the members of a group and the owners of an area
+            from .models import PinGuest
+            _cache['governed'] = frozenset(PinGuest.objects.values_list('user_id', flat=True)) | frozenset(
+                AreaGrant.objects.filter(Q(expires__isnull=True) | Q(expires__gt=timezone.now()),
+                                         revoked__isnull=True).values_list('user_id', flat=True)) | frozenset(
+                AreaOwner.objects.values_list('user_id', flat=True))
     except DatabaseError:
         logger.exception('PIN: the keepers cannot be read, the last known state stays')
     _cache['at'] = time.monotonic()
@@ -236,7 +244,24 @@ def requests_allowed():
 def is_exempt(user):
     """A user for whom the protection does not apply (a keeper set an exception): NetBox's own permissions rule."""
     active_areas()
-    return bool(getattr(user, 'is_authenticated', False) and user.pk in _cache['exempt'])
+    if not getattr(user, 'is_authenticated', False):
+        return False
+    if _cache.get('scope') == 'pin' and user.pk not in _cache.get('governed', ()):
+        return True  # "only people with a PIN": nobody put into the protection - NetBox's permissions alone
+    return user.pk in _cache['exempt']
+
+
+def outside(user):
+    """"Only people with a PIN" is chosen and the user has nothing to do with the PIN: the plugin keeps out of sight."""
+    if not getattr(user, 'is_authenticated', False):
+        return False
+    active_areas()
+    if _cache.get('scope') != 'pin' or user.pk in _cache.get('governed', ()) or is_keeper(user):
+        return False
+    if user.is_superuser and not _cache['keepers']:
+        return False  # without keepers the master runs the PIN
+    return not (roles.core_roles().filter(user=user).exists() or roles.managed_departments(user).exists()
+                or administers_any(user))
 
 
 def own_tokens_allowed():
@@ -1688,8 +1713,11 @@ def remove_exception(user, actor, request=None):
     return bool(removed)
 
 
-def set_visibility(actor, mode, allow_requests, allow_own_tokens, request=None):
-    """What a user sees of what is not allowed to him (A: a door, B: nothing) and what he may ask for / create."""
+def set_visibility(actor, mode, allow_requests, allow_own_tokens, request=None, scope=None):
+    """
+    What a user sees of what is not allowed to him (A: a door, B: nothing), what he may ask for / create, and whom the
+    protection applies to (``scope``: 'all' or 'pin'; None keeps it).
+    """
     if not can_manage_keepers(actor):
         raise PermissionDenied
     if mode not in ('doors', 'hidden'):
@@ -1697,10 +1725,12 @@ def set_visibility(actor, mode, allow_requests, allow_own_tokens, request=None):
     settings = service.get_settings()
     settings.denied_view, settings.allow_requests = mode, bool(allow_requests)
     settings.allow_own_tokens = bool(allow_own_tokens)
+    if scope in ('all', 'pin'):
+        settings.protect_scope = scope
     settings.save()
     service.log_event(PinEventAction.SETTINGS_CHANGED, actor=actor, request=request,
                       detail=f'what is not allowed: {mode}; ask for access: {bool(allow_requests)}; own API key: '
-                             f'{bool(allow_own_tokens)}')
+                             f'{bool(allow_own_tokens)}; protection applies to: {settings.protect_scope}')
     clear_cache()
 
 

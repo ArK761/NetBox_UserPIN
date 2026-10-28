@@ -174,6 +174,7 @@ class AreaListView(AreaViewMixin, View):
                                 if pk not in {k.pk for k in areas.keepers()}] if areas.is_keeper(request.user) else [],
             'denied_view': service.get_settings().denied_view, 'allow_requests': service.get_settings().allow_requests,
             'allow_own_tokens': service.get_settings().allow_own_tokens,
+            'protect_scope': service.get_settings().protect_scope,
             'keeper_form': KeeperForm(),
             'settings': service.get_settings(), **_step_up_context(request),
         })

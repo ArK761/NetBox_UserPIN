@@ -58,6 +58,7 @@
   <h2 class="card-header"><i class="mdi mdi-eye-off-outline"></i> {% trans "What the users see" %}</h2>
   <div class="card-body">
     <form method="post" class="d-flex flex-column gap-2">{% csrf_token %}<input type="hidden" name="action" value="visibility">
+      <div class="alert alert-info py-2 mb-1 small">{% trans "The PIN rules the PIN-only accesses and the users you put into a group or make owners of an area. Everybody else works by the NetBox permissions alone." %}</div>
       <div class="form-check"><input class="form-check-input" type="radio" name="denied_view" id="dv-doors" value="doors" {% if denied_view == 'doors' %}checked{% endif %}><label class="form-check-label" for="dv-doors"><strong>A</strong> – {% trans "the user sees everything, and the PIN blocks what is not allowed with a notice (and a request)." %}</label></div>
       <div class="form-check"><input class="form-check-input" type="radio" name="denied_view" id="dv-hidden" value="hidden" {% if denied_view == 'hidden' %}checked{% endif %}><label class="form-check-label" for="dv-hidden"><strong>B</strong> – {% trans "the user who is in no group sees nothing: only the change of the password and of the PIN. In a group he sees only what the group allows. No API in the browser." %}</label></div>
       <div class="form-check form-switch"><input class="form-check-input" type="checkbox" name="allow_requests" id="dv-req" {% if allow_requests %}checked{% endif %}><label class="form-check-label" for="dv-req">{% trans "Users may ask for access" %}</label></div>

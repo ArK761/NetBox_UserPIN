@@ -28,6 +28,9 @@ class AreaTestCase(PinTestCase):
         areas.clear_cache()
         from django.core.cache import cache
         cache.clear()  # the throttle of the refusal log lives there
+        settings = service.get_settings()
+        settings.protect_scope = 'all'  # most tests check the protection of everybody; the default is tested apart
+        settings.save()
         self.master = User.objects.create_superuser('master', 'm@example.com', 'x')
         self.owner1 = User.objects.create_user('owner1', 'o1@example.com')
         self.owner2 = User.objects.create_user('owner2', 'o2@example.com')
@@ -667,6 +670,35 @@ class DefaultDenyTest(AreaTestCase):
         self.login(plain, unlock=False)
         response = self.client.get(reverse('plugins:netbox_user_pin:areas'))
         self.assertRedirects(response, reverse('plugins:netbox_user_pin:my_access'), fetch_redirect_response=False)
+
+    def test_only_people_with_a_pin_are_ruled_by_the_protection(self):
+        from netbox_user_pin import area_guard
+        self.add_keeper()
+        area = self.make_area(targets=('dcim.site',))
+        colleague = User.objects.create_superuser('colleague', 'c@example.com', 'x')
+        settings = service.get_settings()
+        settings.protect_scope = 'pin'
+        settings.save()
+        areas.clear_cache()
+        armed = area_guard.arm_user(User.objects.get(pk=colleague.pk))
+        self.assertTrue(areas.is_exempt(armed))  # in no group: NetBox decides alone
+        self.assertTrue(armed.has_perm('dcim.add_site'))
+        self.assertTrue(armed.has_perm('users.view_user'))  # "deny everything not allowed" does not reach him either
+        self.assertTrue(armed.has_perm('netbox_user_pin.view_mypin'))  # the menu follows NetBox: a superuser sees it
+        plain = area_guard.arm_user(User.objects.create_user('plaincol', 'pc@example.com', 'x'))
+        self.assertTrue(areas.is_exempt(plain))
+        self.assertFalse(plain.has_perm('netbox_user_pin.view_mypin'))  # no NetBox permission: no menu
+        # put into a group of an area: from now on the PIN rules him
+        group = areas.create_group(area, 'dcim.site', 'Readers', ['view'], self.owner1, records='all')
+        areas.add_member(group, colleague, None, self.owner1)
+        areas.clear_cache()
+        armed = area_guard.arm_user(User.objects.get(pk=colleague.pk))
+        self.assertFalse(areas.is_exempt(armed))
+        self.assertFalse(armed.has_perm('dcim.add_site'))
+        self.assertTrue(armed.has_perm('netbox_user_pin.view_mypin'))
+        # the keeper still runs everything
+        self.assertTrue(area_guard.arm_user(User.objects.get(pk=self.keeper.pk)).has_perm(
+            'netbox_user_pin.view_areaspage'))
 
     def test_the_server_test_command_reports_what_a_user_gets(self):
         from io import StringIO

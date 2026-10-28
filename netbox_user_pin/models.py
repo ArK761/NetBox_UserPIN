@@ -206,6 +206,12 @@ class PinSettings(models.Model):
         verbose_name=_('Users may ask for access'), default=True,
         help_text=_('Off: nobody but the administrators can ask for access (there is no request page or button).'),
     )
+    protect_scope = models.CharField(
+        verbose_name=_('Whom the protection applies to'), max_length=10, default='pin',
+        choices=(('all', _('Everybody')), ('pin', _('Only people with a PIN'))),
+        help_text=_('Only people with a PIN: the PIN-only accesses and the users put into a group or made owners of an '
+                    'area; everybody else works by the NetBox permissions alone and does not see this plugin.'),
+    )
     allow_own_tokens = models.BooleanField(
         verbose_name=_('Users may create their own API key'), default=False,
         help_text=_('A key works with the NetBox permissions of its user and the PIN does not judge it: a superuser with '

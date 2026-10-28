@@ -6,7 +6,8 @@ menu = PluginMenu(
     icon_class='mdi mdi-dialpad',
     groups=(
         (_('My PIN'), (
-            PluginMenuItem(link='plugins:netbox_user_pin:my_pin', link_text=_('My PIN'), auth_required=True),
+            PluginMenuItem(link='plugins:netbox_user_pin:my_pin', link_text=_('My PIN'),
+                           permissions=['netbox_user_pin.view_mypin']),
             PluginMenuItem(link='plugins:netbox_user_pin:my_roles', link_text=_('My roles'),
                            permissions=['netbox_user_pin.view_myroles']),
             PluginMenuItem(link='plugins:netbox_user_pin:my_access', link_text=_('My access'),

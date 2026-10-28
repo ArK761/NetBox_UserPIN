@@ -47,6 +47,10 @@ def _plugin_perm(user, perm):
         return None
     if guests.is_guest(user):
         return False  # a person with a PIN only has no administration, no PIN pages - only their own guest pages
+    if areas.outside(user):
+        return None  # the PIN does not rule him: NetBox's permissions decide what he sees of this plugin too
+    if codename == 'view_mypin':
+        return True
     action, _underscore, model = codename.partition('_')
     if model == 'guestspage':
         return action == 'view' and (areas.is_keeper(user) or areas.administers_any(user))

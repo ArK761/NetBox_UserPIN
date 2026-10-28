@@ -7705,6 +7705,31 @@ msgstr "%(id)s urobil zmenu"
 msgid "%(id)s made changes (%(n)d)"
 msgstr "%(id)s urobil zmeny (%(n)d)"
 
+msgid "Whom the protection applies to"
+msgstr "Na koho platí ochrana"
+
+msgid "Everybody"
+msgstr "Všetci"
+
+msgid "Only people with a PIN"
+msgstr "Len ľudia s PIN-om"
+
+msgid ""
+"Only people with a PIN: the PIN-only accesses and the users put into a group"
+" or made owners of an area; everybody else works by the NetBox permissions "
+"alone and does not see this plugin."
+msgstr ""
+"Len ľudia s PIN-om: prístupy len cez PIN a užívatelia vložení do skupiny "
+"alebo vlastníci oblasti; ostatní pracujú len podľa práv NetBoxu."
+
+msgid ""
+"The PIN rules the PIN-only accesses and the users you put into a group or "
+"make owners of an area. Everybody else works by the NetBox permissions "
+"alone."
+msgstr ""
+"PIN riadi prístupy len cez PIN a užívateľov, ktorých vložíš do skupiny alebo"
+" urobíš vlastníkmi oblasti. Všetci ostatní pracujú len podľa práv NetBoxu."
+
 #, python-format
 #~ msgid ""
 #~ "The e-mail address %(email)s belongs to the NetBox user %(user)s. A PIN-only"
