@@ -7576,13 +7576,13 @@ msgid "You were removed from the group %(group)s."
 msgstr "Bol si odobratý zo skupiny %(group)s."
 
 msgid "added"
-msgstr "pridal"
+msgstr "pridaný"
 
 msgid "changed"
 msgstr "zmenil"
 
 msgid "deleted"
-msgstr "zmazal"
+msgstr "zmazaný"
 
 #, python-format
 msgid "What %(id)s changed in NetBox"
@@ -7692,6 +7692,18 @@ msgstr "raz denne"
 
 msgid "At every change (one e-mail per change)"
 msgstr "Hneď pri každej zmene (jeden e-mail na zmenu)"
+
+#, python-format
+msgid "%(field)s: from \"%(old)s\" to \"%(new)s\""
+msgstr "%(field)s: z „%(old)s“ na „%(new)s“"
+
+#, python-format
+msgid "%(id)s made a change"
+msgstr "%(id)s urobil zmenu"
+
+#, python-format
+msgid "%(id)s made changes (%(n)d)"
+msgstr "%(id)s urobil zmeny (%(n)d)"
 
 #, python-format
 #~ msgid ""

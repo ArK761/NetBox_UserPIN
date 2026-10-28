@@ -2442,6 +2442,7 @@ class GuestAccessTest(AreaTestCase):
             self.assertEqual(len(report), 1)
             self.assertIn('T1', report[0].body)
             self.assertIn(self.guest.user.username, report[0].subject)
+            self.assertIn('T1', report[0].body)
             mail.outbox.clear()
             self.guests.report_changes()  # reported once
             self.assertEqual(mail.outbox, [])
@@ -2502,8 +2503,9 @@ class GuestAccessTest(AreaTestCase):
             with self.captureOnCommitCallbacks(execute=True):
                 change()
             self.assertEqual(len(mail.outbox), 1)
-            self.assertIn('description: old -> new', mail.outbox[0].body)
-            self.assertIn('hw: A -> B', mail.outbox[0].body)
+            self.assertIn('description: from "old" to "new"', mail.outbox[0].body)
+            self.assertIn('made a change', mail.outbox[0].subject)
+            self.assertIn('hw: from "A" to "B"', mail.outbox[0].body)
             self.guests.report_changes(force=True)  # at once, so no summary as well
             self.assertEqual(len(mail.outbox), 1)
             self.guests.set_mail_mode(self.keeper, 'summary', 15)
@@ -2515,7 +2517,7 @@ class GuestAccessTest(AreaTestCase):
             self.guests.report_changes()
             self.assertEqual(mail.outbox, [])  # 15 minutes are not over yet
             self.guests.report_changes(force=True)
-            self.assertIn('description: old -> newer', mail.outbox[-1].body)
+            self.assertIn('description: from "old" to "newer"', mail.outbox[-1].body)
 
     def test_netbox_user_cannot_take_the_address_of_a_pin_only_access(self):
         user = User.objects.create_user('plainx', 'plainx@example.com', 'x')

@@ -1051,23 +1051,30 @@ def _short(value):
 
 
 def _change_lines(change):
-    """The change and, for an update, every field that changed: '    Description: "a" -> "b"'."""
-    action = {'create': _('added'), 'update': _('changed'), 'delete': _('deleted')}.get(
-        str(change.action), str(change.action))
+    """'28.10.2026 13:35' / 'Tenant: X' / '    name: from "a" to "b"' for every changed field (or added / deleted)."""
     model = change.changed_object_type.name if change.changed_object_type_id else ''
-    lines = [f'{timezone.localtime(change.time).strftime("%d.%m.%Y %H:%M")}  {action}  {model}: {change.object_repr}']
+    model = model[:1].upper() + model[1:]
+    title = f'{model}: {change.object_repr}'
+    if str(change.action) == 'create':
+        title += ' – ' + _('added')
+    elif str(change.action) == 'delete':
+        title += ' – ' + _('deleted')
+    lines = [timezone.localtime(change.time).strftime('%d.%m.%Y %H:%M'), title]
     before, after = change.prechange_data or {}, change.postchange_data or {}
     if str(change.action) == 'update':
+        pairs = []
         for key in sorted(set(before) | set(after)):
             if key in ('last_updated', 'created'):
                 continue
             if key == 'custom_fields':
                 old, new = before.get(key) or {}, after.get(key) or {}
-                for name in sorted(set(old) | set(new)):
-                    if old.get(name) != new.get(name):
-                        lines.append(f'    {name}: {_short(old.get(name))} -> {_short(new.get(name))}')
+                pairs += [(name, old.get(name), new.get(name)) for name in sorted(set(old) | set(new))
+                          if old.get(name) != new.get(name)]
             elif before.get(key) != after.get(key):
-                lines.append(f'    {key}: {_short(before.get(key))} -> {_short(after.get(key))}')
+                pairs.append((key, before.get(key), after.get(key)))
+        for key, old, new in pairs:
+            lines.append('    ' + _('%(field)s: from "%(old)s" to "%(new)s"') % {
+                'field': key, 'old': _short(old), 'new': _short(new)})
     return lines
 
 
@@ -1077,11 +1084,10 @@ def _send_changes(guest, changes, since, settings):
     if creator is not None and creator not in recipients:
         recipients.insert(0, creator)
     with translation.override(settings.language or 'en'):
-        subject = _('What %(id)s changed in NetBox') % {'id': display(guest)}
-        body = _('%(name)s (%(id)s, %(email)s) made %(n)d change(s) since %(since)s:') % {
-            'name': guest.name, 'id': guest.user.username, 'email': guest.email, 'n': len(changes),
-            'since': timezone.localtime(since).strftime('%d.%m.%Y %H:%M')}
-        body += '\n\n' + '\n'.join(line for change in changes for line in _change_lines(change))
+        who = guest.user.username + (f' ({guest.alias})' if guest.alias else '')
+        subject = (_('%(id)s made a change') % {'id': who} if len(changes) == 1 else
+                   _('%(id)s made changes (%(n)d)') % {'id': who, 'n': len(changes)})
+        body = '\n\n'.join('\n'.join(_change_lines(change)) for change in changes)
     sent = [r.username for r in recipients if service.send_user_mail(r, subject, body)]
     _log(PinEventAction.MAIL_SENT if sent else PinEventAction.MAIL_FAILED, guest,
          detail=f'{len(changes)} change(s) reported to {", ".join(sent) or "nobody (no verified e-mail)"}')
