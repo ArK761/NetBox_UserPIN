@@ -236,6 +236,14 @@ class PinSettings(models.Model):
                     'administrator who created the access and to the protection keepers. Can also be switched off per '
                     'access.'),
     )
+    guest_mail_mode = models.CharField(
+        verbose_name=_('How the administrators get the changes'), max_length=10, default='summary',
+        choices=(('summary', _('Summary')), ('each', _('At every change'))),
+    )
+    guest_mail_every = models.PositiveIntegerField(
+        verbose_name=_('Summary every (minutes)'), default=60,
+        validators=[MinValueValidator(5), MaxValueValidator(1440)],
+    )
     areas_enabled = models.BooleanField(
         verbose_name=_('Protect areas and objects'),
         default=False,

@@ -2478,6 +2478,45 @@ class GuestAccessTest(AreaTestCase):
         self.assertEqual(self.guest.user.config.get('tables.TenantTable.columns'), ['name', 'id'])
         self.assertTrue(self.denied(self.client.get('/api/users/users/', HTTP_ACCEPT='application/json')))
 
+    def test_changes_at_once_or_as_a_summary_with_the_fields(self):
+        from core.models import ObjectChange
+        from django.contrib.contenttypes.models import ContentType
+        from django.core import mail
+        from netbox_user_pin.models import AllowedDomain
+        from tenancy.models import Tenant
+        AllowedDomain.objects.create(domain='example.com', verified=timezone.now())
+        tenant = Tenant.objects.get(slug='t1')
+        kind = ContentType.objects.get_for_model(Tenant)
+
+        def change(**data):
+            return ObjectChange.objects.create(
+                user=self.guest.user, user_name=self.guest.user.username, request_id=uuid4(), action='update',
+                changed_object_type=kind, changed_object_id=tenant.pk, object_repr='T1',
+                prechange_data={'description': 'old', 'custom_fields': {'hw': 'A'}},
+                postchange_data={'description': data.get('description', 'new'), 'custom_fields': {'hw': 'B'}})
+        with override_settings(EMAIL={'SERVER': 'localhost', 'FROM_EMAIL': 'netbox@example.com'}):
+            with self.assertRaises(ValidationError):
+                self.guests.set_mail_mode(self.keeper, 'summary', 7)
+            self.guests.set_mail_mode(self.keeper, 'each', 60)
+            mail.outbox.clear()
+            with self.captureOnCommitCallbacks(execute=True):
+                change()
+            self.assertEqual(len(mail.outbox), 1)
+            self.assertIn('description: old -> new', mail.outbox[0].body)
+            self.assertIn('hw: A -> B', mail.outbox[0].body)
+            self.guests.report_changes(force=True)  # at once, so no summary as well
+            self.assertEqual(len(mail.outbox), 1)
+            self.guests.set_mail_mode(self.keeper, 'summary', 15)
+            self.guests.report_changes()
+            mail.outbox.clear()
+            with self.captureOnCommitCallbacks(execute=True):
+                change(description='newer')
+            self.assertEqual(mail.outbox, [])  # waits for the summary
+            self.guests.report_changes()
+            self.assertEqual(mail.outbox, [])  # 15 minutes are not over yet
+            self.guests.report_changes(force=True)
+            self.assertIn('description: old -> newer', mail.outbox[-1].body)
+
     def test_netbox_user_cannot_take_the_address_of_a_pin_only_access(self):
         user = User.objects.create_user('plainx', 'plainx@example.com', 'x')
         user.email = 'JAN@example.com'

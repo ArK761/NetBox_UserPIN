@@ -352,7 +352,7 @@ class GuestListView(AreaViewMixin, View):
             'rows': rows, 'group_choices': self._groups(request.user), 'mail_ok': service.email_configured(),
             'min_length': guests.MIN_PIN_LENGTH, 'default_step': service.get_settings().guest_step_attempts,
             'default_waits': service.get_settings().guest_waits, 'default_rules': guests.rules_text(),
-            'languages': guests.LANGUAGES[1:], 'pin_settings': service.get_settings(), **extra})
+            'languages': guests.LANGUAGES[1:], 'pin_settings': service.get_settings(), 'mail_every': guests.MAIL_EVERY, **extra})
 
     def get(self, request):
         return self._render(request)
@@ -373,6 +373,8 @@ class GuestListView(AreaViewMixin, View):
             if action == 'mails-default':
                 guests.set_mails(None, request.user, request.POST.get('mail_person'), request.POST.get('mail_changes'),
                                  request=request)
+                guests.set_mail_mode(request.user, request.POST.get('mail_mode'), request.POST.get('mail_every'),
+                                     request=request)
                 messages.success(request, _('Saved.'))
                 return redirect('plugins:netbox_user_pin:guests')
             if action == 'create':

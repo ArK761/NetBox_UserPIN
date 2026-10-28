@@ -7662,6 +7662,37 @@ msgid ""
 msgstr ""
 "Jedna podmienka na riadok: ~text obsahuje, ^text začína na, =text je presne"
 
+msgid "How the administrators get the changes"
+msgstr "Ako dostávajú administrátori zmeny"
+
+msgid "Summary"
+msgstr "Súhrn"
+
+msgid "At every change"
+msgstr "Pri každej zmene"
+
+msgid "Summary every (minutes)"
+msgstr "Súhrn každých (minút)"
+
+msgid "Choose one of the offered intervals."
+msgstr "Vyber jeden z ponúkaných intervalov."
+
+msgid ""
+"What the person added, changed or deleted (with the changed fields) – to the"
+" administrator who created the access and to the protection keepers."
+msgstr ""
+"Čo človek pridal, zmenil alebo zmazal (aj so zmenenými poľami) – "
+"administrátorovi, ktorý prístup vytvoril, a strážcom ochrany."
+
+msgid "Summary every"
+msgstr "Súhrn každých"
+
+msgid "once a day"
+msgstr "raz denne"
+
+msgid "At every change (one e-mail per change)"
+msgstr "Hneď pri každej zmene (jeden e-mail na zmenu)"
+
 #, python-format
 #~ msgid ""
 #~ "The e-mail address %(email)s belongs to the NetBox user %(user)s. A PIN-only"

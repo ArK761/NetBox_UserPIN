@@ -90,7 +90,14 @@
   <div class="col-md-5"><div class="form-check"><input class="form-check-input" type="checkbox" name="mail_person" id="gmp"{% if pin_settings.guest_mail_person %} checked{% endif %}><label class="form-check-label" for="gmp">{% trans "Send to the person with a PIN only" %}</label></div>
     <div class="form-text">{% trans "Every action of an administrator: groups, disable / enable, PIN reset, unblock, validity, languages, deletion." %}</div></div>
   <div class="col-md-5"><div class="form-check"><input class="form-check-input" type="checkbox" name="mail_changes" id="gmc"{% if pin_settings.guest_mail_changes %} checked{% endif %}><label class="form-check-label" for="gmc">{% trans "Send to the administrators" %}</label></div>
-    <div class="form-text">{% trans "Once an hour: what the person added, changed or deleted – to the administrator who created the access and to the protection keepers." %}</div></div>
+    <div class="form-text">{% trans "What the person added, changed or deleted (with the changed fields) – to the administrator who created the access and to the protection keepers." %}</div>
+    <div class="ms-4 mt-1">
+      <div class="form-check d-flex align-items-center gap-2"><input class="form-check-input" type="radio" name="mail_mode" value="summary" id="gmm-s"{% if pin_settings.guest_mail_mode != 'each' %} checked{% endif %}>
+        <label class="form-check-label" for="gmm-s">{% trans "Summary every" %}</label>
+        <select class="form-select form-select-sm w-auto" name="mail_every">{% for m in mail_every %}<option value="{{ m }}"{% if pin_settings.guest_mail_every == m %} selected{% endif %}>{% if m == 1440 %}{% trans "once a day" %}{% else %}{{ m }} min{% endif %}</option>{% endfor %}</select></div>
+      <div class="form-check"><input class="form-check-input" type="radio" name="mail_mode" value="each" id="gmm-e"{% if pin_settings.guest_mail_mode == 'each' %} checked{% endif %}>
+        <label class="form-check-label" for="gmm-e">{% trans "At every change (one e-mail per change)" %}</label></div>
+    </div></div>
   <div class="col-md-2"><button class="btn btn-primary" type="submit">{% trans "Save" %}</button></div>
   <div class="col-12 form-text">{% trans "Each access can switch them off for itself (Activity and rules). Without e-mails to the person, the links for the PIN are shown to you on the screen." %}</div>
 </form></div></div>

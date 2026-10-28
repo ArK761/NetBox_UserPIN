@@ -390,6 +390,27 @@ def set_alias(guest, actor, alias, description='', request=None):
     return guest.alias
 
 
+MAIL_EVERY = (5, 15, 30, 60, 120, 240, 1440)
+
+
+def set_mail_mode(actor, mode, every, request=None):
+    """How the administrators get the changes: a summary every ``every`` minutes, or at every change (never both)."""
+    if not _may_manage(actor):
+        raise PermissionDenied
+    mode = 'each' if mode == 'each' else 'summary'
+    try:
+        every = int(every)
+    except (TypeError, ValueError):
+        every = 60
+    if every not in MAIL_EVERY:
+        raise ValidationError(_('Choose one of the offered intervals.'))
+    settings = service.get_settings()
+    settings.guest_mail_mode, settings.guest_mail_every = mode, every
+    settings.save()
+    service.log_event(PinEventAction.GUEST_RULES, actor=actor, request=request, scope='guest',
+                      detail=f'changes to the administrators: {mode}' + (f' every {every} min' if mode == 'summary' else ''))
+
+
 def set_mails(guest, actor, person, changes, request=None):
     """E-mails of one access (``guest``) or on the PIN-only page (``guest=None``): to the person / to the administrators."""
     if not _may_manage(actor):
@@ -1020,41 +1041,93 @@ def _grant_saved(sender, instance, created, **kwargs):
 def install_signals():
     from django.db.models.signals import post_save
     post_save.connect(_grant_saved, sender=AreaGrant, dispatch_uid='userpin_guest_grant_mail')
+    from core.models import ObjectChange
+    post_save.connect(_change_saved, sender=ObjectChange, dispatch_uid='userpin_guest_change_mail')
 
 
-def _change_line(change):
+def _short(value):
+    text = '-' if value in (None, '', [], {}) else str(value)
+    return text if len(text) <= 80 else text[:77] + '...'
+
+
+def _change_lines(change):
+    """The change and, for an update, every field that changed: '    Description: "a" -> "b"'."""
     action = {'create': _('added'), 'update': _('changed'), 'delete': _('deleted')}.get(
         str(change.action), str(change.action))
     model = change.changed_object_type.name if change.changed_object_type_id else ''
-    return f'{timezone.localtime(change.time).strftime("%d.%m.%Y %H:%M")}  {action}  {model}: {change.object_repr}'
+    lines = [f'{timezone.localtime(change.time).strftime("%d.%m.%Y %H:%M")}  {action}  {model}: {change.object_repr}']
+    before, after = change.prechange_data or {}, change.postchange_data or {}
+    if str(change.action) == 'update':
+        for key in sorted(set(before) | set(after)):
+            if key in ('last_updated', 'created'):
+                continue
+            if key == 'custom_fields':
+                old, new = before.get(key) or {}, after.get(key) or {}
+                for name in sorted(set(old) | set(new)):
+                    if old.get(name) != new.get(name):
+                        lines.append(f'    {name}: {_short(old.get(name))} -> {_short(new.get(name))}')
+            elif before.get(key) != after.get(key):
+                lines.append(f'    {key}: {_short(before.get(key))} -> {_short(after.get(key))}')
+    return lines
 
 
-def report_changes():
-    """Hourly: what each person with a PIN only added, changed or deleted, to the creator and the keepers."""
+def _send_changes(guest, changes, since, settings):
+    recipients = list(areas.keepers())
+    creator = get_user_model().objects.filter(username=guest.created_by_name, is_active=True).first()
+    if creator is not None and creator not in recipients:
+        recipients.insert(0, creator)
+    with translation.override(settings.language or 'en'):
+        subject = _('What %(id)s changed in NetBox') % {'id': display(guest)}
+        body = _('%(name)s (%(id)s, %(email)s) made %(n)d change(s) since %(since)s:') % {
+            'name': guest.name, 'id': guest.user.username, 'email': guest.email, 'n': len(changes),
+            'since': timezone.localtime(since).strftime('%d.%m.%Y %H:%M')}
+        body += '\n\n' + '\n'.join(line for change in changes for line in _change_lines(change))
+    sent = [r.username for r in recipients if service.send_user_mail(r, subject, body)]
+    _log(PinEventAction.MAIL_SENT if sent else PinEventAction.MAIL_FAILED, guest,
+         detail=f'{len(changes)} change(s) reported to {", ".join(sent) or "nobody (no verified e-mail)"}')
+
+
+def report_changes(force=False):
+    """
+    The summary of what each person with a PIN only added, changed or deleted, to the creator and the keepers - every
+    ``guest_mail_every`` minutes (the job runs every 5 minutes). With "at every change" the changes go out at once.
+    """
     from core.models import ObjectChange
     settings = service.get_settings()
     now = timezone.now()
     for guest in PinGuest.objects.select_related('user'):
         since = guest.changes_mailed or guest.created
-        if not mails_changes(guest, settings):
-            guest.changes_mailed = now  # nothing piles up while it is switched off
-            guest.save(update_fields=['changes_mailed'])
+        if not mails_changes(guest, settings) or settings.guest_mail_mode == 'each':
+            if not guest.changes_mailed or guest.changes_mailed < now:
+                guest.changes_mailed = now  # nothing piles up while it is switched off or sent at once
+                guest.save(update_fields=['changes_mailed'])
+            continue
+        if not force and guest.changes_mailed and now - guest.changes_mailed < timedelta(
+                minutes=settings.guest_mail_every):
             continue
         changes = list(ObjectChange.objects.filter(user=guest.user, time__gt=since, time__lte=now)
                        .select_related('changed_object_type').order_by('time')[:500])
         if changes:
-            recipients = list(areas.keepers())
-            creator = get_user_model().objects.filter(username=guest.created_by_name, is_active=True).first()
-            if creator is not None and creator not in recipients:
-                recipients.insert(0, creator)
-            with translation.override(settings.language or 'en'):
-                subject = _('What %(id)s changed in NetBox') % {'id': display(guest)}
-                body = _('%(name)s (%(id)s, %(email)s) made %(n)d change(s) since %(since)s:') % {
-                    'name': guest.name, 'id': guest.user.username, 'email': guest.email, 'n': len(changes),
-                    'since': timezone.localtime(since).strftime('%d.%m.%Y %H:%M')}
-                body += '\n\n' + '\n'.join(_change_line(c) for c in changes)
-            for recipient in recipients:
-                service.send_user_mail(recipient, subject, body)
-            _log(PinEventAction.MAIL_SENT, guest, detail=f'{len(changes)} change(s) reported')
+            _send_changes(guest, changes, since, settings)
         guest.changes_mailed = now
         guest.save(update_fields=['changes_mailed'])
+
+
+def _change_saved(sender, instance, created, **kwargs):
+    """'At every change': the change of a person with a PIN only goes to the administrators right away."""
+    if not created or not instance.user_id:
+        return
+    settings = service.get_settings()
+    if settings.guest_mail_mode != 'each':
+        return
+    guest = PinGuest.objects.select_related('user').filter(user_id=instance.user_id).first()
+    if guest is None or not mails_changes(guest, settings):
+        return
+    pk = instance.pk
+
+    def send():
+        from core.models import ObjectChange
+        change = ObjectChange.objects.select_related('changed_object_type').filter(pk=pk).first()
+        if change is not None:
+            _send_changes(guest, [change], change.time, settings)
+    transaction.on_commit(send)
