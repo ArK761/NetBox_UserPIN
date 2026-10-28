@@ -2468,6 +2468,16 @@ class GuestAccessTest(AreaTestCase):
             self.assertTrue(self.denied(self.client.get(url, **api)), url)
         self.assertTrue(self.denied(self.client.post('/api/tenancy/tenant-groups/?brief=true', {}, **api)))
 
+    def test_the_person_saves_own_table_columns(self):
+        import json
+        self.sign_in()
+        response = self.client.patch('/api/users/config/', json.dumps({'tables': {'TenantTable': {'columns': ['name', 'id']}}}),
+                                     content_type='application/json', HTTP_ACCEPT='application/json')
+        self.assertEqual(response.status_code, 200, response.content[:300])
+        self.guest.user.config.refresh_from_db()
+        self.assertEqual(self.guest.user.config.get('tables.TenantTable.columns'), ['name', 'id'])
+        self.assertTrue(self.denied(self.client.get('/api/users/users/', HTTP_ACCEPT='application/json')))
+
     def test_netbox_user_cannot_take_the_address_of_a_pin_only_access(self):
         user = User.objects.create_user('plainx', 'plainx@example.com', 'x')
         user.email = 'JAN@example.com'

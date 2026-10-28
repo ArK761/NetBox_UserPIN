@@ -13,7 +13,8 @@
     </div>
     <div class="list-group" id="pin-fields">
       {% for row in rows %}
-      <div class="list-group-item pin-field-row d-flex flex-wrap align-items-center gap-3">
+      <div class="list-group-item pin-field-row">
+        <div class="d-flex flex-wrap align-items-center gap-3">
         <div style="min-width: 14rem; flex: 1 1 14rem"><strong>{{ row.label }}</strong> {% if row.kind == 'custom' %}<span class="badge text-bg-cyan">{% trans "custom field" %}</span>{% endif %}<div><code class="small text-secondary">{{ row.key }}</code></div></div>
         <div class="btn-group btn-group-sm" role="group">
           <input type="radio" class="btn-check pin-mode" name="mode__{{ row.key }}" id="m{{ forloop.counter }}-d" value="default" autocomplete="off" {% if row.mode == 'default' %}checked{% endif %}><label class="btn btn-outline-secondary" for="m{{ forloop.counter }}-d">{% trans "By rights" %}</label>
@@ -21,8 +22,12 @@
           <input type="radio" class="btn-check pin-mode" name="mode__{{ row.key }}" id="m{{ forloop.counter }}-r" value="read" autocomplete="off" {% if row.mode == 'read' %}checked{% endif %}><label class="btn btn-outline-warning" for="m{{ forloop.counter }}-r">{% trans "Read only" %}</label>
           <input type="radio" class="btn-check pin-mode" name="mode__{{ row.key }}" id="m{{ forloop.counter }}-w" value="write" autocomplete="off" {% if row.mode == 'write' %}checked{% endif %}><label class="btn btn-outline-success" for="m{{ forloop.counter }}-w">{% trans "Read and write" %}</label>
         </div>
+          {% if row.kind == 'custom' or row.related %}
+          <button type="button" class="btn btn-sm btn-outline-primary pin-extra pin-pick-toggle" data-target="pick-{{ forloop.counter }}">{% if row.conditions %}&#9656; {% trans "Conditions" %} ({{ row.conditions|length }}){% else %}+ {% trans "Conditions" %}{% endif %}</button>
+          {% endif %}
+        </div>
         {% if row.kind == 'custom' or row.related %}
-        <div class="pin-extra pin-pick w-100" data-key="{{ row.key }}">
+        <div class="pin-extra pin-pick w-100 mt-2 ps-3 border-start d-none" data-key="{{ row.key }}" id="pick-{{ forloop.counter }}">
           <input type="hidden" name="contains__{{ row.key }}" value="{{ row.contains }}" class="pin-pick-store">
           <div class="d-flex flex-wrap align-items-center gap-1">
             <span class="small text-secondary me-1">{% if row.related %}{% trans "May pick:" %}{% else %}{% trans "Values must:" %}{% endif %}</span>
@@ -44,6 +49,7 @@
           {% endif %}
         </div>
         {% endif %}
+      </div>
       {% empty %}<div class="list-group-item text-secondary">{% trans "No fields." %}</div>{% endfor %}
     </div>
     {% if can_manage %}<div class="text-end mt-2"><button class="btn btn-primary" type="submit">{% trans "Save fields" %}</button></div>{% endif %}

@@ -12,8 +12,9 @@
   }
   // what belongs to a field is shown only while the field is written: hidden and read-only fields have nothing more to set
   function syncRow(row) {
-    var checked = row.querySelector('.pin-mode:checked'), extra = row.querySelector('.pin-extra');
-    if (extra) { extra.style.display = (!checked || checked.value === 'default' || checked.value === 'write') ? '' : 'none'; }
+    var checked = row.querySelector('.pin-mode:checked'),
+        shown = !checked || checked.value === 'default' || checked.value === 'write';
+    row.querySelectorAll('.pin-extra').forEach(function (extra) { extra.style.display = shown ? '' : 'none'; });
   }
   document.querySelectorAll('#pin-fields .pin-field-row').forEach(function (row) {
     syncRow(row);
@@ -40,6 +41,7 @@
       var lines = Array.prototype.map.call(chips.querySelectorAll('.pin-chip'), function (c) { return c.dataset.line; });
       store.value = lines.join('\n');
       none.classList.toggle('d-none', lines.length > 0);
+      label();
     }
     function chip(line) {
       var exists = Array.prototype.some.call(chips.querySelectorAll('.pin-chip'), function (c) { return c.dataset.line.toLowerCase() === line.toLowerCase(); });
@@ -50,6 +52,12 @@
       remove.type = 'button'; remove.className = 'btn btn-link btn-sm p-0 text-white pin-pick-remove'; remove.textContent = '×';
       span.appendChild(remove); chips.appendChild(span); save();
     }
+    var toggle = box.closest('.pin-field-row').querySelector('.pin-pick-toggle');
+    function label() {
+      var n = chips.querySelectorAll('.pin-chip').length;
+      toggle.textContent = n ? '\u25B8 {{ _("Conditions")|escapejs }} (' + n + ')' : '+ {{ _("Conditions")|escapejs }}';
+    }
+    toggle.addEventListener('click', function () { box.classList.toggle('d-none'); });
     chips.addEventListener('click', function (event) {
       if (event.target.classList.contains('pin-pick-remove')) { event.target.parentNode.remove(); save(); }
     });

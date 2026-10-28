@@ -314,6 +314,9 @@ class AreaGuardMiddleware:
         if not getattr(request.user, 'is_authenticated', False) and getattr(view_func, '__module__', '').startswith(
                 'netbox_user_pin.'):
             return None  # the pages of this plugin ask for the sign-in themselves (the public link of a PIN-only access)
+        if request.path_info == guests.OWN_CONFIG and request.method in ('GET', 'PATCH') and getattr(
+                request.user, 'is_authenticated', False):
+            return None  # own table columns and preferences: NetBox touches only the config of the signed-in user
         if not areas.protection_on() or _is_token_request(request) or areas.is_exempt(request.user):
             return None  # (an exception: NetBox's own permissions rule the user)
         if request.path_info.startswith('/graphql') and _graphql_would_leak(request):

@@ -835,6 +835,9 @@ CLOSED_PATHS = ('/user/', '/admin/', '/api/users/', '/core/', '/api/core/', '/gr
                 '/social-auth/', '/plugins/user-pin/')
 
 
+OWN_CONFIG = '/api/users/config/'
+
+
 def _drop_down_request(request):
     """The request a drop-down of a form field sends: the brief list of a type, or the values of a select custom field."""
     if request.method != 'GET':
@@ -866,6 +869,8 @@ def guard(request, guest):
         return redirect('plugins:netbox_user_pin:guest_home')
     if path.startswith('/logout/'):
         return redirect('plugins:netbox_user_pin:guest_logout')
+    if path == OWN_CONFIG and request.method in ('GET', 'PATCH'):
+        return None  # the own table columns and preferences (NetBox changes only the config of the signed-in user)
     if path.startswith('/api/') and _drop_down_request(request) and not path.startswith(CLOSED_PATHS):
         return None  # a drop-down of a form field fills itself through the API: the protection decides what it lists
     if path.startswith(('/static/docs', '/api/')):  # documentation and the whole API: never for a PIN-only person
