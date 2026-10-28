@@ -7635,6 +7635,34 @@ msgstr ""
 "človeku sa odkazy na PIN zobrazia tebe na obrazovke."
 
 #, python-format
+msgid "Only these values are allowed: %(text)s."
+msgstr "Povolené sú len tieto hodnoty: %(text)s."
+
+msgid "May pick:"
+msgstr "Smie vybrať:"
+
+msgid "Values must:"
+msgstr "Hodnoty musia:"
+
+msgid "anything the rights allow"
+msgstr "všetko, čo dovolia práva"
+
+#, python-format
+msgid ""
+"Picks %(type)s: with \"Read and write\" the user may choose its objects in "
+"this field (only those that fit a condition, if any) - the pages of %(type)s"
+" stay closed. Several conditions are alternatives."
+msgstr ""
+"Vyberá %(type)s: pri „Čítať a zapisovať“ smie užívateľ v tomto poli vybrať "
+"jeho objekty (len tie, ktoré spĺňajú niektorú podmienku, ak nejaká je) – "
+"stránky %(type)s ostávajú zatvorené. Viac podmienok sú alternatívy."
+
+msgid ""
+"One condition per line: ~text contains, ^text starts with, =text is exactly"
+msgstr ""
+"Jedna podmienka na riadok: ~text obsahuje, ^text začína na, =text je presne"
+
+#, python-format
 #~ msgid ""
 #~ "The e-mail address %(email)s belongs to the NetBox user %(user)s. A PIN-only"
 #~ " access needs an address nobody in NetBox uses."

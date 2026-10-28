@@ -83,7 +83,7 @@ class PolicyTest(FieldRulesCase):
     def test_contains_texts_join_up(self):
         self.rule('cf:hw', 'write', 'PRINTER')
         policy = fieldrules.compute_policy(self.appadmin, self.area, 'tenancy', 'tenant')
-        self.assertEqual(policy.texts('cf:hw'), ['PRINTER'])
+        self.assertEqual(policy.texts('cf:hw'), ['~PRINTER'])
         areas.grant_access(self.area, self.appadmin, self.read, None, self.owner1)  # a profile without a limit
         self.rule('cf:hw', 'read', '', profile=self.read)
         policy = fieldrules.compute_policy(self.appadmin, self.area, 'tenancy', 'tenant')
@@ -208,7 +208,7 @@ class RulesPageTest(FieldRulesCase):
         self.assertEqual(response.status_code, 302, response.content[:300])
         self.assertEqual(AreaFieldRule.objects.get(profile=self.edit, field='cf:secret_note').mode, 'hidden')
         rule = AreaFieldRule.objects.get(profile=self.edit, field='cf:hw')
-        self.assertEqual((rule.mode, rule.contains), ('read', 'PRINTER'))
+        self.assertEqual((rule.mode, rule.contains), ('read', '~PRINTER'))
         # nobody
         self.client.post(url, {'grant': 'nobody', 'target': 'tenancy.tenant', 'mode__description': 'hidden'})
         self.assertTrue(AreaFieldRule.objects.filter(profile=None, field='description').exists())

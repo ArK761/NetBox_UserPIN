@@ -187,7 +187,8 @@ class Command(BaseCommand):
                 response = client.get(f'{api}?brief=true&limit=1', HTTP_ACCEPT='application/json')
                 count = response.json().get('count', '?') if response.status_code == 200 else response.status_code
                 closed = _verdict(client.get(page))
-                rule = 'all' if texts is None else 'only names containing ' + ' / '.join(texts)
+                from netbox_user_pin.fieldrules import describe
+                rule = 'all' if texts is None else 'only names that ' + describe(texts)
                 self.stdout.write(f'{label:28} drop-down: {rule:34} gives {count} of {model.objects.count()}'
                                   f'  | pages of the type: {closed}')
             for pk in sets:

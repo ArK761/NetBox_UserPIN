@@ -22,14 +22,31 @@
           <input type="radio" class="btn-check pin-mode" name="mode__{{ row.key }}" id="m{{ forloop.counter }}-w" value="write" autocomplete="off" {% if row.mode == 'write' %}checked{% endif %}><label class="btn btn-outline-success" for="m{{ forloop.counter }}-w">{% trans "Read and write" %}</label>
         </div>
         {% if row.kind == 'custom' or row.related %}
-        <span class="pin-extra d-inline-flex align-items-center gap-1">
-          <input type="text" class="form-control form-control-sm" style="width: 16rem" name="contains__{{ row.key }}" value="{{ row.contains }}" maxlength="200" placeholder="{% if row.related %}{% trans 'may pick only names containing (optional)' %}{% else %}{% trans 'values must include (optional)' %}{% endif %}">
-          {% if row.related %}<i class="mdi mdi-information-outline text-secondary" title="{% blocktrans with type=row.related %}Picks {{ type }}: with "Read and write" the user may choose its objects in this field (only those whose name contains the text, if given) - the pages of {{ type }} stay closed.{% endblocktrans %}"></i>{% endif %}
-        </span>
+        <div class="pin-extra pin-pick w-100" data-key="{{ row.key }}">
+          <input type="hidden" name="contains__{{ row.key }}" value="{{ row.contains }}" class="pin-pick-store">
+          <div class="d-flex flex-wrap align-items-center gap-1">
+            <span class="small text-secondary me-1">{% if row.related %}{% trans "May pick:" %}{% else %}{% trans "Values must:" %}{% endif %}</span>
+            <span class="pin-pick-chips d-inline-flex flex-wrap gap-1">{% for mark, value, label in row.conditions %}<span class="badge text-bg-success pin-chip" data-line="{{ mark }}{{ value }}">{{ label }} <button type="button" class="btn btn-link btn-sm p-0 text-white pin-pick-remove">×</button></span>{% endfor %}</span>
+            <span class="pin-pick-none small text-secondary{% if row.conditions %} d-none{% endif %}">{% trans "anything the rights allow" %}</span>
+          </div>
+          {% if can_manage %}
+          <div class="d-flex flex-wrap align-items-center gap-1 mt-1">
+            <select class="form-select form-select-sm w-auto pin-pick-op">
+              <option value="~">{% trans "contains" %}</option>
+              <option value="^">{% trans "starts with" %}</option>
+              <option value="=">{% trans "is one of" %}</option>
+            </select>
+            <input type="text" class="form-control form-control-sm pin-pick-text" style="width: 16rem" placeholder="{% trans 'type a value and press Enter' %}">
+            <select class="form-select form-select-sm pin-pick-choice d-none" style="width: 16rem" multiple size="5"></select>
+            <button type="button" class="btn btn-sm btn-primary pin-pick-add">{% trans "Add" %}</button>
+            {% if row.related %}<i class="mdi mdi-information-outline text-secondary" title="{% blocktrans with type=row.related %}Picks {{ type }}: with "Read and write" the user may choose its objects in this field (only those that fit a condition, if any) - the pages of {{ type }} stay closed. Several conditions are alternatives.{% endblocktrans %}"></i>{% endif %}
+          </div>
+          {% endif %}
+        </div>
         {% endif %}
-      </div>
       {% empty %}<div class="list-group-item text-secondary">{% trans "No fields." %}</div>{% endfor %}
     </div>
     {% if can_manage %}<div class="text-end mt-2"><button class="btn btn-primary" type="submit">{% trans "Save fields" %}</button></div>{% endif %}
   </form>
+  {{ pick_values|json_script:"pin-pick-values" }}
 </details>

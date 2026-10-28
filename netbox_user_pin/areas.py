@@ -1786,7 +1786,8 @@ def save_field_rules(area, profile, target, rules, actor, request=None):
     changed = []
     for field, (mode, contains) in rules.items():
         existing = AreaFieldRule.objects.filter(area=area, profile=profile, target=target, field=field)
-        contains = (contains or '').strip()[:200]
+        from .fieldrules import join_entries
+        contains = join_entries(str(contains or '').splitlines())[:2000]
         if profile is None and mode != AreaFieldMode.HIDDEN:
             mode = ''
         if mode in ('', None):

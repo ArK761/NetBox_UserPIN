@@ -50,7 +50,7 @@
             <label><input type="radio" name="mode__{{ row.key }}" value="write" {% if row.mode == 'write' %}checked{% endif %}> {% trans "Read and write" %}</label>
             {% endif %}
           </td>
-          <td>{% if row.kind == 'custom' and not nobody %}<input type="text" class="form-control form-control-sm" name="contains__{{ row.key }}" value="{{ row.contains }}" maxlength="200" placeholder="{% trans 'optional' %}">{% else %}<span class="text-secondary small">{% if nobody %}—{% else %}{% trans "custom fields only" %}{% endif %}</span>{% endif %}</td>
+          <td>{% if row.kind == 'custom' and not nobody %}<textarea class="form-control form-control-sm" rows="1" name="contains__{{ row.key }}" placeholder="{% trans 'optional' %}" title="{% trans 'One condition per line: ~text contains, ^text starts with, =text is exactly' %}">{{ row.contains }}</textarea>{% else %}<span class="text-secondary small">{% if nobody %}—{% else %}{% trans "custom fields only" %}{% endif %}</span>{% endif %}</td>
         </tr>
         {% empty %}<tr><td colspan="4" class="text-secondary">{% trans "No fields." %}</td></tr>{% endfor %}
       </tbody>

@@ -28,6 +28,53 @@
       });
     });
   });
+  // what a field may pick: conditions as chips (contains / starts with / is one of), stored one per line
+  var pickData = document.getElementById('pin-pick-values'), pickValues = pickData ? JSON.parse(pickData.textContent) : {};
+  var opName = {'~': '{{ _("contains")|escapejs }}', '^': '{{ _("starts with")|escapejs }}', '=': '{{ _("is")|escapejs }}'};
+  document.querySelectorAll('.pin-pick').forEach(function (box) {
+    var store = box.querySelector('.pin-pick-store'), chips = box.querySelector('.pin-pick-chips'),
+        none = box.querySelector('.pin-pick-none'), op = box.querySelector('.pin-pick-op'),
+        text = box.querySelector('.pin-pick-text'), choice = box.querySelector('.pin-pick-choice'),
+        add = box.querySelector('.pin-pick-add'), values = pickValues[box.dataset.key] || [];
+    function save() {
+      var lines = Array.prototype.map.call(chips.querySelectorAll('.pin-chip'), function (c) { return c.dataset.line; });
+      store.value = lines.join('\n');
+      none.classList.toggle('d-none', lines.length > 0);
+    }
+    function chip(line) {
+      var exists = Array.prototype.some.call(chips.querySelectorAll('.pin-chip'), function (c) { return c.dataset.line.toLowerCase() === line.toLowerCase(); });
+      if (exists) { return; }
+      var span = document.createElement('span'), remove = document.createElement('button');
+      span.className = 'badge text-bg-success pin-chip'; span.dataset.line = line;
+      span.appendChild(document.createTextNode(opName[line[0]] + ' ' + line.slice(1) + ' '));
+      remove.type = 'button'; remove.className = 'btn btn-link btn-sm p-0 text-white pin-pick-remove'; remove.textContent = '×';
+      span.appendChild(remove); chips.appendChild(span); save();
+    }
+    chips.addEventListener('click', function (event) {
+      if (event.target.classList.contains('pin-pick-remove')) { event.target.parentNode.remove(); save(); }
+    });
+    if (!op) { return; }
+    function refresh() {
+      var pick = op.value === '=' && values.length;
+      choice.classList.toggle('d-none', !pick); text.classList.toggle('d-none', !!pick);
+      if (pick && !choice.options.length) {
+        values.forEach(function (v) { var o = document.createElement('option'); o.value = v; o.text = v; choice.appendChild(o); });
+      }
+    }
+    function addNow() {
+      if (op.value === '=' && values.length) {
+        Array.prototype.forEach.call(choice.selectedOptions, function (o) { chip('=' + o.value); o.selected = false; });
+      } else if (text.value.trim()) {
+        chip(op.value + text.value.trim()); text.value = '';
+      }
+    }
+    op.addEventListener('change', refresh);
+    add.addEventListener('click', addNow);
+    text.addEventListener('keydown', function (event) {
+      if (event.key === 'Enter') { event.preventDefault(); addNow(); }
+    });
+    refresh();
+  });
   var box = document.getElementById('pin-fields-box');
   if (box && location.hash === '#pin-fields-box') { box.open = true; }
 

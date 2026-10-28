@@ -1507,6 +1507,14 @@ class RowConditionsTest(AreaTestCase):
         sites = self.client.get('/api/dcim/sites/?brief=true', **api)  # a relation without a text: all of the type
         self.assertEqual((sites.status_code, sites.json()['count']), (200, Site.objects.count()))
         self.assertEqual(self.client.get('/api/ipam/vlans/?brief=true', **api).status_code, 403)  # not a field of his
+        # conditions of 2.0.5: starts with / is one of, several are alternatives
+        areas.save_field_rules(self.area, self.group, 'dcim.device', {'role': ('write', '^Swi\n=printer ROLE')},
+                               self.owner1)
+        areas.clear_cache()
+        names = sorted(r['name'] for r in self.client.get('/api/dcim/device-roles/?brief=true', **api).json()['results'])
+        self.assertEqual(names, ['Printer role', 'Switch'])
+        areas.save_field_rules(self.area, self.group, 'dcim.device', {'role': ('write', 'Print')}, self.owner1)
+        areas.clear_cache()
         from io import StringIO
 
         from django.core.management import call_command
@@ -1514,7 +1522,7 @@ class RowConditionsTest(AreaTestCase):
         call_command('userpin_access_test', self.user.username, stdout=out)
         report = out.getvalue()
         self.assertIn('What the user may PICK', report)
-        self.assertRegex(report, r'dcim.devicerole\s+drop-down: only names containing Print\s+gives 1 of 3')
+        self.assertRegex(report, r'dcim.devicerole\s+drop-down: only names that contains "Print"\s+gives 1 of 3')
         # the values of a select custom field he may write fill its drop-down; of one he only reads they do not
         from core.models import ObjectType
         from dcim.models import Device
@@ -1800,10 +1808,10 @@ class HiddenFieldPathsTest(AreaTestCase):
         from netbox_user_pin.models import AreaFieldRule
         areas.save_field_rules(self.area, self.group, 'dcim.device', {'role': ('default', 'Print')}, self.owner1)
         rule = AreaFieldRule.objects.get(profile=self.group, field='role')
-        self.assertEqual((rule.mode, rule.contains), ('default', 'Print'))  # "by rights" does not drop the text
+        self.assertEqual((rule.mode, rule.contains), ('default', '~Print'))  # "by rights" does not drop the text
         areas.clear_cache()
         policy = fieldrules.compute_policy(User.objects.get(pk=self.user.pk), self.area, 'dcim', 'device')
-        self.assertEqual((policy.mode('role'), policy.texts('role')), ('write', ['Print']))  # the rights decide
+        self.assertEqual((policy.mode('role'), policy.texts('role')), ('write', ['~Print']))  # the rights decide
         areas.save_field_rules(self.area, self.group, 'dcim.device', {'role': ('default', '')}, self.owner1)
         self.assertFalse(AreaFieldRule.objects.filter(profile=self.group, field='role').exists())
 

@@ -707,7 +707,10 @@ class GroupView(AreaViewMixin, View):
             related = fieldrules.related_label(model_class, key)
             rows.append({'key': key, 'label': label, 'kind': kind, 'mode': rule.mode if rule else 'default',
                          'contains': rule.contains if rule else '',
+                         'conditions': fieldrules.conditions_of(rule.contains if rule else ''),
                          'related': _target_label(related) if related else ''})
+        values = {row['key']: fieldrules.pick_values(model_class, row['key']) for row in rows
+                  if row['related'] or row['kind'] == 'custom'}
         tabs = areas.tabs_of(target)
         conditions = areas.group_conditions(group)
         filter_fields = areas.filter_fields(target)
@@ -716,6 +719,7 @@ class GroupView(AreaViewMixin, View):
             row['filterable'] = row['key'] in filterable
             row['conds'] = [(i, text) for i, text, field in conditions if field == row['key']]
         return render(request, self.template_name, {
+            'pick_values': values,
             'area': area, 'group': group, 'target': target, 'target_label': _target_label(target),
             'members': areas.group_members(group), 'user_choices': _all_user_choices(),
             'wide_members': self._wide_members(area, group),

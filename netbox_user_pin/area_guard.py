@@ -779,10 +779,8 @@ def install():
                 field = areas._name_field(self.model)
                 if field is None:
                     return self.none()
-                query = Q()
-                for text in flag[1]:
-                    query |= Q(**{f'{field}__icontains': text})
-                return self.filter(query)
+                from . import fieldrules
+                return self.filter(fieldrules.name_query(field, flag[1]))
             area = areas.area_for(meta.app_label, meta.model_name, package=meta.app_label)
             if area is None:
                 if areas.default_deny_blocks(user, meta.app_label, meta.model_name, meta.app_label):

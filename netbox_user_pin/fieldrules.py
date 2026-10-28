@@ -79,8 +79,8 @@ def compute_policy(user, area, app_label, model):
                 if best is None or RANK[mode] > RANK[best]:
                     best = mode
                 if mode != AreaFieldMode.HIDDEN:
-                    if rule and rule.contains:
-                        texts.append(rule.contains)
+                    if rule and entries(rule.contains):
+                        texts.extend(entries(rule.contains))
                     else:
                         unlimited = True
             # a rule of any source that hides the field or makes it read only wins over a write of another source
@@ -123,6 +123,35 @@ def related_label(model, key):
     if getattr(field, 'is_relation', False) and related is not None and not field.auto_created:
         return f'{related._meta.app_label}.{related._meta.model_name}'
     return None
+
+
+def pick_values(model, key, limit=500):
+    """The existing values a condition "is one of" may choose from: names of the related objects or select choices."""
+    from django.apps import apps
+    try:
+        if key.startswith('cf:'):
+            from extras.models import CustomField
+            cf = CustomField.objects.filter(name=key[3:]).select_related('choice_set').first()
+            if cf is not None and cf.type in ('select', 'multiselect') and cf.choice_set_id:
+                return [str(label) for _value, label in cf.choice_set.choices][:limit]
+        label = related_label(model, key)
+        if not label:
+            return []
+        related = apps.get_model(label)
+        field = areas._name_field(related)
+        if field is None:
+            return []
+        values = related.objects.order_by(field).values_list(field, flat=True).distinct()[:limit]
+        return [str(v) for v in values if v not in (None, '')]
+    except Exception:  # noqa: BLE001 - a list to choose from is a help, not a must
+        logger.exception('Cannot list the values of %s', key)
+        return []
+
+
+def conditions_of(contains):
+    """[(mark, value, label)] of a rule, for the page."""
+    names = {'~': gettext('contains'), '^': gettext('starts with'), '=': gettext('is')}
+    return [(line[0], line[1:], f'{names[line[0]]} {line[1:]}') for line in entries(contains)]
 
 
 def _writable_fields(user):
@@ -223,10 +252,65 @@ def policy_of_model(model):
     return current_policy(meta.app_label, meta.model_name) if meta is not None else None
 
 
+# A field rule holds conditions on what may be picked, one per line: ``~text`` contains, ``^text`` starts with,
+# ``=text`` is exactly (one of the existing values); a line without a mark (rules before 2.0.5) means "contains".
+OPERATORS = (('~', 'contains'), ('^', 'starts with'), ('=', 'is one of'))
+
+
+def entries(contains):
+    """The conditions of a rule as marked lines (``['~PRINTER', '=Office']``)."""
+    result = []
+    for line in str(contains or '').splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        result.append(line if line[0] in '~^=' and len(line) > 1 else f'~{line}')
+    return result
+
+
+def join_entries(lines):
+    """Marked lines -> the stored text (duplicates and empty values dropped, order kept)."""
+    seen, result = set(), []
+    for line in lines:
+        line = str(line or '').strip()
+        if not line:
+            continue
+        line = line if line[0] in '~^=' and len(line) > 1 else f'~{line}'
+        if line.lower() not in seen:
+            seen.add(line.lower())
+            result.append(line)
+    return '\n'.join(result)
+
+
+def describe(texts):
+    """'contains PRINTER / is Office' for messages."""
+    names = {'~': gettext('contains'), '^': gettext('starts with'), '=': gettext('is')}
+    return ' / '.join(f'{names[t[0]]} "{t[1:]}"' for t in entries('\n'.join(texts)))
+
+
+def _one(shown, line):
+    mark, text = line[0], line[1:].lower()
+    if mark == '^':
+        return shown.startswith(text)
+    if mark == '=':
+        return shown == text
+    return text in shown
+
+
 def matches(value, texts):
-    """Does the (display of the) value contain one of the texts (case-insensitive)?"""
-    shown = str(value).lower()
-    return any(text.lower() in shown for text in texts)
+    """Does the (display of the) value fit one of the conditions (case-insensitive)?"""
+    shown = str(value).strip().lower()
+    return any(_one(shown, line) for line in entries('\n'.join(texts)))
+
+
+def name_query(field, texts):
+    """A Q that keeps the objects whose ``field`` fits one of the conditions."""
+    from django.db.models import Q
+    lookup = {'~': 'icontains', '^': 'istartswith', '=': 'iexact'}
+    query = Q()
+    for line in entries('\n'.join(texts)):
+        query |= Q(**{f'{field}__{lookup[line[0]]}': line[1:]})
+    return query
 
 
 def filter_value(value, texts):
@@ -369,8 +453,8 @@ def _must_include(texts):
         items = value if isinstance(value, (list, tuple)) or (hasattr(value, '__iter__') and not isinstance(
             value, str) and not hasattr(value, 'pk')) else [value]
         if any(not matches(item, texts) for item in items):
-            raise ValidationError(gettext('Only values containing "%(text)s" are allowed.'),
-                                  params={'text': ' / '.join(texts)})
+            raise ValidationError(gettext('Only these values are allowed: %(text)s.'),
+                                  params={'text': describe(texts)})
     return validator
 
 
@@ -424,8 +508,8 @@ def _hook_forms():
             if policy.mode(key) == AreaFieldMode.READ:
                 field.disabled, field.required = True, False
             if (texts := policy.texts(key)):
-                if hasattr(field.widget, 'add_query_params'):
-                    field.widget.add_query_params({'q': texts[0]})  # narrows the drop-down
+                if hasattr(field.widget, 'add_query_params') and len(texts) == 1 and texts[0][0] == '~':
+                    field.widget.add_query_params({'q': texts[0][1:]})  # narrows the drop-down (the server does too)
 
                 def must_include(value, texts=texts):
                     if value in (None, '', []):
@@ -433,8 +517,8 @@ def _hook_forms():
                     items = value if isinstance(value, (list, tuple)) or hasattr(value, '__iter__') and not isinstance(
                         value, str) and not hasattr(value, 'pk') else [value]
                     if any(not matches(item, texts) for item in items):
-                        raise ValidationError(gettext('Only values containing "%(text)s" are allowed.'),
-                                              params={'text': ' / '.join(texts)})
+                        raise ValidationError(gettext('Only these values are allowed: %(text)s.'),
+                                              params={'text': describe(texts)})
                 field.validators = list(field.validators) + [must_include]
             return field
         return wrapper
@@ -686,8 +770,8 @@ def _hook_paths():
                     elif (texts := policy.texts(key)) and value not in (None, '', []) and not (
                             matches(value, texts) if not isinstance(value, (list, tuple)) else
                             all(matches(v, texts) for v in value)):
-                        errors[name] = gettext('Only values containing "%(text)s" are allowed.') % {
-                            'text': ' / '.join(texts)}
+                        errors[name] = gettext('Only these values are allowed: %(text)s.') % {
+                            'text': describe(texts)}
                 if errors:
                     raise ApiValidationError(errors)
             return original(self, data)

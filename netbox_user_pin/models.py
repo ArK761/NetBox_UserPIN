@@ -1017,7 +1017,7 @@ class AreaFieldRule(models.Model):
     target = models.CharField(max_length=100, help_text='app_label.model')
     field = models.CharField(max_length=150)
     mode = models.CharField(max_length=10, choices=AreaFieldMode.choices, default=AreaFieldMode.WRITE)
-    contains = models.CharField(max_length=200, blank=True)
+    contains = models.TextField(blank=True)  # conditions on the picked values, one per line (fieldrules.entries)
 
     class Meta:
         verbose_name = _('field rule')
