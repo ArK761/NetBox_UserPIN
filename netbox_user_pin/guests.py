@@ -1129,11 +1129,22 @@ def _change_saved(sender, instance, created, **kwargs):
     guest = PinGuest.objects.select_related('user').filter(user_id=instance.user_id).first()
     if guest is None or not mails_changes(guest, settings):
         return
-    pk = instance.pk
+    pk, guest_pk = instance.pk, guest.pk
 
-    def send():
-        from core.models import ObjectChange
-        change = ObjectChange.objects.select_related('changed_object_type').filter(pk=pk).first()
-        if change is not None:
-            _send_changes(guest, [change], change.time, settings)
-    transaction.on_commit(send)
+    def enqueue():
+        # never in the request: SMTP can take seconds per recipient; netbox-rq sends it right away
+        try:
+            from django_rq import get_queue
+            get_queue('default').enqueue(send_change_mail, pk, guest_pk)
+        except Exception:  # noqa: BLE001 - no queue: the next summary run is not affected, send it there
+            logger.exception('Cannot queue the e-mail of a change')
+    transaction.on_commit(enqueue)
+
+
+def send_change_mail(change_pk, guest_pk):
+    """Job of netbox-rq: the e-mail of one change of a person with a PIN only."""
+    from core.models import ObjectChange
+    change = ObjectChange.objects.select_related('changed_object_type').filter(pk=change_pk).first()
+    guest = PinGuest.objects.select_related('user').filter(pk=guest_pk).first()
+    if change is not None and guest is not None:
+        _send_changes(guest, [change], change.time, service.get_settings())

@@ -2500,8 +2500,15 @@ class GuestAccessTest(AreaTestCase):
                 self.guests.set_mail_mode(self.keeper, 'summary', 7)
             self.guests.set_mail_mode(self.keeper, 'each', 60)
             mail.outbox.clear()
-            with self.captureOnCommitCallbacks(execute=True):
-                change()
+            from unittest import mock
+            queued = []
+            with mock.patch('django_rq.get_queue') as get_queue:
+                get_queue.return_value.enqueue.side_effect = lambda func, *args: queued.append((func, args))
+                with self.captureOnCommitCallbacks(execute=True):
+                    change()
+            self.assertEqual(mail.outbox, [])  # nothing is sent while the page saves
+            for func, args in queued:
+                func(*args)  # what netbox-rq does
             self.assertEqual(len(mail.outbox), 1)
             self.assertIn('description: from "old" to "new"', mail.outbox[0].body)
             self.assertIn('made a change', mail.outbox[0].subject)
@@ -2511,8 +2518,9 @@ class GuestAccessTest(AreaTestCase):
             self.guests.set_mail_mode(self.keeper, 'summary', 15)
             self.guests.report_changes()
             mail.outbox.clear()
-            with self.captureOnCommitCallbacks(execute=True):
+            with mock.patch('django_rq.get_queue') as get_queue, self.captureOnCommitCallbacks(execute=True):
                 change(description='newer')
+            get_queue.return_value.enqueue.assert_not_called()  # a summary: nothing queued
             self.assertEqual(mail.outbox, [])  # waits for the summary
             self.guests.report_changes()
             self.assertEqual(mail.outbox, [])  # 15 minutes are not over yet
