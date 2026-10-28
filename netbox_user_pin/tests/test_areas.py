@@ -2445,6 +2445,21 @@ class GuestAccessTest(AreaTestCase):
             self.guests.report_changes()
             self.assertEqual(mail.outbox, [])
 
+    def test_drop_downs_of_the_form_work_but_the_api_stays_closed(self):
+        from tenancy.models import TenantGroup
+        TenantGroup.objects.create(name='Office', slug='office')
+        areas.save_field_rules(self.area, self.group, 'tenancy.tenant', {'group': ('write', '')}, self.owner1)
+        areas.clear_cache()
+        self.sign_in()
+        api = {'HTTP_ACCEPT': 'application/json'}
+        response = self.client.get('/api/tenancy/tenant-groups/?brief=true', **api)
+        self.assertEqual(response.status_code, 200, response.content[:300])
+        self.assertIn('Office', response.content.decode())
+        for url in ('/api/tenancy/tenant-groups/', '/api/tenancy/tenants/', '/api/users/users/?brief=true',
+                    '/api/schema/?brief=true'):
+            self.assertTrue(self.denied(self.client.get(url, **api)), url)
+        self.assertTrue(self.denied(self.client.post('/api/tenancy/tenant-groups/?brief=true', {}, **api)))
+
     def test_netbox_user_cannot_take_the_address_of_a_pin_only_access(self):
         user = User.objects.create_user('plainx', 'plainx@example.com', 'x')
         user.email = 'JAN@example.com'

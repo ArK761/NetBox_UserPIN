@@ -835,6 +835,17 @@ CLOSED_PATHS = ('/user/', '/admin/', '/api/users/', '/core/', '/api/core/', '/gr
                 '/social-auth/', '/plugins/user-pin/')
 
 
+def _drop_down_request(request):
+    """The request a drop-down of a form field sends: the brief list of a type, or the values of a select custom field."""
+    if request.method != 'GET':
+        return False
+    path = request.path_info
+    if path.startswith('/api/extras/custom-field-choice-sets/') and path.rstrip('/').endswith('/choices'):
+        return True
+    return bool(request.GET.get('brief')) and not path.startswith(('/api/schema', '/api/docs', '/api/status',
+                                                                   '/api/authentication-check'))
+
+
 def guard(request, guest):
     """Called for every request of a PIN-only account: ends the session or refuses what is closed. None = go on."""
     from django.shortcuts import redirect
@@ -855,6 +866,8 @@ def guard(request, guest):
         return redirect('plugins:netbox_user_pin:guest_home')
     if path.startswith('/logout/'):
         return redirect('plugins:netbox_user_pin:guest_logout')
+    if path.startswith('/api/') and _drop_down_request(request) and not path.startswith(CLOSED_PATHS):
+        return None  # a drop-down of a form field fills itself through the API: the protection decides what it lists
     if path.startswith(('/static/docs', '/api/')):  # documentation and the whole API: never for a PIN-only person
         from .area_guard import denied_response
         return denied_response(request, None, right='view', target=None)
