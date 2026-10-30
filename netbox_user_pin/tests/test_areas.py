@@ -717,6 +717,27 @@ class DefaultDenyTest(AreaTestCase):
         areas.clear_cache()
         self.assertFalse(areas.switched_off())
 
+    def test_the_switch_on_the_page_only_for_keepers(self):
+        from netbox_user_pin.models import PinSettings
+        self.add_keeper()
+        areas.clear_cache()
+        url = reverse('plugins:netbox_user_pin:areas')
+        admin_login(self.client, self.keeper)
+        page = self.client.get(url)
+        self.assertContains(page, 'Switch the protection OFF')
+        self.client.post(url, {'action': 'deny-off'})
+        self.assertFalse(PinSettings.load().default_deny)
+        self.assertContains(self.client.get(url), 'Switch the protection ON')
+        self.client.post(url, {'action': 'deny-on'})
+        self.assertTrue(PinSettings.load().default_deny)
+        # nobody else: a superuser who is no keeper cannot switch it (and sees no button)
+        other = User.objects.create_superuser('notkeeper', 'nk2@example.com', 'x')
+        self.client.logout()
+        admin_login(self.client, other)
+        self.assertEqual(self.client.get(url).status_code, 302)  # the page is not even open to him
+        self.client.post(url, {'action': 'deny-off'})
+        self.assertTrue(PinSettings.load().default_deny)
+
     def test_last_keeper_gone_switches_the_protection_off_and_the_server_appoints_one(self):
         from io import StringIO
 
@@ -731,6 +752,9 @@ class DefaultDenyTest(AreaTestCase):
         areas.clear_cache()
         self.assertFalse(areas.default_deny_active())  # off - and it cannot go on without a keeper
         self.assertTrue(areas.switched_off())
+        admin = User.objects.create_superuser('whoever', 'wh@example.com', 'x')
+        admin_login(self.client, admin)
+        self.assertNotContains(self.client.get(reverse('plugins:netbox_user_pin:areas')), 'text-bg-green')  # shows OFF
         with self.assertRaises(CommandError):
             call_command('userpin_default_deny', '--on', stdout=StringIO())
         new = User.objects.create_user('newkeeper', 'nk@example.com', 'x')

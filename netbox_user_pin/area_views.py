@@ -167,7 +167,7 @@ class AreaListView(AreaViewMixin, View):
             'rows': rows, 'is_core': core, 'form': form or AreaForm(create=True), 'tree': _tree(request.user),
             'add_form': AreaTargetForm(exclude=[t for a in ProtectedArea.objects.all() for t in areas.targets_of(a)]),
             'waiting': len(waiting_list), 'waiting_list': waiting_list,
-            'deny_on': service.get_settings().default_deny, 'keepers': areas.keepers(),
+            'deny_on': areas.default_deny_active(), 'keepers': areas.keepers(),
             'is_keeper': areas.is_keeper(request.user), 'can_keepers': areas.can_manage_keepers(request.user),
             'exceptions': [setattr(e, 'groups', areas.group_names_of(e.user)) or e for e in areas.exceptions()]
             if areas.is_keeper(request.user) else [],

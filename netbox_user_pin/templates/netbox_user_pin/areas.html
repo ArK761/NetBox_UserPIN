@@ -7,6 +7,20 @@
 {% if waiting %}<div class="alert alert-warning"><i class="mdi mdi-key-alert"></i> {% blocktrans count n=waiting %}{{ n }} access request is waiting for your decision.{% plural %}{{ n }} access requests are waiting for your decision.{% endblocktrans %}
   <ul class="mb-0 mt-1">{% for r in waiting_list %}<li><a href="{% url 'plugins:netbox_user_pin:request_decide' pk=r.pk %}">{{ r.user.username }} → {{ r.area.name|default:r.target }}</a>{% if r.rights %} ({{ r.rights|join:", " }}){% endif %}</li>{% endfor %}</ul></div>{% endif %}
 {% if not settings.areas_enabled %}<div class="alert alert-secondary"><div>{% trans "The protection of your own areas is off (Settings → Protected areas). Areas of plugins with a PIN integration protect as soon as the plugin's integration is switched on." %}</div></div>{% endif %}
+<div class="card mb-3 {% if deny_on %}border-success{% else %}border-warning{% endif %}">
+  <h2 class="card-header"><i class="mdi mdi-power"></i> {% trans "Protection" %}
+    <span class="badge text-bg-{% if deny_on %}green{% else %}orange{% endif %} ms-2">{% if deny_on %}{% trans "ON" %}{% else %}{% trans "OFF" %}{% endif %}</span></h2>
+  <div class="card-body">
+    <p class="mb-2">{% if deny_on %}{% trans "ON: everything that no group allows is denied to everybody except the protection keepers and the exceptions. The PIN-only accesses see only their groups." %}{% else %}{% trans "OFF: everybody works by the NetBox permissions alone. The PIN-only accesses can only change their PIN and are told that the function is switched off by the administrator." %}{% endif %}</p>
+    {% if is_keeper %}
+    <form method="post" class="d-inline">{% csrf_token %}
+      {% if deny_on %}<input type="hidden" name="action" value="deny-off"><button class="btn btn-warning" type="submit" data-confirm="{% trans 'Switch the protection off? The PIN-only accesses will not be able to do anything.' %}"><i class="mdi mdi-power-off"></i> {% trans "Switch the protection OFF" %}</button>
+      {% elif keepers %}<input type="hidden" name="action" value="deny-on"><button class="btn btn-success" type="submit"><i class="mdi mdi-power"></i> {% trans "Switch the protection ON" %}</button>
+      {% else %}<span class="text-secondary">{% trans "Appoint a protection keeper first." %}</span>{% endif %}
+    </form>
+    {% else %}<span class="text-secondary small">{% trans "Only the protection keepers switch it." %}</span>{% endif %}
+  </div>
+</div>
 <div class="card {% if deny_on %}border-danger{% endif %}">
   <h2 class="card-header"><i class="mdi mdi-shield-lock"></i> {% trans "Protection keepers" %}
     <span class="badge text-bg-{% if deny_on %}red{% else %}secondary{% endif %} ms-2">{% if deny_on %}{% trans "everything not allowed is denied" %}{% else %}{% trans "protection not active yet" %}{% endif %}</span></h2>

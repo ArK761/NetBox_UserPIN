@@ -7779,6 +7779,45 @@ msgstr ""
 "\n"
 "Ak to nebolo dohodnuté, skontroluj server a audit log."
 
+msgid "ON"
+msgstr "ZAPNUTÁ"
+
+msgid "OFF"
+msgstr "VYPNUTÁ"
+
+msgid ""
+"ON: everything that no group allows is denied to everybody except the "
+"protection keepers and the exceptions. The PIN-only accesses see only their "
+"groups."
+msgstr ""
+"ZAPNUTÁ: všetko, čo nepovoľuje žiadna skupina, je zakázané všetkým okrem "
+"strážcov ochrany a výnimiek. Ľudia len s PIN-om vidia len svoje skupiny."
+
+msgid ""
+"OFF: everybody works by the NetBox permissions alone. The PIN-only accesses "
+"can only change their PIN and are told that the function is switched off by "
+"the administrator."
+msgstr ""
+"VYPNUTÁ: všetci pracujú len podľa práv NetBoxu. Ľudia len s PIN-om si môžu "
+"iba zmeniť PIN a uvidia, že funkciu vypol administrátor."
+
+msgid ""
+"Switch the protection off? The PIN-only accesses will not be able to do "
+"anything."
+msgstr "Vypnúť ochranu? Ľudia len s PIN-om nebudú môcť nič robiť."
+
+msgid "Switch the protection OFF"
+msgstr "Vypnúť ochranu"
+
+msgid "Switch the protection ON"
+msgstr "Zapnúť ochranu"
+
+msgid "Appoint a protection keeper first."
+msgstr "Najprv určte strážcu ochrany."
+
+msgid "Only the protection keepers switch it."
+msgstr "Prepína ju len strážca ochrany."
+
 #, python-format
 #~ msgid ""
 #~ "The e-mail address %(email)s belongs to the NetBox user %(user)s. A PIN-only"
