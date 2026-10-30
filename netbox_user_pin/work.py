@@ -156,3 +156,27 @@ def message(guest, now=None):
     if holiday:
         text = _('Today is a public holiday (%(name)s).') % {'name': holiday} + ' ' + text
     return text
+
+
+SAFE_METHODS = ('GET', 'HEAD', 'OPTIONS')
+
+
+def write_state(guest, now=None, settings=None):
+    """
+    May the person change anything now? ``'free'`` (inside the working time, or no limit), ``'once'`` (the time just
+    ended: one save) or ``'blocked'`` (outside the working time: reading only).
+    """
+    value = state(guest, now, settings)
+    return 'free' if value == 'ok' else ('once' if value == 'grace' else 'blocked')
+
+
+def read_only_text(guest, now=None):
+    """'Outside your working time (Mon–Fri 06:00–16:00) you can only read.' (in the language that is active)."""
+    rules = rules_of(guest)
+    now = timezone.localtime(now or timezone.now())
+    holiday = holiday_name(rules.country, now.date()) if rules else ''
+    text = _('Outside your working time (%(rules)s) you can only read: nothing can be changed or saved.') % {
+        'rules': describe(rules) if rules else ''}
+    if holiday:
+        text = _('Today is a public holiday (%(name)s).') % {'name': holiday} + ' ' + text
+    return text

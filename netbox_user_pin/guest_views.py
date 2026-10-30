@@ -92,8 +92,6 @@ class GuestLoginView(View):
         guest.refresh_from_db()
         if status == 'locked':
             return _stopped(request, guest, LOCKED_TEXT())
-        if status == 'offhours':
-            return self._page(request, guest, token, error=work.message(guest))
         error = {'pause': _('Wait a moment before the next attempt.'),
                  'blocked': _('This access is not usable now (ended, revoked or from another address).'),
                  'disabled': _('Your account is disabled (suspended). Contact the administrator.'),
@@ -111,9 +109,7 @@ class GuestPinLoginView(View):
     def get(self, request):
         if request.user.is_authenticated and guests.guest_of(request.user) is not None:
             return redirect('plugins:netbox_user_pin:guest_home')
-        notice = _('The working time is over. Your last change was saved and you were signed out.') \
-            if request.GET.get('ended') == 'hours' else ''
-        return self._page(request, notice=notice)
+        return self._page(request)
 
     def post(self, request):
         status, guest = guests.pin_only_login(request, request.POST.get('pin', ''))
@@ -121,8 +117,6 @@ class GuestPinLoginView(View):
             return _stopped(request, guest, guests.stop_message(guest))
         if status == 'locked' and guest is not None:
             return _stopped(request, guest, LOCKED_TEXT())
-        if status == 'offhours' and guest is not None:
-            return self._page(request, error=work.message(guest))  # the right PIN outside the working time
         if status == 'ok':
             guests.start_session(request, guest, guests.login_path())
             return redirect('plugins:netbox_user_pin:guest_home')
@@ -257,7 +251,9 @@ class GuestHomeView(GuestMixin, View):
             'pin_warn': days is not None and days <= settings.warn_days, 'languages': guests.LANGUAGES[1:],
             'pin_language': guests.language_of(guest),
             'work_text': (work.describe(rules) if (rules := work.rules_of(guest)) else ''),
-            'work_grace': work.state(guest) == 'grace'})
+            'work_grace': work.write_state(guest) == 'once',
+            'work_readonly': work.write_state(guest) == 'blocked',
+            'work_message': work.read_only_text(guest) if work.write_state(guest) == 'blocked' else ''})
 
 
 class GuestChangeView(GuestMixin, View):

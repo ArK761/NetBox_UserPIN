@@ -7,7 +7,8 @@
 <h2 class="text-center mb-1">{% blocktrans with name=guest.name %}You are signed in as {{ name }}{% endblocktrans %}</h2>
 {% if pin_until %}<p class="text-center mb-1 {% if pin_warn %}text-warning fw-bold{% else %}text-secondary{% endif %}">
   <i class="mdi mdi-calendar-clock"></i> {% blocktrans with d=pin_days h=pin_hours date=pin_until|date:"d.m.Y H:i" %}Your PIN expires in {{ d }} days and {{ h }} hours ({{ date }}).{% endblocktrans %}</p>{% endif %}
-{% if work_text %}<p class="text-center mb-1 {% if work_grace %}text-danger fw-bold{% else %}text-secondary{% endif %}"><i class="mdi mdi-briefcase-clock-outline"></i> {% blocktrans with t=work_text %}Your working time: {{ t }}.{% endblocktrans %}{% if work_grace %} {% trans "It is over: one more save, then you are signed out." %}{% endif %}</p>{% endif %}
+{% if work_message %}<div class="alert alert-warning text-center py-2"><i class="mdi mdi-eye-outline"></i> {{ work_message }}</div>{% endif %}
+{% if work_text %}<p class="text-center mb-1 {% if work_grace %}text-danger fw-bold{% else %}text-secondary{% endif %}"><i class="mdi mdi-briefcase-clock-outline"></i> {% blocktrans with t=work_text %}Your working time: {{ t }}.{% endblocktrans %}{% if work_grace %} {% trans "It is over: one more save, then you only read." %}{% endif %}</p>{% endif %}
 <p class="text-secondary text-center small">{% blocktrans with m=left %}The session ends after {{ m }} min of inactivity at the latest.{% endblocktrans %}</p>
 {% if switched_off %}<div class="alert alert-warning mt-3"><i class="mdi mdi-power-plug-off"></i> {% trans "The function is switched off by the administrator for now. You can only change your PIN." %}</div>{% else %}
 <h3 class="mt-3 mb-2">{% trans "Where do you want to continue?" %}</h3>

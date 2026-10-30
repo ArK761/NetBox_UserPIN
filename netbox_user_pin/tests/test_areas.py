@@ -3104,46 +3104,59 @@ class WorkTimeTest(AreaTestCase):
         self.guests.set_work(self.get(), self.owner1, 'own', 'CZ', '01234', '08:00', '17:00')  # now under him
         self.assertEqual(self.work.rules_of(self.get()).country, 'CZ')
 
-    def test_signing_in_outside_the_working_time_tells_the_hours(self):
+    def test_outside_the_working_time_he_signs_in_and_only_reads(self):
         from unittest import mock
-        with mock.patch('django.utils.timezone.now', return_value=self.at(2026, 12, 22, 5)):
-            page = self.client.post('/pin/', {'pin': 'Secret-pin-1'})
-        self.assertEqual(page.status_code, 200)
-        self.assertContains(page, '06:00–16:00')  # the working time is told
-        self.assertNotIn('_auth_user_id', self.client.session)
-        with mock.patch('django.utils.timezone.now', return_value=self.at(2026, 12, 24, 10)):
-            page = self.client.post('/pin/', {'pin': 'Secret-pin-1'})
-        self.assertContains(page, 'public holiday')
-        with mock.patch('django.utils.timezone.now', return_value=self.at(2026, 12, 22, 10)):
+        from tenancy.models import Tenant
+        with mock.patch('django.utils.timezone.now', return_value=self.at(2026, 12, 26, 10)):  # a Saturday
             response = self.client.post('/pin/', {'pin': 'Secret-pin-1'})
-        self.assertEqual(response.status_code, 302)  # inside the working time he is in
-        self.assertIn('_auth_user_id', self.client.session)
+            self.assertEqual(response.status_code, 302)  # he is in
+            self.assertIn('_auth_user_id', self.client.session)
+            home = self.client.get('/plugins/user-pin/guest/')
+            self.assertContains(home, '06:00–16:00')  # the working time is told
+            page = self.client.get('/tenancy/tenants/')
+            self.assertEqual(page.status_code, 200)  # reading goes on
+            self.assertContains(page, 'Outside working time: reading only')  # the badge in the top bar
+            blocked = self.client.get('/tenancy/tenants/add/')  # no form to add
+            self.assertEqual(blocked.status_code, 302)
+            self.assertEqual(blocked.url, '/tenancy/tenants/')
+            saved = self.client.post('/tenancy/tenants/add/', {'name': 'Nope', 'slug': 'nope'})
+            self.assertEqual(saved.status_code, 302)
+            self.assertFalse(Tenant.objects.filter(slug='nope').exists())  # nothing was saved
+            message = self.client.get('/tenancy/tenants/').content.decode()
+            self.assertIn('you can only read', message)
+            api = self.client.post('/api/tenancy/tenants/', {'name': 'X', 'slug': 'x'}, content_type='application/json',
+                                   HTTP_ACCEPT='application/json')
+            self.assertEqual(api.status_code, 403)
+            self.assertEqual(self.client.get('/plugins/user-pin/guest/change/').status_code, 200)  # his PIN: always
+        with mock.patch('django.utils.timezone.now', return_value=self.at(2026, 12, 24, 10)):  # a public holiday
+            self.assertIn('public holiday', self.client.get('/plugins/user-pin/guest/').content.decode())
+        with mock.patch('django.utils.timezone.now', return_value=self.at(2026, 12, 22, 10)):  # a working Tuesday
+            self.assertContains(self.client.get('/tenancy/tenants/'), 'Working time until 16:00')  # always in sight
+            self.assertEqual(self.client.post('/tenancy/tenants/add/', {'name': 'Ok', 'slug': 'ok'}).status_code, 302)
+            self.assertTrue(Tenant.objects.filter(slug='ok').exists())
 
-    def test_the_last_minutes_one_save_then_the_sign_out(self):
+    def test_the_last_minutes_one_save_then_only_reading(self):
         from unittest import mock
         from tenancy.models import Tenant
         with mock.patch('django.utils.timezone.now', return_value=self.at(2026, 12, 22, 10)):
             self.client.post('/pin/', {'pin': 'Secret-pin-1'})
-            self.assertEqual(self.client.get('/tenancy/tenants/').status_code, 200)
         with mock.patch('django.utils.timezone.now', return_value=self.at(2026, 12, 22, 16, 10)):
             page = self.client.get('/tenancy/tenants/')
-            self.assertEqual(page.status_code, 200)  # reading goes on during the last minutes
-            self.assertContains(page, 'Working time over')  # the countdown in the top bar
+            self.assertContains(page, 'one more save')  # the countdown in the top bar
             failed = self.client.post('/tenancy/tenants/add/', {'name': '', 'slug': ''})
             self.assertEqual(failed.status_code, 200)  # a form with errors does not use up the save
             saved = self.client.post('/tenancy/tenants/add/', {'name': 'Late', 'slug': 'late'})
             self.assertEqual(saved.status_code, 302)
-            self.assertTrue(saved.url.endswith('?ended=hours'), saved.url)  # saved - and signed out
-        self.assertTrue(Tenant.objects.filter(slug='late').exists())
-        self.assertNotIn('_auth_user_id', self.client.session)
-        self.assertContains(self.client.get('/pin/?ended=hours'), 'signed out')
-        # after the last minutes nothing goes on: a session that was left open ends
-        with mock.patch('django.utils.timezone.now', return_value=self.at(2026, 12, 22, 10)):
-            self.client.post('/pin/', {'pin': 'Secret-pin-1'})
+            self.assertTrue(Tenant.objects.filter(slug='late').exists())
+            self.assertIn('_auth_user_id', self.client.session)  # still signed in ...
+            again = self.client.post('/tenancy/tenants/add/', {'name': 'Later', 'slug': 'later'})
+            self.assertEqual(again.status_code, 302)
+            self.assertFalse(Tenant.objects.filter(slug='later').exists())  # ... but the save is used up
+            self.assertContains(self.client.get('/tenancy/tenants/'), 'Outside working time: reading only')
         with mock.patch('django.utils.timezone.now', return_value=self.at(2026, 12, 22, 16, 31)):
-            response = self.client.get('/tenancy/tenants/')
-            self.assertEqual(response.status_code, 302)
-            self.assertTrue(response.url.endswith('?ended=hours'), response.url)
+            self.client.post('/tenancy/tenants/add/', {'name': 'After', 'slug': 'after'})
+            self.assertFalse(Tenant.objects.filter(slug='after').exists())
+            self.assertEqual(self.client.get('/tenancy/tenants/').status_code, 200)  # he may still read
 
     def test_without_the_holiday_library_only_days_and_hours_count(self):
         from unittest import mock

@@ -20,7 +20,7 @@ from django.db.models import Q
 from django.http import JsonResponse
 from django.shortcuts import redirect, render
 from django.utils.functional import SimpleLazyObject
-from django.utils import translation
+from django.utils import timezone, translation
 from django.utils.translation import gettext as _
 from django.utils.http import urlencode
 
@@ -295,9 +295,8 @@ class AreaGuardMiddleware:
         response = self.get_response(request)
         if getattr(request, '_userpin_grace_save', False) and (
                 300 <= response.status_code < 400 or (path.startswith('/api/') and response.status_code in (200, 201, 204))):
-            # the working time of a PIN-only person ended: the one save went through, now he is signed out
-            guests.end_session(request)
-            return redirect(guests.login_path() + '?ended=hours')
+            # the working time of a PIN-only person ended: the one save went through, from now on he only reads
+            request.session[guests.GRACE_KEY] = timezone.localdate().isoformat()
         user = getattr(request, 'user', None)
         if (_hides_menu_for(user) and not getattr(response, 'streaming', False)
                 and 'text/html' in response.get('Content-Type', '') and hasattr(response, 'content')):
@@ -603,7 +602,7 @@ def _shape_html(request, text):
     text = text.replace('</head>', '<style>footer.footer{display:none!important}</style></head>', 1)
     guest = guests.guest_of(user)
     if guest is not None:  # a PIN-only person always sees until when the PIN and the account are valid
-        badges = _guest_badges(guest)
+        badges = _guest_badges(guest, request)
         text = text.replace('<div class="navbar-nav flex-row align-items-center order-md-last">',
                             '<div class="navbar-nav flex-row align-items-center order-md-last">' + badges)
         text = text.replace('<div class="navbar-nav flex-row align-items-center d-lg-none">',
@@ -615,7 +614,7 @@ def _shape_html(request, text):
     return text
 
 
-def _guest_badges(guest):
+def _guest_badges(guest, request=None):
     """'PIN: 54 d 14 h' and 'Account until …' for the top bar of a PIN-only person (in the language of the page)."""
     from django.urls import reverse
     from django.utils import timezone
@@ -637,11 +636,19 @@ def _guest_badges(guest):
         when = timezone.localtime(guest.expires).strftime('%d.%m.%Y %H:%M')
         parts.append((color, 'mdi-timer-sand', _('Account until %(time)s') % {'time': when},
                       _('Your account is switched off on %(time)s.') % {'time': when}))
-    if work.state(guest) == 'grace':
+    mode = work.write_state(guest)
+    if mode == 'blocked' or (mode == 'once' and request is not None and
+                             request.session.get(guests.GRACE_KEY) == timezone.localdate().isoformat()):
+        parts.append(('red', 'mdi-eye-outline', _('Outside working time: reading only'), work.read_only_text(guest)))
+    elif mode == 'once':
         minutes = max(1, work.seconds_until_cut(guest) // 60)
-        parts.append(('red', 'mdi-clock-alert-outline', _('Working time over: signed out in %(m)d min') % {'m': minutes},
-                      _('The working time is over. You have one more save; after it, or after %(m)d minutes, you are '
-                        'signed out.') % {'m': minutes}))
+        parts.append(('orange', 'mdi-clock-alert-outline', _('Working time over: one more save (%(m)d min)') % {'m': minutes},
+                      _('The working time is over. You may save once more within %(m)d minutes; then you only read.') % {
+                          'm': minutes}))
+    rules = work.rules_of(guest)
+    if rules is not None and mode == 'free':  # inside the working time: when it ends, always in sight
+        parts.append(('secondary', 'mdi-briefcase-clock-outline',
+                      _('Working time until %(end)s') % {'end': rules.end.strftime('%H:%M')}, work.describe(rules)))
     link = reverse('plugins:netbox_user_pin:guest_home')
     return ''.join(f'<a href="{link}" class="badge text-bg-{c} me-2 text-decoration-none" title="{escape(t)}">'
                    f'<i class="mdi {i}"></i> {escape(label)}</a>' for c, i, label, t in parts)

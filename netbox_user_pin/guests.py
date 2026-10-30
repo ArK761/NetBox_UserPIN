@@ -6,6 +6,7 @@ exactly as for any user). What is different: no 2FA, no password, no API, never 
 PIN that is chosen by the person alone, waits after wrong PINs (on the personal link a block after the last step), and a short session.
 """
 import hashlib
+import re
 import ipaddress
 import logging
 import secrets
@@ -794,8 +795,6 @@ def check_pin(guest, pin, request=None):
         except crypto.DecryptionError:
             return 'blocked'
         if service._check_hash(user_pin, stored, pin):
-            if work.state(guest) != 'ok':
-                return 'offhours'  # the right PIN, but outside the working time
             guest = PinGuest.objects.select_for_update().get(pk=guest.pk)
             guest.failed, guest.retry_after = 0, None
             if guest.pin_index:
@@ -939,8 +938,6 @@ def session_problem(request, guest):
         return 'idle'
     if now - data.get('start', 0) > guest.max_hours * 3600:
         return 'max'
-    if work.state(guest) in ('before', 'after', 'off'):
-        return 'hours'  # the working time (and the minutes after it) is over
     if not request.path_info.startswith(('/htmx/', '/static/', '/api/')) and request.headers.get('HX-Request') != 'true':
         data['last'] = now
         request.session[SESSION_KEY] = data
@@ -974,6 +971,43 @@ def _drop_down_request(request):
                                                                    '/api/authentication-check'))
 
 
+GRACE_KEY = 'userpin_grace_used'
+_EDIT_PAGE = re.compile(r'/(add|edit|delete|import|bulk-edit|bulk-delete|bulk-rename|bulk-import)/?$')
+_FREE_PATHS = ('/plugins/user-pin/', '/api/users/config', '/static/', '/media/', '/htmx/', '/logout/')
+
+
+def _working_time_gate(request, guest):
+    """
+    Outside the working time the person only reads: no save, no add / edit / delete page. The last minutes after the end
+    allow one save (``request._userpin_grace_save``; the middleware notes it when it went through).
+    """
+    path = request.path_info
+    if path.startswith(_FREE_PATHS):
+        return None
+    writes = request.method not in work.SAFE_METHODS
+    if not (writes or _EDIT_PAGE.search(path)):
+        return None
+    mode = work.write_state(guest)
+    if mode == 'free':
+        return None
+    today = timezone.localdate().isoformat()
+    if mode == 'once' and request.session.get(GRACE_KEY) != today:
+        if writes:
+            request._userpin_grace_save = True  # the one save of the last minutes
+        return None
+    from django.contrib import messages
+    from django.http import HttpResponse, JsonResponse
+    from django.shortcuts import redirect
+    text = work.read_only_text(guest)
+    if path.startswith('/api/') or 'application/json' in request.headers.get('Accept', ''):
+        return JsonResponse({'detail': text}, status=403)
+    if request.headers.get('HX-Request') == 'true':
+        return HttpResponse(text, status=403)
+    messages.error(request, text)
+    parent = _EDIT_PAGE.sub('/', path)
+    return redirect(parent if parent != path and parent else (request.META.get('HTTP_REFERER') or '/'))
+
+
 def guard(request, guest):
     """Called for every request of a PIN-only account: ends the session or refuses what is closed. None = go on."""
     from django.shortcuts import redirect
@@ -984,10 +1018,9 @@ def guard(request, guest):
         if request.headers.get('HX-Request') == 'true' or path.startswith('/api/'):
             from django.http import HttpResponse
             return HttpResponse(status=401)
-        return redirect(return_url(guest, link) + ('?ended=hours' if problem == 'hours' else ''))
-    if work.state(guest) == 'grace' and request.method not in ('GET', 'HEAD', 'OPTIONS') and not path.startswith(
-            ('/plugins/user-pin/', '/api/users/config', '/static/', '/htmx/')):
-        request._userpin_grace_save = True  # the one save of the last minutes: the sign-out follows it
+        return redirect(return_url(guest, link))
+    if (response := _working_time_gate(request, guest)) is not None:
+        return response
     if must_change(guest) and not path.startswith(('/plugins/user-pin/guest/change/', '/plugins/user-pin/guest/logout/',
                                                    '/static/', '/media/')):
         return redirect('plugins:netbox_user_pin:guest_change')  # like 'must change password at next logon'
@@ -1054,8 +1087,6 @@ def pin_only_login(request, pin):
             return 'locked', None
         if pause_seconds(guest):
             return 'pause', None
-        if work.state(guest) != 'ok':
-            return 'offhours', guest  # the right PIN, but outside the working time: tell the hours
         cache.delete(_ip_key(address))
         _refresh_pin_index(guest, pin)
         guest.failed, guest.retry_after, guest.last_login, guest.last_ip = 0, None, timezone.now(), str(address)
