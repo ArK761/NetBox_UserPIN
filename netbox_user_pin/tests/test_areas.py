@@ -56,7 +56,7 @@ class AreaTestCase(PinTestCase):
                                  max_hours)
         if owners:
             areas.add_owner(area, self.owner1, kept[0] if kept else self.master)
-            areas.add_owner(area, self.owner2, self.owner1)
+            areas.add_owner(area, self.owner2, kept[0] if kept else self.master)
         return area
 
     def profile(self, area, name='Read'):
@@ -219,8 +219,13 @@ class WholeAppAndUsersTest(AreaTestCase):
 
 
 class OwnerRulesTest(AreaTestCase):
-    def test_master_cannot_change_owners_once_they_exist(self):
+    def test_the_master_stands_in_only_until_a_keeper_exists(self):
         area = self.make_area()
+        keeper = User.objects.create_superuser('keepx', 'kx@example.com', 'x')
+        service.set_pin(keeper, GOOD_PIN)
+        enable_2fa(keeper)
+        areas.add_keeper(keeper, self.master)
+        areas.clear_cache()
         with self.assertRaises(PermissionDenied):
             areas.add_owner(area, self.appadmin, self.master)
         with self.assertRaises(PermissionDenied):
@@ -231,12 +236,17 @@ class OwnerRulesTest(AreaTestCase):
             areas.update_area(area, self.master, name='Mine now')
         with self.assertRaises(PermissionDenied):
             areas.delete_area(area, self.master)
+        areas.update_area(area, keeper, name='The keeper may')
 
-    def test_owners_manage_owners_but_not_down_to_zero(self):
+    def test_only_the_keepers_appoint_and_remove_managers(self):
         area = self.make_area()
-        areas.remove_owner(area, self.owner2, self.owner1)
+        with self.assertRaises(PermissionDenied):
+            areas.remove_owner(area, self.owner2, self.owner1)  # a manager does not remove managers
+        with self.assertRaises(PermissionDenied):
+            areas.add_owner(area, self.owner2, self.owner1)
+        areas.remove_owner(area, self.owner2, self.master)  # the master stands in while there is no keeper
         with self.assertRaises(ValidationError):
-            areas.remove_owner(area, self.owner1, self.owner1)
+            areas.remove_owner(area, self.owner1, self.master)  # not down to zero, but by a keeper
 
     def test_nobody_grants_themselves_or_decides_on_their_own_request(self):
         area = self.make_area()
@@ -993,7 +1003,7 @@ class RequestFromDeniedPageTest(AreaTestCase):
         req = AreaRequest.objects.get(user=self.plain)
         self.assertEqual(req.area, area)
         self.assertEqual(areas.pending_requests_for(self.owner1).count(), 1)
-        self.assertEqual(areas.pending_requests_for(self.keeper).count(), 0)
+        self.assertEqual(areas.pending_requests_for(self.keeper).count(), 1)  # the keepers see every request
         grant = areas.decide_request(req, self.owner1, True, hours=None)
         self.assertEqual((grant.area, grant.target), (area, 'dcim.site'))
 
@@ -1139,14 +1149,12 @@ class OwnerRoleTest(AreaTestCase):
         plain = User.objects.create_user('plain', 'p@example.com')
         with self.assertRaises(ValidationError):
             areas.add_owner(area, plain, self.master)
-        areas.add_owner(area, self.owner1, self.master)  # a department head
+        service.set_pin(plain, GOOD_PIN)
+        enable_2fa(plain)
+        areas.add_owner(area, plain, self.master)  # since 2.2.0 no department role is needed
+        areas.add_owner(area, self.owner1, self.master)
         with self.assertRaises(ValidationError):
-            areas.add_owner(area, self.master, self.owner1)  # a superuser decides nothing about himself
-        from netbox_user_pin import roles
-        names = set(roles.manager_users().values_list('username', flat=True))
-        self.assertIn('owner1', names)
-        self.assertIn('owner2', names)
-        self.assertNotIn('plain', names)
+            areas.add_owner(area, self.master, self.master)  # a superuser manages nothing
 
 
 class TreeTest(AreaTestCase):
@@ -1300,8 +1308,7 @@ class SeveralOwnersTest(AreaTestCase):
         response = self.client.post(url, {'action': 'owner-add', 'users': [self.owner1.pk, self.owner2.pk, plain.pk]})
         self.assertEqual(response.status_code, 302)
         self.assertEqual({o.username for o in areas.owners(area)}, {'owner1', 'owner2'})  # the plain user was refused
-        admin_login(self.client, self.owner1)  # an owner sees the owners' form with the list of everybody
-        html = self.client.get(url).content.decode()
+        html = self.client.get(url).content.decode()  # the master (no keeper yet) sees the form with everybody
         self.assertIn('name="users"', html)
         self.assertIn('Has no PIN yet', html)  # the red ones show what blocks them
         self.assertIn('Has 2FA', html)
@@ -1316,8 +1323,8 @@ class KeeperRemovesOwnersTest(AreaTestCase):
         areas.add_keeper(keeper, self.master)
         area = self.make_area(owners=False)
         areas.add_owner(area, self.owner1, keeper)
-        with self.assertRaises(ValidationError):
-            areas.remove_owner(area, self.owner1, self.owner1)  # an owner never removes the last one
+        with self.assertRaises(PermissionDenied):
+            areas.remove_owner(area, self.owner1, self.owner1)  # a manager never removes a manager
         admin_login(self.client, keeper)
         response = self.client.post(reverse('plugins:netbox_user_pin:area', kwargs={'pk': area.pk}),
                                     {'action': 'owner-remove', 'pk': self.owner1.pk})
@@ -1333,7 +1340,7 @@ class OwnerRequirementsTest(AreaTestCase):
         PinDelegate.objects.create(user=head, role=RoleKind.HEAD, department=Department.objects.first(),
                                    status=RoleStatus.ACTIVE)
         checks = dict((str(text), ok) for text, ok in areas.owner_requirements(head))
-        self.assertEqual(checks['Is a department head, a delegate or a CORE deputy'], True)
+        self.assertEqual(checks['Is a NetBox account'], True)
         self.assertEqual(checks['Has no PIN yet'], False)
         self.assertEqual(checks['Has no 2FA yet'], False)
         with self.assertRaises(ValidationError):
@@ -2893,3 +2900,259 @@ class GuestAccessTest(AreaTestCase):
         self.sign_in()
         self.assertRedirects(self.client.get('/plugins/user-pin/guest/logout/'), '/tenanti/',
                              fetch_redirect_response=False)
+
+
+class SectionManagerTest(AreaTestCase):
+    """A keeper rules everything; a section manager only his section; the rest of the agreement of 2.2.0."""
+
+    def setUp(self):
+        super().setUp()
+        from netbox_user_pin.models import AllowedDomain
+        AllowedDomain.objects.create(domain='example.com', verified=timezone.now())
+        self.keeper = User.objects.create_superuser('keepsec', 'ks@example.com', 'x')
+        service.set_pin(self.keeper, GOOD_PIN)
+        enable_2fa(self.keeper)
+        areas.add_keeper(self.keeper, self.master)
+        self.area = self.make_area(targets=('dcim.device', 'tenancy.tenant'), owners=False)
+        # a plain account (no department role at all) with a PIN and 2FA
+        self.mgr = User.objects.create_user('mgr', 'mgr@example.com')
+        service.set_pin(self.mgr, GOOD_PIN)
+        enable_2fa(self.mgr)
+        areas.add_owner(self.area, self.mgr, self.keeper, targets=['tenancy.tenant'])
+        areas.clear_cache()
+
+    def test_a_manager_needs_no_department_role_but_a_pin_2fa_and_no_special_duty(self):
+        plain = User.objects.create_user('nopin', 'np@example.com')
+        with self.assertRaises(ValidationError):
+            areas.add_owner(self.area, plain, self.keeper)  # no PIN, no 2FA
+        with self.assertRaises(ValidationError):
+            areas.add_owner(self.area, self.master, self.keeper)  # a superuser
+        with self.assertRaises(ValidationError):
+            areas.add_owner(self.area, self.keeper, self.keeper)  # a keeper
+        with self.assertRaises(ValidationError):
+            areas.add_owner(self.area, self.mgr, self.keeper, targets=['ipam.vlan'])  # not in the area
+
+    def test_the_manager_rules_only_his_section(self):
+        tenant = 'tenancy.tenant'
+        group = areas.create_group(self.area, tenant, 'Techs', ['view', 'change'], self.mgr, records='all')
+        areas.save_field_rules(self.area, group, tenant, {'description': ('read', '')}, self.mgr)
+        areas.add_member(group, self.owner2, None, self.mgr)
+        with self.assertRaises(PermissionDenied):
+            areas.create_group(self.area, 'dcim.device', 'Other', ['view'], self.mgr)
+        device_group = areas.create_group(self.area, 'dcim.device', 'Devs', ['view'], self.keeper, records='all')
+        with self.assertRaises(PermissionDenied):
+            areas.save_field_rules(self.area, device_group, 'dcim.device', {'name': ('read', '')}, self.mgr)
+        with self.assertRaises(PermissionDenied):
+            areas.add_member(device_group, self.owner2, None, self.mgr)
+        # the area itself, its object types and its managers: the keepers only
+        with self.assertRaises(PermissionDenied):
+            areas.update_area(self.area, self.mgr, name='Mine')
+        with self.assertRaises(PermissionDenied):
+            areas.add_target(self.area, 'ipam.vlan', self.mgr)
+        with self.assertRaises(PermissionDenied):
+            areas.add_owner(self.area, self.owner1, self.mgr)
+        with self.assertRaises(PermissionDenied):
+            areas.remove_owner(self.area, self.mgr, self.mgr)
+        areas.update_area(self.area, self.keeper, name='Network 2')  # the keeper may
+        areas.save_field_rules(self.area, device_group, 'dcim.device', {'name': ('read', '')}, self.keeper)
+        self.assertEqual(areas.rights_of(self.mgr, self.area, tenant), set(areas.rights_available(self.area)))
+        self.assertEqual(areas.rights_of(self.mgr, self.area, 'dcim.device'), set())
+
+    def test_requests_go_to_the_manager_of_the_section_and_the_keepers_and_decisions_to_everybody(self):
+        from django.core import mail
+        asker = User.objects.create_user('asker', 'asker@example.com')
+        with override_settings(EMAIL={'SERVER': 'localhost', 'FROM_EMAIL': 'netbox@example.com'}):
+            mail.outbox.clear()
+            req = areas.request_target_access(asker, 'tenancy.tenant', ['view'], 'I need the tenants')
+            told = {a for m in mail.outbox for a in m.to}
+            self.assertEqual(told, {'mgr@example.com', 'ks@example.com'})  # the section manager and the keeper
+            mail.outbox.clear()
+            req2 = areas.request_target_access(asker, 'dcim.device', ['view'], 'I need the devices')
+            self.assertEqual({a for m in mail.outbox for a in m.to}, {'ks@example.com'})  # no manager: keepers
+            self.assertIn(req, areas.pending_requests_for(self.mgr))
+            self.assertNotIn(req2, areas.pending_requests_for(self.mgr))
+            self.assertIn(req2, areas.pending_requests_for(self.keeper))
+            with self.assertRaises(PermissionDenied):
+                areas.decide_request(req2, self.mgr, True, group_name='Reading')  # not his section
+            mail.outbox.clear()
+            areas.decide_request(req, self.mgr, True, group_name='Reading', group_rights=['view'])
+            told = {a for m in mail.outbox for a in m.to}
+            self.assertEqual(told, {'asker@example.com', 'ks@example.com'})  # the asker and the keeper (not the decider)
+            mail.outbox.clear()
+            areas.decide_request(req2, self.keeper, False)
+            told = {a for m in mail.outbox for a in m.to}
+            self.assertEqual(told, {'asker@example.com'})  # no manager for devices, the decider is the keeper
+
+    def test_pin_only_accesses_cannot_ask_for_access(self):
+        from netbox_user_pin import guests
+        guest, _token = guests.create('Jan', 'jan2@example.com', None, self.keeper)
+        with self.assertRaises(PermissionDenied):
+            areas.request_target_access(guest.user, 'tenancy.tenant', ['view'], 'please let me in')
+
+    def test_a_pin_only_access_belongs_to_whoever_made_it_and_a_keeper_moves_it(self):
+        from django.core import mail
+        from netbox_user_pin import guests
+        group = areas.create_group(self.area, 'tenancy.tenant', 'Techs', ['view'], self.mgr, records='all')
+        other = areas.create_group(self.area, 'dcim.device', 'Devs', ['view'], self.keeper, records='all')
+        # made by a keeper without a group: nobody else manages it
+        by_keeper, _t = guests.create('Keeper made', 'km@example.com', None, self.keeper)
+        self.assertIsNone(by_keeper.manager)
+        with self.assertRaises(PermissionDenied):
+            guests.set_expiry(by_keeper, self.mgr, timezone.now() + timedelta(days=3))
+        # a manager makes one only into a group of his section, and it belongs to him
+        with self.assertRaises(PermissionDenied):
+            guests.create('Wrong', 'wr@example.com', other, self.mgr)
+        with self.assertRaises(ValidationError):
+            guests.create('Nogroup', 'ng@example.com', None, self.mgr)
+        with override_settings(EMAIL={'SERVER': 'localhost', 'FROM_EMAIL': 'netbox@example.com'}):
+            mail.outbox.clear()
+            mine, _t = guests.create('Mine', 'mine@example.com', group, self.mgr)
+            self.assertEqual(mine.manager_id, self.mgr.pk)
+            self.assertIn('ks@example.com', {a for m in mail.outbox for a in m.to})  # the keepers are told
+            mail.outbox.clear()
+            guests.set_expiry(mine, self.mgr, timezone.now() + timedelta(days=3))
+            self.assertIn('ks@example.com', {a for m in mail.outbox for a in m.to})
+        # the keeper moves the first one under the manager - and back
+        guests.set_manager(by_keeper, self.keeper, self.mgr)
+        guests.set_expiry(by_keeper, self.mgr, timezone.now() + timedelta(days=3))
+        with self.assertRaises(PermissionDenied):
+            guests.set_manager(by_keeper, self.mgr, None)  # only the keepers move
+        with self.assertRaises(ValidationError):
+            guests.set_manager(by_keeper, self.keeper, self.master)  # manages no section
+        guests.set_manager(by_keeper, self.keeper, None)
+        with self.assertRaises(PermissionDenied):
+            guests.set_expiry(by_keeper, self.mgr, timezone.now() + timedelta(days=4))
+        # the list of the manager shows only his accesses
+        self.client.force_login(self.mgr)
+        admin_login(self.client, self.mgr)
+        page = self.client.get(reverse('plugins:netbox_user_pin:guests'))
+        self.assertContains(page, mine.user.username)
+        self.assertContains(page, f'<code>{mine.user.username}</code>')  # in his list (the id of every row)
+        self.assertNotContains(page, f'<code>{by_keeper.user.username}</code>')
+
+
+class WorkTimeTest(AreaTestCase):
+    """Working days, hours and public holidays of the PIN-only accesses; the last minutes and the one save."""
+
+    def setUp(self):
+        super().setUp()
+        from datetime import datetime as dt
+        from netbox_user_pin import guests, work
+        from tenancy.models import Tenant
+        self.guests, self.work, self.dt = guests, work, dt
+        Tenant.objects.create(name='T1', slug='t1')
+        self.keeper = User.objects.create_superuser('keepwt', 'kw@example.com', 'x')
+        service.set_pin(self.keeper, GOOD_PIN)
+        enable_2fa(self.keeper)
+        areas.add_keeper(self.keeper, self.master)
+        self.area = self.make_area(targets=('tenancy.tenant',))
+        self.group = areas.create_group(self.area, 'tenancy.tenant', 'Editors', ['view', 'add', 'change'],
+                                        self.owner1, records='all')
+        areas.set_visibility(self.keeper, 'hidden', False, False)
+        self.guest, self.token = guests.create('Jan Novak', 'jan@example.com', self.group, self.keeper)
+        self.url = guests.link_path(self.token)
+        self.client.post(self.url, {'pin': 'Secret-pin-1', 'pin2': 'Secret-pin-1'})  # the PIN is chosen
+        self.client.logout()
+        guests.set_work_general(self.keeper, True, 'SK', '01234', '06:00', '16:00')
+
+    def at(self, year, month, day, hour, minute=0):
+        return timezone.make_aware(self.dt(year, month, day, hour, minute))
+
+    def get(self):
+        return PinGuest_get(self.guest)
+
+    def test_the_state_follows_days_hours_and_public_holidays(self):
+        work, guest = self.work, self.get()
+        state = lambda *when: work.state(guest, self.at(*when))  # noqa: E731
+        self.assertEqual(state(2026, 12, 22, 10), 'ok')  # Tuesday
+        self.assertEqual(state(2026, 12, 22, 5, 59), 'before')
+        self.assertEqual(state(2026, 12, 22, 15, 59), 'ok')
+        self.assertEqual(state(2026, 12, 22, 16, 0), 'grace')  # the time just ended: the last minutes
+        self.assertEqual(state(2026, 12, 22, 16, 29), 'grace')
+        self.assertEqual(state(2026, 12, 22, 16, 30), 'after')
+        self.assertEqual(state(2026, 12, 26, 10), 'off')  # Saturday
+        self.assertEqual(state(2026, 12, 24, 10), 'off')  # a Slovak public holiday on a Thursday
+        self.assertEqual(state(2026, 12, 28, 10), 'ok')  # Monday
+        # an own rule of a Hungarian technician: the Hungarian holidays, whatever the language of the page is
+        self.assertEqual(state(2026, 8, 20, 10), 'ok')  # 20 August is no Slovak holiday
+        self.guests.set_work(guest, self.keeper, 'own', 'HU', ['0', '1', '2', '3', '4'], '07:00', '15:00')
+        guest = self.get()
+        self.assertEqual(work.state(guest, self.at(2026, 8, 20, 10)), 'off')  # St Stephen's Day
+        self.assertEqual(work.state(guest, self.at(2026, 8, 19, 6, 59)), 'before')
+        self.assertEqual(work.state(guest, self.at(2026, 8, 19, 7, 0)), 'ok')
+        self.assertIn('07:00', work.describe(work.rules_of(guest)))
+        self.guests.set_work(guest, self.keeper, 'none')
+        self.assertEqual(work.state(self.get(), self.at(2026, 12, 26, 3)), 'ok')  # no limit at all
+        self.guests.set_work(self.get(), self.keeper, 'general')
+        self.guests.set_work_general(self.keeper, False, 'SK', '01234', '06:00', '16:00')
+        self.assertEqual(work.state(self.get(), self.at(2026, 12, 26, 3)), 'ok')  # the general rules are off
+
+    def test_the_rules_are_checked_and_not_everybody_may_set_them(self):
+        guest = self.get()
+        with self.assertRaises(ValidationError):
+            self.guests.set_work_general(self.keeper, True, 'SK', '', '06:00', '16:00')  # no day
+        with self.assertRaises(ValidationError):
+            self.guests.set_work_general(self.keeper, True, 'SK', '01234', '16:00', '06:00')  # ends before it starts
+        with self.assertRaises(ValidationError):
+            self.guests.set_work_general(self.keeper, True, 'XX', '01234', '06:00', '16:00')  # no such country
+        with self.assertRaises(PermissionDenied):
+            self.guests.set_work_general(self.owner1, True, 'SK', '01234', '06:00', '16:00')  # a manager: not general
+        with self.assertRaises(PermissionDenied):
+            self.guests.set_work(guest, self.owner1, 'none')  # not under him
+        areas.add_owner(self.area, self.owner1, self.keeper) if not areas.is_owner(self.owner1, self.area) else None
+        self.guests.set_manager(guest, self.keeper, self.owner1)
+        self.guests.set_work(self.get(), self.owner1, 'own', 'CZ', '01234', '08:00', '17:00')  # now under him
+        self.assertEqual(self.work.rules_of(self.get()).country, 'CZ')
+
+    def test_signing_in_outside_the_working_time_tells_the_hours(self):
+        from unittest import mock
+        with mock.patch('django.utils.timezone.now', return_value=self.at(2026, 12, 22, 5)):
+            page = self.client.post('/pin/', {'pin': 'Secret-pin-1'})
+        self.assertEqual(page.status_code, 200)
+        self.assertContains(page, '06:00–16:00')  # the working time is told
+        self.assertNotIn('_auth_user_id', self.client.session)
+        with mock.patch('django.utils.timezone.now', return_value=self.at(2026, 12, 24, 10)):
+            page = self.client.post('/pin/', {'pin': 'Secret-pin-1'})
+        self.assertContains(page, 'public holiday')
+        with mock.patch('django.utils.timezone.now', return_value=self.at(2026, 12, 22, 10)):
+            response = self.client.post('/pin/', {'pin': 'Secret-pin-1'})
+        self.assertEqual(response.status_code, 302)  # inside the working time he is in
+        self.assertIn('_auth_user_id', self.client.session)
+
+    def test_the_last_minutes_one_save_then_the_sign_out(self):
+        from unittest import mock
+        from tenancy.models import Tenant
+        with mock.patch('django.utils.timezone.now', return_value=self.at(2026, 12, 22, 10)):
+            self.client.post('/pin/', {'pin': 'Secret-pin-1'})
+            self.assertEqual(self.client.get('/tenancy/tenants/').status_code, 200)
+        with mock.patch('django.utils.timezone.now', return_value=self.at(2026, 12, 22, 16, 10)):
+            page = self.client.get('/tenancy/tenants/')
+            self.assertEqual(page.status_code, 200)  # reading goes on during the last minutes
+            self.assertContains(page, 'Working time over')  # the countdown in the top bar
+            failed = self.client.post('/tenancy/tenants/add/', {'name': '', 'slug': ''})
+            self.assertEqual(failed.status_code, 200)  # a form with errors does not use up the save
+            saved = self.client.post('/tenancy/tenants/add/', {'name': 'Late', 'slug': 'late'})
+            self.assertEqual(saved.status_code, 302)
+            self.assertTrue(saved.url.endswith('?ended=hours'), saved.url)  # saved - and signed out
+        self.assertTrue(Tenant.objects.filter(slug='late').exists())
+        self.assertNotIn('_auth_user_id', self.client.session)
+        self.assertContains(self.client.get('/pin/?ended=hours'), 'signed out')
+        # after the last minutes nothing goes on: a session that was left open ends
+        with mock.patch('django.utils.timezone.now', return_value=self.at(2026, 12, 22, 10)):
+            self.client.post('/pin/', {'pin': 'Secret-pin-1'})
+        with mock.patch('django.utils.timezone.now', return_value=self.at(2026, 12, 22, 16, 31)):
+            response = self.client.get('/tenancy/tenants/')
+            self.assertEqual(response.status_code, 302)
+            self.assertTrue(response.url.endswith('?ended=hours'), response.url)
+
+    def test_without_the_holiday_library_only_days_and_hours_count(self):
+        from unittest import mock
+        with mock.patch.object(self.work, 'holidays', None):
+            self.assertEqual(self.work.holiday_name('SK', self.dt(2026, 12, 24).date()), '')
+            self.assertEqual(self.work.state(self.get(), self.at(2026, 12, 24, 10)), 'ok')  # no holiday known
+            self.assertEqual(self.work.state(self.get(), self.at(2026, 12, 26, 10)), 'off')  # Saturday still is
+
+
+def PinGuest_get(guest):  # noqa: N802 - a fresh copy of the access
+    from netbox_user_pin.models import PinGuest
+    return PinGuest.objects.get(pk=guest.pk)

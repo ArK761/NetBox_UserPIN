@@ -22,8 +22,8 @@ from django.utils import timezone
 from django.utils import translation
 from django.utils.translation import gettext as _
 
-from . import areas, crypto, service
-from .models import AreaGrant, PinAccess, PinEventAction, PinGuest, UserPin
+from . import areas, crypto, service, work
+from .models import AreaGrant, AreaOwner, PinAccess, PinEventAction, PinGuest, UserPin
 
 logger = logging.getLogger('netbox_user_pin.guests')
 
@@ -129,7 +129,7 @@ def request_unblock(guest, request=None):
 
 def set_expiry(guest, actor, expires, request=None):
     """The end of the whole access (None = unlimited); a later end re-arms the e-mails before it."""
-    if not _may_manage(actor):
+    if not _may_manage(actor, guest):
         raise PermissionDenied
     if expires is not None and expires <= timezone.now():
         raise ValidationError(_('The end of the access must be in the future.'))
@@ -250,13 +250,46 @@ def ip_allowed(guest, request):
     return any(address in ipaddress.ip_network(part.strip(), strict=False) for part in guest.allowed_ips.split(','))
 
 
-def _may_manage(actor):
-    return areas.is_keeper(actor) or areas.administers_any(actor)
+def _keeper_level(actor):
+    """The protection keepers (CORE / the master while there is none): what concerns all the PIN-only accesses."""
+    return areas.is_keeper(actor) or areas._stand_in(actor)
+
+
+def _may_manage(actor, guest=None):
+    """
+    The keepers manage every PIN-only access. A section manager only those put under him (``guest.manager``); an
+    access made by a keeper belongs to the keepers until one of them moves it under a manager.
+    """
+    if _keeper_level(actor):
+        return True
+    if not areas.administers_any(actor):
+        return False
+    return guest is not None and guest.manager_id == actor.pk
 
 
 def _log(action, guest, actor=None, request=None, detail=''):
     service.log_event(action, user=guest.user, actor=actor, request=request, scope='guest',
                       detail=f'{guest.email}{" - " + detail if detail else ""}')
+    if actor is not None and actor.pk != guest.user_id and not _keeper_level(actor) and action in _WATCHED:
+        _tell_keepers(guest, actor, action, detail)
+
+
+_WATCHED = {PinEventAction.GUEST_CREATED, PinEventAction.GUEST_DELETED, PinEventAction.GUEST_REVOKED,
+            PinEventAction.GUEST_INVITED, PinEventAction.GUEST_RULES, PinEventAction.GUEST_EXPIRES,
+            PinEventAction.GUEST_UNBLOCKED, PinEventAction.GUEST_WORK, PinEventAction.FORCE_CHANGE}
+
+
+def _tell_keepers(guest, actor, action, detail):
+    """A section manager did something with a PIN-only access: every keeper is told (nothing happens quietly)."""
+    settings = service.get_settings()
+    with translation.override(settings.language or 'en'):
+        label = str(PinEventAction(action).label)
+        subject = _('PIN-only access %(id)s: %(what)s') % {'id': guest.user.username, 'what': label}
+        body = _('%(actor)s did this with the PIN-only access %(id)s (%(name)s, %(email)s):\n\n%(what)s%(detail)s') % {
+            'actor': actor.username, 'id': guest.user.username, 'name': guest.name, 'email': guest.email,
+            'what': label, 'detail': f'\n{detail}' if detail else ''}
+    for keeper in areas.keepers():
+        service.send_user_mail(keeper, subject, body)
 
 
 def _mail(guest, subject, body):
@@ -305,13 +338,13 @@ def _absolute(request, path):
     return request.build_absolute_uri(path) if request is not None else path
 
 
-def _may_put_in(actor, area):
-    """Owners of the area, and the protection keepers (the authority above the owners)."""
-    return areas._may_grant(actor, area) or areas.is_keeper(actor)
+def _may_put_in(actor, group):
+    """The keepers (anywhere) and the manager of the section that holds the group."""
+    return areas.is_keeper(actor) or areas.owns(actor, group.area, group.target)
 
 
 def _join(group, user, actor, request):
-    if areas._may_grant(actor, group.area):
+    if areas._may_grant(actor, group.area, group.target):
         return areas.add_member(group, user, None, actor, request=request, notify=False)
     grant = AreaGrant.objects.create(area=group.area, user=user, profile=group, expires=None, granted_by=actor,
                                      granted_by_name=actor.username, target=group.target)
@@ -353,7 +386,7 @@ def _set_ui_language(guest):
 
 def set_languages(guest, actor, pin_language=None, ui_language=None, request=None):
     """Languages of one person: PIN pages / e-mails, and the NetBox interface. ``actor=None`` = the person."""
-    if actor is not None and not _may_manage(actor):
+    if actor is not None and not _may_manage(actor, guest):
         raise PermissionDenied
     valid = {code for code, _label in LANGUAGES}
     fields = []
@@ -377,7 +410,7 @@ def set_languages(guest, actor, pin_language=None, ui_language=None, request=Non
 
 def set_alias(guest, actor, alias, description='', request=None):
     """Alias and description are texts only: the account keeps its ID (username), nothing in NetBox is renamed."""
-    if not _may_manage(actor):
+    if not _may_manage(actor, guest):
         raise PermissionDenied
     alias, description = (alias or '').strip()[:100], (description or '').strip()[:150]
     if (alias, description) == (guest.alias, guest.description):
@@ -395,7 +428,7 @@ MAIL_EVERY = (5, 15, 30, 60, 120, 240, 1440)
 
 def set_mail_mode(actor, mode, every, request=None):
     """How the administrators get the changes: a summary every ``every`` minutes, or at every change (never both)."""
-    if not _may_manage(actor):
+    if not _keeper_level(actor):
         raise PermissionDenied
     mode = 'each' if mode == 'each' else 'summary'
     try:
@@ -413,7 +446,7 @@ def set_mail_mode(actor, mode, every, request=None):
 
 def set_mails(guest, actor, person, changes, request=None):
     """E-mails of one access (``guest``) or on the PIN-only page (``guest=None``): to the person / to the administrators."""
-    if not _may_manage(actor):
+    if not (_may_manage(actor, guest) if guest is not None else _keeper_level(actor)):
         raise PermissionDenied
     person, changes = bool(person), bool(changes)
     if guest is None:
@@ -427,6 +460,66 @@ def set_mails(guest, actor, person, changes, request=None):
     guest.save(update_fields=['mail_person', 'mail_changes'])
     _log(PinEventAction.GUEST_RULES, guest, actor, request,
          f'e-mails: to the person {person}, to the administrators {changes}')
+
+
+def _clean_work(country, days, start, end):
+    """Validate a set of working-time rules; returns (country, days, start, end)."""
+    country = (country or '').strip().upper()
+    if country and country not in dict(work.country_choices()):
+        raise ValidationError(_('Choose a country from the list.'))
+    days = work.clean_days(days or '')
+    if not days:
+        raise ValidationError(_('Choose at least one working day.'))
+    start, end = work.parse_time(start), work.parse_time(end)
+    if start is None or end is None or start >= end:
+        raise ValidationError(_('The working time must end after it starts (e.g. 06:00 to 16:00).'))
+    return country, days, start, end
+
+
+def set_work_general(actor, on, country, days, start, end, request=None):
+    """The general working time of the PIN-only accesses (keepers): the country of the holidays, the days, the hours."""
+    if not _keeper_level(actor):
+        raise PermissionDenied
+    country, days, start, end = _clean_work(country or 'SK', days, start, end)
+    settings = service.get_settings()
+    settings.guest_work_on, settings.guest_work_country, settings.guest_work_days = bool(on), country, days
+    settings.guest_work_from, settings.guest_work_to = start, end
+    settings.save()
+    service.log_event(PinEventAction.GUEST_WORK, actor=actor, request=request, scope='guest',
+                      detail=f'general: {"on" if on else "off"}, {country}, days {days}, {start:%H:%M}-{end:%H:%M}')
+
+
+def set_work(guest, actor, mode, country='', days='', start=None, end=None, request=None):
+    """The working time of one access: 'general' (the rules of the page), 'own' (given here) or 'none' (no limit)."""
+    if not _may_manage(actor, guest):
+        raise PermissionDenied
+    mode = mode if mode in ('general', 'own', 'none') else 'general'
+    if mode == 'own':
+        country, days, start, end = _clean_work(country, days, start, end)
+        guest.work_country, guest.work_days, guest.work_from, guest.work_to = country, days, start, end
+    guest.work_mode = mode
+    guest.save(update_fields=['work_mode', 'work_country', 'work_days', 'work_from', 'work_to'])
+    _log(PinEventAction.GUEST_WORK, guest, actor, None, f'{mode}' + (
+        f': {country}, days {days}, {start:%H:%M}-{end:%H:%M}' if mode == 'own' else ''))
+    _tell(guest, actor, lambda: (_('Your working time: %(rules)s.') % {'rules': work.describe(rules)})
+          if (rules := work.rules_of(guest)) else _('Your access has no working-time limit.'))
+
+
+def set_manager(guest, actor, manager):
+    """A keeper moves the access under a section manager (or back to the keepers: ``manager`` None)."""
+    if not _keeper_level(actor):
+        raise PermissionDenied
+    if manager is not None and not AreaOwner.objects.filter(user=manager).exists():
+        raise ValidationError(_('%(user)s manages no section.') % {'user': manager.username})
+    before = guest.manager
+    guest.manager = manager
+    guest.save(update_fields=['manager'])
+    _log(PinEventAction.GUEST_MANAGER, guest, actor, detail=f'manager: {before.username if before else "keepers"}'
+         f' -> {manager.username if manager else "keepers"}')
+    for person in {before, manager} - {None}:
+        service.send_user_mail(person, _('PIN-only access %(id)s: manager changed') % {'id': guest.user.username}, _(
+            'The PIN-only access %(id)s (%(name)s) is now managed by %(who)s.') % {
+                'id': guest.user.username, 'name': guest.name, 'who': manager.username if manager else _('the keepers')})
 
 
 def display(guest):
@@ -443,8 +536,12 @@ def create(name, email, group, actor, expires=None, ips='', idle=30, hours=8, no
     Create the access: the technical user, its group and the personal link. Returns ``(guest, token)``; the token is
     shown only now (and e-mailed by ``invite``).
     """
-    if not _may_manage(actor) or not _may_put_in(actor, group.area):
+    if not (_keeper_level(actor) or areas.administers_any(actor)):
         raise PermissionDenied
+    if group is not None and not _may_put_in(actor, group):
+        raise PermissionDenied  # a section manager puts people only into the groups of his section
+    if group is None and not _keeper_level(actor):
+        raise ValidationError(_('Choose a group of your section.'))
     name = (name or '').strip()[:150]
     email = (email or '').strip().lower()
     if not name:
@@ -464,7 +561,7 @@ def create(name, email, group, actor, expires=None, ips='', idle=30, hours=8, no
             'account %(user)s or change its e-mail to another address (Admin > Users > %(user)s: %(url)s), then '
             'create the access again.') % {'email': email, 'user': owner.username,
                                             'url': reverse('users:user', kwargs={'pk': owner.pk})})
-    if group.private or not group.target:
+    if group is not None and (group.private or not group.target):
         raise ValidationError(_('Choose a group.'))
     if expires is not None and expires <= timezone.now():
         raise ValidationError(_('The end of the access must be in the future.'))
@@ -488,10 +585,13 @@ def create(name, email, group, actor, expires=None, ips='', idle=30, hours=8, no
         guest = PinGuest.objects.create(
             user=user, name=name, email=email, token_hash=_hash(token), expires=expires, allowed_ips=ips,
             idle_minutes=idle, max_hours=hours, created_by_name=actor.username,
+            manager=None if _keeper_level(actor) else actor,
             description=description, alias=alias, pin_language=pin_language, ui_language=ui_language,
             invite_expires=timezone.now() + timedelta(days=INVITE_DAYS))
-        _join(group, user, actor, request)
-    _log(PinEventAction.GUEST_CREATED, guest, actor, request, f'{group.area.name} / {group.name}')
+        if group is not None:
+            _join(group, user, actor, request)
+    _log(PinEventAction.GUEST_CREATED, guest, actor, request,
+         f'{group.area.name} / {group.name}' if group is not None else 'no group yet')
     if ui_language:
         _set_ui_language(guest)
     return guest, token
@@ -502,7 +602,7 @@ def invite(guest, actor, request=None):
     Send the personal link (a new one: the old link stops working). A person who has no PIN yet has 7 days to set it.
     Returns ``(token, sent)``.
     """
-    if not _may_manage(actor):
+    if not _may_manage(actor, guest):
         raise PermissionDenied
     token = _new_token()
     now = timezone.now()
@@ -553,7 +653,7 @@ def rules_text(guest=None):
 
 def set_rules(guest, actor, step, waits, request=None):
     """Own rules of one person (``guest``) or the defaults (``guest=None``); empty values = back to the defaults."""
-    if not _may_manage(actor):
+    if not (_may_manage(actor, guest) if guest is not None else _keeper_level(actor)):
         raise PermissionDenied
     step = int(step) if str(step or '').strip() else None
     if step is not None and not 1 <= step <= 50:
@@ -575,7 +675,7 @@ def set_rules(guest, actor, step, waits, request=None):
 
 def unblock(guest, actor, request=None):
     """The old PIN works again; the counting starts from zero."""
-    if not _may_manage(actor):
+    if not _may_manage(actor, guest):
         raise PermissionDenied
     guest.failed, guest.retry_after, guest.blocked = 0, None, None
     guest.save(update_fields=['failed', 'retry_after', 'blocked'])
@@ -587,7 +687,7 @@ def unblock(guest, actor, request=None):
 
 def force_change(guest, actor, request=None):
     """Like 'User must change password at next logon': the next sign-in asks for a new PIN."""
-    if not _may_manage(actor):
+    if not _may_manage(actor, guest):
         raise PermissionDenied
     UserPin.objects.filter(user=guest.user).exclude(pin_hash='').update(must_change=True)
     service.log_event(PinEventAction.FORCE_CHANGE, user=guest.user, actor=actor, request=request, scope='guest')
@@ -694,6 +794,8 @@ def check_pin(guest, pin, request=None):
         except crypto.DecryptionError:
             return 'blocked'
         if service._check_hash(user_pin, stored, pin):
+            if work.state(guest) != 'ok':
+                return 'offhours'  # the right PIN, but outside the working time
             guest = PinGuest.objects.select_for_update().get(pk=guest.pk)
             guest.failed, guest.retry_after = 0, None
             if guest.pin_index:
@@ -718,7 +820,7 @@ def request_reset(guest, request=None, actor=None):
     administrator (``actor``) sends it, e.g. to a blocked access – the new PIN also unblocks it.
     """
     now = timezone.now()
-    if actor is not None and not _may_manage(actor):
+    if actor is not None and not _may_manage(actor, guest):
         raise PermissionDenied
     if guest.revoked or not guest.is_active or (actor is None and guest.reset_sent and guest.reset_sent > now - timedelta(seconds=60)):
         return False
@@ -745,7 +847,7 @@ def find_reset(token):
 
 
 def revoke(guest, actor, request=None):
-    if not _may_manage(actor):
+    if not _may_manage(actor, guest):
         raise PermissionDenied
     guest.revoked = timezone.now()
     guest.save(update_fields=['revoked'])
@@ -761,7 +863,7 @@ def revoke(guest, actor, request=None):
 
 
 def restore(guest, actor, request=None):
-    if not _may_manage(actor):
+    if not _may_manage(actor, guest):
         raise PermissionDenied
     guest.revoked = None
     guest.save(update_fields=['revoked'])
@@ -775,7 +877,7 @@ def restore(guest, actor, request=None):
 
 
 def delete(guest, actor, request=None):
-    if not _may_manage(actor):
+    if not _may_manage(actor, guest):
         raise PermissionDenied
     _log(PinEventAction.GUEST_DELETED, guest, actor, request)
     _say(guest, lambda: (_('Your NetBox access was deleted'), _(
@@ -837,6 +939,8 @@ def session_problem(request, guest):
         return 'idle'
     if now - data.get('start', 0) > guest.max_hours * 3600:
         return 'max'
+    if work.state(guest) in ('before', 'after', 'off'):
+        return 'hours'  # the working time (and the minutes after it) is over
     if not request.path_info.startswith(('/htmx/', '/static/', '/api/')) and request.headers.get('HX-Request') != 'true':
         data['last'] = now
         request.session[SESSION_KEY] = data
@@ -880,7 +984,10 @@ def guard(request, guest):
         if request.headers.get('HX-Request') == 'true' or path.startswith('/api/'):
             from django.http import HttpResponse
             return HttpResponse(status=401)
-        return redirect(return_url(guest, link))
+        return redirect(return_url(guest, link) + ('?ended=hours' if problem == 'hours' else ''))
+    if work.state(guest) == 'grace' and request.method not in ('GET', 'HEAD', 'OPTIONS') and not path.startswith(
+            ('/plugins/user-pin/', '/api/users/config', '/static/', '/htmx/')):
+        request._userpin_grace_save = True  # the one save of the last minutes: the sign-out follows it
     if must_change(guest) and not path.startswith(('/plugins/user-pin/guest/change/', '/plugins/user-pin/guest/logout/',
                                                    '/static/', '/media/')):
         return redirect('plugins:netbox_user_pin:guest_change')  # like 'must change password at next logon'
@@ -947,6 +1054,8 @@ def pin_only_login(request, pin):
             return 'locked', None
         if pause_seconds(guest):
             return 'pause', None
+        if work.state(guest) != 'ok':
+            return 'offhours', guest  # the right PIN, but outside the working time: tell the hours
         cache.delete(_ip_key(address))
         _refresh_pin_index(guest, pin)
         guest.failed, guest.retry_after, guest.last_login, guest.last_ip = 0, None, timezone.now(), str(address)

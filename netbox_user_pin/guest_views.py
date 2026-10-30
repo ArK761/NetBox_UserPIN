@@ -1,8 +1,10 @@
 """Pages of the PIN-only access: the person's (public link, PIN, home) and the administration (keepers, owners)."""
 from django.contrib import messages
+from django.contrib.auth import get_user_model
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.http import Http404
+from django.utils.dates import WEEKDAYS_ABBR
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import NoReverseMatch, reverse
 from django.utils import timezone
@@ -12,7 +14,7 @@ from datetime import timedelta
 from django.utils.translation import gettext as _
 from django.views import View
 
-from . import areas, guests, service
+from . import areas, guests, service, work
 from .area_views import AreaViewMixin, _target_label
 from .models import PinGuest
 
@@ -90,6 +92,8 @@ class GuestLoginView(View):
         guest.refresh_from_db()
         if status == 'locked':
             return _stopped(request, guest, LOCKED_TEXT())
+        if status == 'offhours':
+            return self._page(request, guest, token, error=work.message(guest))
         error = {'pause': _('Wait a moment before the next attempt.'),
                  'blocked': _('This access is not usable now (ended, revoked or from another address).'),
                  'disabled': _('Your account is disabled (suspended). Contact the administrator.'),
@@ -107,7 +111,9 @@ class GuestPinLoginView(View):
     def get(self, request):
         if request.user.is_authenticated and guests.guest_of(request.user) is not None:
             return redirect('plugins:netbox_user_pin:guest_home')
-        return self._page(request)
+        notice = _('The working time is over. Your last change was saved and you were signed out.') \
+            if request.GET.get('ended') == 'hours' else ''
+        return self._page(request, notice=notice)
 
     def post(self, request):
         status, guest = guests.pin_only_login(request, request.POST.get('pin', ''))
@@ -115,6 +121,8 @@ class GuestPinLoginView(View):
             return _stopped(request, guest, guests.stop_message(guest))
         if status == 'locked' and guest is not None:
             return _stopped(request, guest, LOCKED_TEXT())
+        if status == 'offhours' and guest is not None:
+            return self._page(request, error=work.message(guest))  # the right PIN outside the working time
         if status == 'ok':
             guests.start_session(request, guest, guests.login_path())
             return redirect('plugins:netbox_user_pin:guest_home')
@@ -247,7 +255,9 @@ class GuestHomeView(GuestMixin, View):
             'left': guests.seconds_left(request, guest) // 60,
             'pin_until': until, 'pin_days': days, 'pin_hours': hours,
             'pin_warn': days is not None and days <= settings.warn_days, 'languages': guests.LANGUAGES[1:],
-            'pin_language': guests.language_of(guest)})
+            'pin_language': guests.language_of(guest),
+            'work_text': (work.describe(rules) if (rules := work.rules_of(guest)) else ''),
+            'work_grace': work.state(guest) == 'grace'})
 
 
 class GuestChangeView(GuestMixin, View):
@@ -313,13 +323,20 @@ def _time(text):
     return timezone.make_aware(value) if timezone.is_naive(value) else value
 
 
+def _managers():
+    """The section managers a keeper may put an access under."""
+    from .models import AreaOwner
+    users = {o.user for o in AreaOwner.objects.select_related('user') if o.user.is_active}
+    return sorted(users, key=lambda u: u.username)
+
+
 class GuestListView(AreaViewMixin, View):
     template_name = T + 'list.html'
 
     def _groups(self, user):
         rows = []
         for group in areas.AreaProfile.objects.filter(private=False).exclude(target='').select_related('area'):
-            if areas.can_see(user, group.area) and guests._may_put_in(user, group.area):
+            if guests._may_put_in(user, group):
                 rows.append((group.pk, f'{group.area.name} › {_target_label(group.target)} › {group.name}'))
         return sorted(rows, key=lambda r: r[1])
 
@@ -327,7 +344,10 @@ class GuestListView(AreaViewMixin, View):
         if not (areas.is_keeper(request.user) or areas.administers_any(request.user)):
             raise PermissionDenied
         rows = []
-        for guest in PinGuest.objects.select_related('user'):
+        mine_only = not guests._keeper_level(request.user)
+        for guest in PinGuest.objects.select_related('user', 'manager'):
+            if mine_only and guest.manager_id != request.user.pk:
+                continue  # a section manager sees (and runs) only the accesses put under him
             if guest.revoked:
                 state = ('revoked', _('Disabled'))
             elif guest.blocked:
@@ -341,6 +361,9 @@ class GuestListView(AreaViewMixin, View):
             else:
                 state = ('active', _('Active'))
             rows.append({'guest': guest, 'state': state, 'groups': guests.groups_of(guest),
+                         'work_days': guest.work_days or service.get_settings().guest_work_days,
+                         'work_from': (guest.work_from or service.get_settings().guest_work_from).strftime('%H:%M'),
+                         'work_to': (guest.work_to or service.get_settings().guest_work_to).strftime('%H:%M'),
                          'must_change': guests.has_pin(guest) and guests.must_change(guest),
                          'pin_until': guests.pin_valid_until(guest), 'rules': guests.rules_text(guest),
                          'activity': _activity(guest),
@@ -354,7 +377,10 @@ class GuestListView(AreaViewMixin, View):
             'rows': rows, 'group_choices': self._groups(request.user), 'mail_ok': service.email_configured(),
             'min_length': guests.MIN_PIN_LENGTH, 'default_step': service.get_settings().guest_step_attempts,
             'default_waits': service.get_settings().guest_waits, 'default_rules': guests.rules_text(),
-            'languages': guests.LANGUAGES[1:], 'pin_settings': service.get_settings(), 'mail_every': guests.MAIL_EVERY, **extra})
+            'languages': guests.LANGUAGES[1:], 'pin_settings': service.get_settings(), 'mail_every': guests.MAIL_EVERY,
+            'is_keeper_level': guests._keeper_level(request.user), 'managers': _managers(),
+            'work_countries': work.country_choices(), 'work_available': work.available(),
+            'weekdays': [(str(i), str(WEEKDAYS_ABBR[i])) for i in range(7)], **extra})
 
     def get(self, request):
         return self._render(request)
@@ -372,6 +398,12 @@ class GuestListView(AreaViewMixin, View):
                                  request=request)
                 messages.success(request, _('The rules for wrong PINs were saved.'))
                 return redirect('plugins:netbox_user_pin:guests')
+            if action == 'work-default':
+                guests.set_work_general(request.user, request.POST.get('work_on') == 'on',
+                                        request.POST.get('country'), request.POST.getlist('days'),
+                                        request.POST.get('start'), request.POST.get('end'), request=request)
+                messages.success(request, _('The working time was saved.'))
+                return redirect('plugins:netbox_user_pin:guests')
             if action == 'mails-default':
                 guests.set_mails(None, request.user, request.POST.get('mail_person'), request.POST.get('mail_changes'),
                                  request=request)
@@ -380,7 +412,8 @@ class GuestListView(AreaViewMixin, View):
                 messages.success(request, _('Saved.'))
                 return redirect('plugins:netbox_user_pin:guests')
             if action == 'create':
-                group = get_object_or_404(areas.AreaProfile, pk=request.POST.get('group') or 0)
+                group = (get_object_or_404(areas.AreaProfile, pk=request.POST.get('group'))
+                         if request.POST.get('group') else None)
                 guest, token = guests.create(
                     request.POST.get('name'), request.POST.get('email'), group, request.user,
                     expires=_time(request.POST.get('expires')), ips=request.POST.get('ips', ''),
@@ -388,6 +421,10 @@ class GuestListView(AreaViewMixin, View):
                     request=request, alias=request.POST.get('alias', ''),
                     description=request.POST.get('description', ''),
                     pin_language=request.POST.get('pin_language', ''), ui_language=request.POST.get('ui_language', ''))
+                if request.POST.get('work_mode') in ('own', 'none'):
+                    guests.set_work(guest, request.user, request.POST.get('work_mode'), request.POST.get('country', ''),
+                                    request.POST.getlist('days'), request.POST.get('start'), request.POST.get('end'),
+                                    request=request)
                 if not (request.POST.get('mail_person') and request.POST.get('mail_changes')):
                     guests.set_mails(guest, request.user, request.POST.get('mail_person'),
                                      request.POST.get('mail_changes'), request=request)
@@ -435,6 +472,16 @@ class GuestListView(AreaViewMixin, View):
                                  request=request)
                 guests.set_languages(guest, request.user, request.POST.get('pin_language'),
                                      request.POST.get('ui_language'), request=request)
+                messages.success(request, _('Saved.'))
+            elif action == 'work':
+                guests.set_work(guest, request.user, request.POST.get('work_mode'), request.POST.get('country', ''),
+                                request.POST.getlist('days'), request.POST.get('start'), request.POST.get('end'),
+                                request=request)
+                messages.success(request, _('Saved.'))
+            elif action == 'manager':
+                manager = (get_object_or_404(get_user_model(), pk=request.POST.get('manager'))
+                           if request.POST.get('manager') else None)
+                guests.set_manager(guest, request.user, manager)
                 messages.success(request, _('Saved.'))
             elif action == 'mails':
                 guests.set_mails(guest, request.user, request.POST.get('mail_person'), request.POST.get('mail_changes'),

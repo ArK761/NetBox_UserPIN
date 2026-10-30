@@ -55,7 +55,7 @@ def compute_policy(user, area, app_label, model):
         return None
     nobody = {r.field for r in rules if r.profile_id is None}
     modes, contains = {}, {}
-    if areas._unrestricted(user, area):
+    if areas._unrestricted(user, area, target):
         default = AreaFieldMode.WRITE
     else:
         grants = [g for g in areas.active_grants(user, area, target) if 'view' in g.profile.rights]
@@ -165,8 +165,8 @@ def _writable_fields(user):
         if grant.is_active and grant.target and grant.area in areas.active_areas():
             entries.append((grant.area, grant.target, set(grant.profile.rights)))
     for area in areas.active_areas():
-        if areas.is_owner(user, area):
-            entries += [(area, t, set(areas.GENERIC_RIGHTS)) for t in areas.area_models(area)]
+        entries += [(area, t, set(areas.GENERIC_RIGHTS)) for t in areas.area_models(area)
+                    if areas.owns(user, area, t)]
     for area, target, rights in entries:
         if not {'add', 'change'} & rights:
             continue

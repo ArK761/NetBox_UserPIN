@@ -1,3 +1,5 @@
+import datetime
+
 from django.conf import settings
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
@@ -242,6 +244,13 @@ class PinSettings(models.Model):
                     'administrator who created the access and to the protection keepers. Can also be switched off per '
                     'access.'),
     )
+    guest_work_on = models.BooleanField(
+        verbose_name=_('Limit the working time of the PIN-only accesses'), default=False)
+    guest_work_country = models.CharField(
+        verbose_name=_('Country (public holidays)'), max_length=2, default='SK')
+    guest_work_days = models.CharField(verbose_name=_('Working days'), max_length=7, default='01234')
+    guest_work_from = models.TimeField(verbose_name=_('Working time from'), default=datetime.time(6, 0))
+    guest_work_to = models.TimeField(verbose_name=_('Working time to'), default=datetime.time(16, 0))
     guest_mail_mode = models.CharField(
         verbose_name=_('How the administrators get the changes'), max_length=10, default='summary',
         choices=(('summary', _('Summary')), ('each', _('At every change'))),
@@ -504,6 +513,8 @@ class PinEventAction(models.TextChoices):
     GUEST_UNBLOCK_ASKED = 'guest_unblock_asked', _('PIN-only access: unblocking asked for')
     GUEST_EXPIRES = 'guest_expires', _('PIN-only access: validity changed')
     GUEST_EXPIRY_WARNED = 'guest_expiry_warned', _('PIN-only access: end of validity announced')
+    GUEST_MANAGER = 'guest_manager', _('PIN-only access: manager changed')
+    GUEST_WORK = 'guest_work', _('PIN-only access: working time')
     ERROR = 'error', _('Error')
 
 
@@ -865,6 +876,8 @@ class AreaOwner(models.Model):
     area = models.ForeignKey(ProtectedArea, on_delete=models.CASCADE, related_name='owners')
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='area_ownerships')
     since = models.DateTimeField(default=timezone.now)
+    # the section he runs: app / app.model entries of the area; empty = the whole area
+    targets = models.JSONField(default=list, blank=True)
 
     class Meta:
         verbose_name = _('area owner')
@@ -1082,6 +1095,14 @@ class PinGuest(models.Model):
     ui_language = models.CharField(max_length=5, blank=True)  # language of the NetBox interface ('' = default)
     created_by_name = models.CharField(max_length=150, blank=True)
     created = models.DateTimeField(default=timezone.now)
+    manager = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+                                related_name='+')  # the section manager who runs the access; empty = the keepers
+    # working time: 'general' = the rules of the PIN-only page, 'own' = the rules below, 'none' = no limit
+    work_mode = models.CharField(max_length=7, default='general')
+    work_country = models.CharField(max_length=2, blank=True)
+    work_days = models.CharField(max_length=7, blank=True)  # weekdays 0 (Monday) .. 6, e.g. '01234'
+    work_from = models.TimeField(null=True, blank=True)
+    work_to = models.TimeField(null=True, blank=True)
     mail_person = models.BooleanField(default=True)  # e-mail the person about changes of the access
     mail_changes = models.BooleanField(default=True)  # e-mail the administrators what the person changed
     changes_mailed = models.DateTimeField(null=True, blank=True)  # the changes up to this moment were reported

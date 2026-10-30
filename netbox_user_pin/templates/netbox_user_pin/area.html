@@ -80,29 +80,37 @@
 <div class="row g-3 mb-3">
 <div class="col-12 col-xl-6">
 <div class="card h-100">
-  <h2 class="card-header">{% trans "Owners" %}</h2>
+  <h2 class="card-header">{% trans "Section managers" %}</h2>
   <div class="card-body">
-    <p class="text-secondary small">{% trans "Owners decide who gets access." %}</p>
+    <p class="text-secondary small">{% trans "A section manager decides about the groups, fields and members of his section (an object type or the whole area) and about the PIN-only accesses put under him. The protection keepers stand above him." %}</p>
     <ul class="list-group list-group-flush mb-2">
-      {% for u, removable in owner_rows %}
-      <li class="list-group-item d-flex justify-content-between align-items-center">{{ u.username }}
-        {% if removable %}<form method="post" class="d-inline">{% csrf_token %}<input type="hidden" name="pk" value="{{ u.pk }}"><input type="hidden" name="action" value="owner-remove"><button class="btn btn-sm btn-outline-danger" type="submit">{% trans "Remove" %}</button></form>{% endif %}</li>
-      {% empty %}<li class="list-group-item text-secondary">{% trans "No owners." %}</li>{% endfor %}
+      {% for u, removable, scope_label, scope_list in owner_rows %}
+      <li class="list-group-item">
+        <div class="d-flex justify-content-between align-items-center"><span><strong>{{ u.username }}</strong> <span class="badge text-bg-secondary">{{ scope_label }}</span></span>
+        {% if removable %}<form method="post" class="d-inline">{% csrf_token %}<input type="hidden" name="pk" value="{{ u.pk }}"><input type="hidden" name="action" value="owner-remove"><button class="btn btn-sm btn-outline-danger" type="submit">{% trans "Remove" %}</button></form>{% endif %}</div>
+        {% if removable and targets|length > 1 %}<form method="post" class="d-flex flex-wrap gap-2 mt-1 align-items-center">{% csrf_token %}<input type="hidden" name="pk" value="{{ u.pk }}"><input type="hidden" name="action" value="owner-scope">
+          {% for t in targets %}<label class="form-check-label small"><input class="form-check-input" type="checkbox" name="scope" value="{{ t }}"{% if t in scope_list %} checked{% endif %}> {{ t }}</label>{% endfor %}
+          <button class="btn btn-sm btn-outline-primary" type="submit">{% trans "Save the section" %}</button>
+          <span class="form-text">{% trans "Nothing ticked = the whole area." %}</span></form>{% endif %}
+      </li>
+      {% empty %}<li class="list-group-item text-secondary">{% trans "No section managers." %}</li>{% endfor %}
     </ul>
-    {% if can_manage %}
+    {% if can_keeper %}
     <form method="post" class="d-flex flex-column gap-2">{% csrf_token %}<input type="hidden" name="action" value="owner-add">
       {% include 'netbox_user_pin/inc/owner_picker.html' with choices=owner_choices %}
-      <div class="form-text mb-2">{{ owner_form.user.help_text }}</div>
-      <div><button class="btn btn-primary" type="submit">{% trans "Add the owners" %}</button></div>
+      <div class="form-text mb-1">{{ owner_form.user.help_text }}</div>
+      {% if targets|length > 1 %}<div><div class="small fw-bold">{% trans "Section (nothing ticked = the whole area):" %}</div>
+        {% for t in targets %}<label class="form-check-label me-3"><input class="form-check-input" type="checkbox" name="scope" value="{{ t }}"> {{ t }}</label>{% endfor %}</div>{% endif %}
+      <div><button class="btn btn-primary" type="submit">{% trans "Appoint the section managers" %}</button></div>
     </form>
-    {% if owners|length == 1 %}<p class="small text-warning mt-2 mb-0">{% trans "Appoint at least two owners, so that a decision can be taken when one is away." %}</p>{% endif %}
+    
     {% endif %}
   </div>
 </div>
 
 </div>
 </div>
-{% if can_manage and not area.plugin %}
+{% if can_area and not area.plugin %}
 <details class="mb-3">
   <summary class="text-secondary">{% trans "Settings of the area" %}</summary>
   <div class="card mt-2"><div class="card-body">

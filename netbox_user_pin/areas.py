@@ -361,11 +361,46 @@ def owners(area):
 
 
 def is_owner(user, area):
-    """An owner is still an owner only while he holds the role (head, delegate, CORE deputy) and is no superuser."""
+    """A section manager of the area (any section): an ordinary account - no superuser, keeper or PIN-only access."""
     if not (getattr(user, 'is_authenticated', False) and user.is_active and not user.is_superuser
             and AreaOwner.objects.filter(area=area, user=user).exists()):
         return False
-    return not is_keeper(user) and roles.manager_users(include_superusers=False).filter(pk=user.pk).exists()
+    return not is_keeper(user) and user.pk not in _guest_ids()
+
+
+def _guest_ids():
+    return set(PinGuest.objects.values_list('user_id', flat=True))
+
+
+def covers(scope, target):
+    """Does a section (``[]`` = the whole area, else app / app.model entries) cover the object type ``target``?"""
+    if not scope:
+        return True
+    target = target or ''
+    return bool(target) and any(target == entry or target.startswith(entry + '.') for entry in scope)
+
+
+def owner_scope(user, area):
+    """``None``: not a manager of the area; ``[]``: the whole area; else the entries of his section."""
+    if not is_owner(user, area):
+        return None
+    return list(AreaOwner.objects.filter(area=area, user=user).values_list('targets', flat=True).first() or [])
+
+
+def owns(user, area, target=None):
+    """Is the user a manager of the section that covers ``target`` (None: of the whole area)?"""
+    scope = owner_scope(user, area)
+    if scope is None:
+        return False
+    return covers(scope, target) if target else not scope
+
+
+def managers_for(area, target=None):
+    """Section managers whose section covers the object type (the whole-area managers when ``target`` is None)."""
+    if area is None:
+        return []
+    return [o.user for o in AreaOwner.objects.filter(area=area).select_related('user') if o.user.is_active
+            and owns(o.user, area, target)]
 
 
 def active_grants(user, area, target=None):
@@ -379,7 +414,7 @@ def rights_of(user, area, target=None):
     """Rights the user holds in the area now (owners: all of them)."""
     if not getattr(user, 'is_authenticated', False) or not user.is_active:
         return set()
-    if is_owner(user, area):
+    if owns(user, area, target):
         return set(rights_available(area))
     if _bootstrap(user, area):
         return set(rights_available(area))  # bootstrap: no owners yet, the master keeps access
@@ -424,9 +459,9 @@ def _bootstrap(user, area):
     return bool(user.is_superuser)
 
 
-def _unrestricted(user, area):
-    """Owners (and, before owners exist, superusers) see every row."""
-    return is_owner(user, area) or _bootstrap(user, area)
+def _unrestricted(user, area, target=None):
+    """Section managers (in their section) and, before managers exist, superusers see every row."""
+    return owns(user, area, target) or _bootstrap(user, area)
 
 
 #
@@ -477,7 +512,7 @@ def tabs_of(target):
 def set_group_tabs(group, tabs, actor, request=None):
     """Choose the system tabs the members of a group may open."""
     area = group.area
-    if not _may_grant(actor, area) or group.private:
+    if not _may_grant(actor, area, group.target) or group.private:
         raise PermissionDenied
     known = {t['name'] for t in tabs_of(group.target) if not t['plugin']}
     group.tabs = sorted(t for t in tabs if t in known)
@@ -489,7 +524,7 @@ def set_group_tabs(group, tabs, actor, request=None):
 
 def tab_allowed(user, area, target, tab_name):
     """May the user open this (system) tab? Owners always; others as their grants for the object type allow."""
-    if _unrestricted(user, area):
+    if _unrestricted(user, area, target):
         return True
     for grant in active_grants(user, area, target):
         if 'view' in grant.profile.rights and (grant.profile.tabs is None or tab_name in grant.profile.tabs):
@@ -500,7 +535,7 @@ def tab_allowed(user, area, target, tab_name):
 def set_grant_tabs(grant, tabs, actor, request=None):
     """Choose the system tabs an access entry may open."""
     area = grant.area
-    if not _may_grant(actor, area):
+    if not _may_grant(actor, area, grant.target or None):
         raise PermissionDenied
     profile = grant.profile
     if not profile.private:
@@ -521,7 +556,7 @@ def row_filter(user, area, app_label, model, action='view'):
     target = f'{app_label}.{model}'
     if not getattr(user, 'is_authenticated', False) or action not in _memo_rights(user, area, target):
         return None
-    if _unrestricted(user, area):
+    if _unrestricted(user, area, target):
         return Q()
     allowed, everything, denied = [], False, []
     for grant in active_grants(user, area, target):
@@ -707,7 +742,7 @@ def group_deny_conditions(group):
 
 def set_group_records(group, actor, state, request=None):
     """Which records the group sees: ``unset`` (none yet), ``all`` (chosen by the owner) or ``filtered``."""
-    if not _may_grant(actor, group.area) or group.private:
+    if not _may_grant(actor, group.area, group.target) or group.private:
         raise PermissionDenied
     if state not in ('unset', 'all', 'filtered'):
         raise ValidationError(_('Unknown choice.'))
@@ -745,7 +780,7 @@ def group_conditions(group):
 
 def add_group_condition(group, actor, field, op, values, request=None, deny=False):
     area = group.area
-    if not _may_grant(actor, area) or group.private or not group.target:
+    if not _may_grant(actor, area, group.target) or group.private or not group.target:
         raise PermissionDenied
     condition = _clean_condition(group.target, field, op, values)
     opposite = (group.filters if deny else group.deny_filters) or {}
@@ -806,7 +841,7 @@ def add_group_condition(group, actor, field, op, values, request=None, deny=Fals
 
 def remove_group_condition(group, actor, index, request=None, deny=False):
     area = group.area
-    if not _may_grant(actor, area) or group.private:
+    if not _may_grant(actor, area, group.target) or group.private:
         raise PermissionDenied
     filters = dict((group.deny_filters if deny else group.filters) or {})
     current = filters.get(group.target) or []
@@ -937,11 +972,12 @@ def right_for_request(request, view_class=None, view_kwargs=None):
 # Administration
 #
 
-def _core_or_owner(actor, area):
-    """Who may change an area: its owners; as long as there are none, the keepers (CORE / the master without any)."""
-    if AreaOwner.objects.filter(area=area).exists():
-        return is_owner(actor, area)
-    return _stand_in(actor)
+def _core_or_owner(actor, area, target=None):
+    """
+    Who may change the area: the protection keepers (CORE / the master while there is none) and the manager of the
+    whole area; a manager of a section only what concerns his object types (``target``).
+    """
+    return _stand_in(actor) or owns(actor, area, target)
 
 
 def _stand_in(actor):
@@ -972,8 +1008,8 @@ def _may_take(actor, area, target):
     return True
 
 
-def can_manage(actor, area):
-    return _core_or_owner(actor, area)
+def can_manage(actor, area, target=None):
+    return _core_or_owner(actor, area, target)
 
 
 def administers_any(user):
@@ -986,8 +1022,7 @@ def administers_any(user):
 
 
 def can_see(actor, area):
-    return is_owner(actor, area) or is_keeper(actor) or (
-        roles.is_core(actor) and not AreaOwner.objects.filter(area=area).exists())
+    return is_owner(actor, area) or is_keeper(actor) or _stand_in(actor)
 
 
 def _log(action, area, actor, user=None, request=None, detail=''):
@@ -1044,38 +1079,59 @@ def _unique_key(name):
 
 
 def owner_requirements(user):
-    """[(text, ok)]: what an account needs to own an area; every line is met or it is what blocks him."""
+    """[(text, ok)]: what an account needs to manage a section; every line is met or it is what blocks him."""
     plain = not (user.is_superuser or is_keeper(user))
-    role = roles.manager_users(include_superusers=False).filter(pk=user.pk).exists()
     return [
         (_('Is not a superuser or a protection keeper') if plain else
          _('Is a superuser or a protection keeper (they are decided about)'), plain),
-        (_('Is a department head, a delegate or a CORE deputy') if role else
-         _('Is no department head, delegate or CORE deputy'), role),
+        (_('Is a NetBox account') if user.pk not in _guest_ids() else _('Is a PIN-only access'),
+         user.pk not in _guest_ids()),
         (_('Has a PIN') if service.has_pin(user) else _('Has no PIN yet'), service.has_pin(user)),
         (_('Has 2FA') if service.has_2fa(user) else _('Has no 2FA yet'), service.has_2fa(user)),
     ]
 
 
 def _check_owner_role(user):
-    """
-    The owner decides about the superusers, so he is none of them (nor a protection keeper): a department head, a
-    delegate or a CORE deputy, with a PIN and 2FA.
-    """
+    """A section manager is an ordinary NetBox account (no superuser, keeper or PIN-only access) with a PIN and 2FA."""
     problems = [text for text, ok in owner_requirements(user) if not ok]
     if problems:
-        raise ValidationError(_('%(user)s cannot own an area: %(why)s.') % {
+        raise ValidationError(_('%(user)s cannot manage a section: %(why)s.') % {
             'user': user.username, 'why': '; '.join(str(p).lower() for p in problems)})
 
 
-def _add_owner(area, user, actor, request):
-    owner, created = AreaOwner.objects.get_or_create(area=area, user=user)
+def clean_scope(area, targets):
+    """The section of a manager: app / app.model entries inside the area; empty = the whole area."""
+    result = []
+    for raw in targets or []:
+        entry = str(raw or '').strip().lower()
+        if not entry or entry in result:
+            continue
+        if not any(entry == t or entry.startswith(t + '.') for t in targets_of(area)):
+            raise ValidationError(_('"%(target)s" is not protected by this area.') % {'target': entry})
+        result.append(entry)
+    return result
+
+
+def scope_text(targets):
+    return ', '.join(target_label(t) for t in targets) if targets else str(_('the whole area'))
+
+
+def _add_owner(area, user, actor, request, targets=None):
+    targets = clean_scope(area, targets)
+    owner, created = AreaOwner.objects.get_or_create(area=area, user=user, defaults={'targets': targets})
     if created:
-        _log(PinEventAction.AREA_OWNER_ADDED, area, actor, user=user, request=request)
-        service.send_user_mail(user, _('You are an owner of the area "%(area)s"') % {'area': area.name}, _(
-            'You were appointed an owner of the protected area "%(area)s". You decide who gets access to it: '
-            'requests arrive here (bell and e-mail) and are confirmed with your PIN and 2FA.') % {'area': area.name},
+        _log(PinEventAction.AREA_OWNER_ADDED, area, actor, user=user, request=request,
+             detail=f'section: {scope_text(targets)}')
+        service.send_user_mail(user, _('You manage a section of the area "%(area)s"') % {'area': area.name}, _(
+            'You were appointed the manager of a section of the protected area "%(area)s": %(scope)s. You decide who '
+            'gets access to it and what the groups and fields allow there; requests arrive here (bell and e-mail) '
+            'and are confirmed with your PIN and 2FA.') % {'area': area.name, 'scope': scope_text(targets)},
             request=request)
+    elif list(owner.targets or []) != targets:
+        owner.targets = targets
+        owner.save(update_fields=['targets'])
+        _log(PinEventAction.AREA_OWNER_ADDED, area, actor, user=user, request=request,
+             detail=f'section changed: {scope_text(targets)}')
     return owner
 
 
@@ -1085,22 +1141,22 @@ def _no_guest(user):
         raise ValidationError(_('An access with a PIN only cannot be given this duty.'))
 
 
-def add_owner(area, user, actor, request=None):
-    if not _core_or_owner(actor, area):
-        raise PermissionDenied
+def add_owner(area, user, actor, request=None, targets=None):
+    if not _stand_in(actor):
+        raise PermissionDenied  # the keepers appoint the managers
     _no_guest(user)
     if not user.is_active:
         raise ValidationError(_('The account is not active.'))
     _check_owner_role(user)
     _ensure_pin_allowed(user, actor, request)
-    owner = _add_owner(area, user, actor, request)
+    owner = _add_owner(area, user, actor, request, targets)
     clear_cache()
     return owner
 
 
-def add_owners(area, users, actor, request=None):
-    """Several owners at once (the right to do so is checked once, before the first one makes it the owners' own)."""
-    if not _core_or_owner(actor, area):
+def add_owners(area, users, actor, request=None, targets=None):
+    """Several managers at once (the keepers appoint them)."""
+    if not _stand_in(actor):
         raise PermissionDenied
     added, errors = [], []
     for user in users:
@@ -1109,7 +1165,7 @@ def add_owners(area, users, actor, request=None):
                 raise ValidationError(_('The account is not active.'))
             _check_owner_role(user)
             _ensure_pin_allowed(user, actor, request)
-            _add_owner(area, user, actor, request)
+            _add_owner(area, user, actor, request, targets)
             added.append(user)
         except ValidationError as exc:
             errors.append(exc)
@@ -1124,8 +1180,8 @@ def remove_owner(area, user, actor, request=None):
     """
     owner = AreaOwner.objects.filter(area=area, user=user).first()
     ineligible = owner is not None and (owner.user.is_superuser or is_keeper(owner.user))
-    keeper = is_keeper(actor)  # the protection keepers run the whole protection: they may remove any owner
-    if not (is_owner(actor, area) or keeper):
+    keeper = is_keeper(actor)  # the protection keepers run the whole protection: they alone decide about managers
+    if not (keeper or _stand_in(actor)):
         raise PermissionDenied
     if owner is None:
         return
@@ -1222,8 +1278,27 @@ def _notify(req, users, text, subject):
 
 def _check_requests_allowed(user):
     """The settings may take the request for access from the users (the administrators keep it)."""
+    if user.pk in _guest_ids():
+        raise PermissionDenied  # the PIN-only accesses never ask: what they may do is put in by the managers
     if not requests_allowed() and not roles.is_manager(user):
         raise PermissionDenied
+
+
+def _deciders(area, target):
+    """Who hears of a request and of its decision: the manager of the section and every keeper (no duplicates)."""
+    seen, result = set(), []
+    for user in managers_for(area, target or None) + keepers():
+        if user.pk not in seen:
+            seen.add(user.pk)
+            result.append(user)
+    return result
+
+
+def _tell_decision(req, area, actor, text, subject):
+    """Whoever decided: the requester, every keeper and the manager of the section are told (not the decider)."""
+    people = [u for u in _deciders(area, req.target) if u.pk not in (actor.pk, req.user_id)]
+    for user in people:
+        service.send_user_mail(user, subject, text)
 
 
 def request_access(area, user, note='', request=None, scope='', target='', rights=None):
@@ -1236,9 +1311,7 @@ def request_access(area, user, note='', request=None, scope='', target='', right
                                           status=AreaRequestStatus.PENDING).first()
     if existing:
         return existing
-    recipients = owners(area)
-    if not recipients:
-        recipients = keepers()  # no owners yet: the keepers decide
+    recipients = _deciders(area, target or None)  # the manager of the section and the keepers
     return _create_request(area, user, note, request, scope, target, rights, recipients)
 
 
@@ -1264,7 +1337,7 @@ def request_target_access(user, target, rights, note, request=None, scope=''):
     existing = AreaRequest.objects.filter(user=user, target=target, status=AreaRequestStatus.PENDING).first()
     if existing:
         return existing
-    recipients = (owners(area) if area else []) or keepers()
+    recipients = _deciders(area, target) if area else keepers()
     return _create_request(area, user, note, request, scope, target, rights, recipients)
 
 
@@ -1296,9 +1369,9 @@ def _create_request(area, user, note, request, scope, target, rights, recipients
     return req
 
 
-def _may_grant(actor, area):
-    """Owners grant; an area without owners yet is handled by the protection keepers."""
-    return is_owner(actor, area) or (not AreaOwner.objects.filter(area=area).exists() and is_keeper(actor))
+def _may_grant(actor, area, target=None):
+    """The protection keepers grant everywhere; a section manager in his section (``target`` None: his whole area)."""
+    return is_keeper(actor) or owns(actor, area, target)
 
 
 def target_label(target):
@@ -1340,7 +1413,7 @@ def decide_request(req, actor, approve, profile=None, hours=None, request=None, 
         area = area_for(app_label, model or None, package=app_label)
         if area is None and not is_keeper(actor):
             raise PermissionDenied
-    if area is not None and not _may_grant(actor, area):
+    if area is not None and not _may_grant(actor, area, req.target or None):
         raise PermissionDenied
     if req.user_id == actor.pk:
         raise PermissionDenied  # nobody decides about their own request
@@ -1353,6 +1426,9 @@ def decide_request(req, actor, approve, profile=None, hours=None, request=None, 
         service.send_user_mail(req.user, _('Access denied: %(area)s') % {'area': what},
                                _('Your request for access to "%(area)s" was denied.') % {'area': what},
                                request=request)
+        _tell_decision(req, area, actor, _('%(actor)s denied the request of %(user)s for access to "%(area)s".') % {
+            'actor': actor.username, 'user': req.user.username, 'area': what},
+            _('Access denied: %(user)s – %(area)s') % {'user': req.user.username, 'area': what})
         return None
     if area is None:
         area = _create_requested_area(req, actor, request)
@@ -1381,6 +1457,10 @@ def decide_request(req, actor, approve, profile=None, hours=None, request=None, 
     service.send_user_mail(req.user, _('Access granted: %(area)s') % {'area': area.name}, _(
         'You were given access to "%(area)s" (%(profile)s) %(until)s.') % {
         'area': area.name, 'profile': _profile_label(grant.profile), 'until': _until_text(grant)}, request=request)
+    _tell_decision(req, area, actor, _('%(actor)s granted %(user)s access to "%(area)s" (%(profile)s) %(until)s.') % {
+        'actor': actor.username, 'user': req.user.username, 'area': area.name,
+        'profile': _profile_label(grant.profile), 'until': _until_text(grant)},
+        _('Access granted: %(user)s – %(area)s') % {'user': req.user.username, 'area': area.name})
     return grant
 
 
@@ -1399,7 +1479,7 @@ def grant_custom(area, user, target, rights, hours, actor, filters=None, request
     Give ``user`` exactly ``rights`` on one object type (``target`` 'dcim.device'; '' = the whole area), optionally
     only the rows of ``filters``. The rights live in a private profile that belongs to this entry alone.
     """
-    if not _may_grant(actor, area):
+    if not _may_grant(actor, area, target or None):
         raise PermissionDenied
     known = set(rights_available(area))
     rights = [r for r in rights if r in known]
@@ -1421,7 +1501,7 @@ def grant_custom(area, user, target, rights, hours, actor, filters=None, request
 def update_grant(grant, rights, actor, filters=None, request=None):
     """Change the rights / rows of an access entry (its private profile)."""
     area = grant.area
-    if not _may_grant(actor, area):
+    if not _may_grant(actor, area, grant.target or None):
         raise PermissionDenied
     known = set(rights_available(area))
     rights = [r for r in rights if r in known]
@@ -1440,8 +1520,8 @@ def update_grant(grant, rights, actor, filters=None, request=None):
 
 
 def grant_access(area, user, profile, hours, actor, request=None, notify=True, target=''):
-    """Give ``user`` access. ``hours=None`` is permanent; otherwise 1..area.max_hours. Only owners grant."""
-    if not _may_grant(actor, area):
+    """Give ``user`` access. ``hours=None`` is permanent; otherwise 1..area.max_hours. Keepers and managers grant."""
+    if not _may_grant(actor, area, target or (profile.target if profile is not None else None) or None):
         raise PermissionDenied
     if user.pk == actor.pk:
         raise ValidationError(_('Owners already hold every right in their area.'))
@@ -1501,7 +1581,7 @@ def _clean_group_rights(area, rights):
 
 def create_group(area, target, name, rights, actor, filters=None, request=None, records='unset'):
     rights = rights or ['view']  # a new group reads; what else it may do is ticked inside the group
-    if not _may_grant(actor, area):
+    if not _may_grant(actor, area, target):
         raise PermissionDenied
     name = (name or '').strip()[:100]
     if not name:
@@ -1520,7 +1600,7 @@ def create_group(area, target, name, rights, actor, filters=None, request=None, 
 
 def update_group(group, actor, name=None, rights=None, filters=None, request=None, allow_empty=False, denied=None):
     area = group.area
-    if not _may_grant(actor, area) or group.private:
+    if not _may_grant(actor, area, group.target) or group.private:
         raise PermissionDenied
     if name is not None:
         name = name.strip()[:100]
@@ -1546,7 +1626,7 @@ def update_group(group, actor, name=None, rights=None, filters=None, request=Non
 
 def delete_group(group, actor, request=None):
     area = group.area
-    if not _may_grant(actor, area) or group.private:
+    if not _may_grant(actor, area, group.target) or group.private:
         raise PermissionDenied
     if group_members(group):
         raise ValidationError(_('The group has members. Remove them first.'))
@@ -1561,7 +1641,7 @@ def add_member(group, user, hours, actor, request=None, notify=True):
     later replace the reading ones, and leaving the last group means no access.
     """
     area = group.area
-    if not _may_grant(actor, area) or group.private or not group.target:
+    if not _may_grant(actor, area, group.target) or group.private or not group.target:
         raise PermissionDenied
     now = timezone.now()
     for grant in AreaGrant.objects.filter(area=area, user=user, target=group.target, revoked__isnull=True
@@ -1580,7 +1660,7 @@ def revoke_grant(grant, actor, request=None):
     """Owners revoke; the user may end their own access."""
     if grant.revoked is not None:
         return
-    if not (_may_grant(actor, grant.area) or actor.pk == grant.user_id):
+    if not (_may_grant(actor, grant.area, grant.target or None) or actor.pk == grant.user_id):
         raise PermissionDenied
     grant.revoked, grant.revoked_by_name = timezone.now(), actor.username
     grant.save()
@@ -1598,12 +1678,15 @@ def cancel_request(req, actor, request=None):
 
 
 def pending_requests_for(user):
-    """Waiting requests in the areas the user owns."""
-    query = Q(area__owners__user=user)
+    """Waiting requests: every one for a keeper; for a section manager those for object types of his section."""
+    waiting = AreaRequest.objects.filter(status=AreaRequestStatus.PENDING).exclude(user=user).select_related(
+        'area', 'user')
     if is_keeper(user):
-        query |= Q(area__isnull=True) | Q(area__owners__isnull=True)
-    return AreaRequest.objects.filter(query, status=AreaRequestStatus.PENDING).exclude(
-        user=user).distinct().select_related('area', 'user')
+        return waiting
+    if not AreaOwner.objects.filter(user=user).exists():
+        return waiting.none()
+    ids = [r.pk for r in waiting if r.area is not None and owns(user, r.area, r.target or None)]
+    return waiting.filter(pk__in=ids)
 
 
 def reset_owners(area, new_owners, actor_label='server command'):
@@ -1833,7 +1916,7 @@ def save_field_rules(area, profile, target, rules, actor, request=None):
     ``rules``: {field: (mode or 'default', contains)}. 'default' removes the rule. ``profile=None`` is the rule
     "nobody sees it" (only 'hidden' / 'default').
     """
-    if not _core_or_owner(actor, area):
+    if not _core_or_owner(actor, area, target):
         raise PermissionDenied
     if target not in area_models(area):
         raise ValidationError(_('"%(target)s" is not protected by this area.') % {'target': target})

@@ -36,7 +36,7 @@ class FieldRulesCase(AreaTestCase):
                                             custom_field_data={'secret_note': 'TOPSECRET-123', 'hw': self.switch.pk})
         self.area = areas.create_area('Tenants', ['tenancy.tenant', 'dcim.device'], [], self.master)
         areas.add_owner(self.area, self.owner1, self.master)
-        areas.add_owner(self.area, self.owner2, self.owner1)
+        areas.add_owner(self.area, self.owner2, self.master)
         self.edit = self.profile(self.area, 'Edit')
         self.read = self.profile(self.area, 'Read')
         self.grant = areas.grant_access(self.area, self.appadmin, self.edit, None, self.owner1)
@@ -90,8 +90,9 @@ class PolicyTest(FieldRulesCase):
         self.assertIsNone(policy.texts('cf:hw'))
 
     def test_only_owners_save_rules(self):
+        stranger = User.objects.create_user('stranger', 'st@example.com')
         with self.assertRaises(PermissionDenied):
-            areas.save_field_rules(self.area, self.edit, 'tenancy.tenant', {'name': ('hidden', '')}, self.master)
+            areas.save_field_rules(self.area, self.edit, 'tenancy.tenant', {'name': ('hidden', '')}, stranger)
         with self.assertRaises(ValidationError):
             areas.save_field_rules(self.area, self.edit, 'ipam.prefix', {'x': ('hidden', '')}, self.owner1)
 

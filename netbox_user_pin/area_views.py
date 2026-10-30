@@ -295,8 +295,13 @@ class AreaView(AreaViewMixin, View):
             'heading': _target_label(single) if single else area.name, 'single_target': single,
             'area': area, 'status': code, 'status_label': label, 'targets': targets,
             'owners': list(areas.owners(area)), 'is_owner': mine,
-            'owner_rows': [(u, (mine and area.owners.count() > 1) or areas.is_keeper(request.user))
-                           for u in areas.owners(area)], 'can_manage': areas.can_manage(request.user, area),
+            'owner_rows': [(u, areas.is_keeper(request.user) or areas._stand_in(request.user),
+                            areas.scope_text(areas.owner_scope(u, area) or []),
+                            list(areas.owner_scope(u, area) or []))
+                           for u in areas.owners(area)],
+            'can_area': areas.can_manage(request.user, area),  # the area itself and its object types
+            'can_keeper': areas._stand_in(request.user),  # appointing the section managers
+            'can_manage': areas.can_manage(request.user, area) or areas.is_owner(request.user, area),
             'bootstrap': not area.owners.exists(),
             'active_grants': [(g, _grant_rows(area, g)) for g in grants if g.is_active],
             'old_grants': [g for g in grants if not g.is_active][:15],
@@ -364,11 +369,16 @@ class AreaView(AreaViewMixin, View):
                 if not chosen:
                     messages.error(request, _('Choose a user.'))
                 if chosen:
-                    added, problems = areas.add_owners(area, chosen, request.user, request=request)
+                    added, problems = areas.add_owners(area, chosen, request.user, request=request,
+                                                       targets=request.POST.getlist('scope'))
                     for user in added:
                         messages.success(request, _('Owner added: {name}').format(name=user.username))
                     for exc in problems:
                         _errors(request, exc)
+            elif action == 'owner-scope':
+                areas.add_owner(area, get_object_or_404(User, pk=request.POST.get('pk')), request.user,
+                                request=request, targets=request.POST.getlist('scope'))
+                messages.success(request, _('The section was changed.'))
             elif action == 'owner-remove':
                 areas.remove_owner(area, get_object_or_404(User, pk=request.POST.get('pk')), request.user,
                                    request=request)
@@ -511,7 +521,7 @@ class AreaFieldsView(AreaViewMixin, View):
                              [(str(g.pk), f'{g.user.username} · {g.target or "*"}') for g in self._grants(area)
                               if g.is_active and g.profile.private],
             'grant_pk': (request.POST.get('grant') or request.GET.get('grant') or ''), 'targets': [(t, _target_label(t)) for t in areas.area_models(area)],
-            'can_manage': areas.can_manage(request.user, area),
+            'can_manage': areas.can_manage(request.user, area, target or None),
             'settings': service.get_settings(), **_step_up_context(request),
         })
 
@@ -598,8 +608,8 @@ class RequestDecideView(AreaViewMixin, View):
         if area is None:
             app_label, _dot, model = req.target.partition('.')
             area = areas.area_for(app_label, model or None, package=app_label)
-        allowed = areas.is_keeper(request.user) if area is None or not area.owners.exists() \
-            else areas.is_owner(request.user, area)
+        allowed = areas.is_keeper(request.user) if area is None \
+            else areas._may_grant(request.user, area, req.target or None)
         if not allowed or req.user_id == request.user.pk:
             raise PermissionDenied
         return req, area
@@ -744,7 +754,8 @@ class GroupView(AreaViewMixin, View):
             'deny_conditions': [(i, text) for i, text, _field in areas.group_deny_conditions(group)],
             'records': group.records, 'denied': set(group.denied or []),
             'ops': list(areas.row_op_labels().items()),
-            'can_manage': areas.can_manage(request.user, area) or areas._may_grant(request.user, area),
+            'can_manage': areas.can_manage(request.user, area, group.target) or areas._may_grant(
+                request.user, area, group.target),
             'settings': service.get_settings(),
         })
 

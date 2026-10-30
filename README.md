@@ -46,6 +46,33 @@ sensitive pages ("enter your PIN to continue"), so the PIN logic exists only onc
 
 Requires NetBox **4.7+** (Python 3.12+).
 
+## The model since 2.x (this wins over older text below)
+
+| Who | Rules them | Can do |
+|---|---|---|
+| **PIN-only access** (`PinUserNNNN`) | only its groups (always) | no API, no requests; without a group only changes its PIN; not a NetBox user (hidden from every user list) |
+| **Regular user in a group** (protection ON) | only what the groups allow | no PIN prompt, no API key |
+| **Regular user with an exception** | NetBox permissions alone | PIN plugin pages by their role |
+| **Section manager** ("owner" before 2.2) | NetBox as any user; **full power over his section** | groups, fields, members, requests of his section (an object type or a whole area); creates / runs PIN-only accesses put under him |
+| **Protection keeper** | everything | areas, object types, section managers, exceptions, the ON/OFF switch, all PIN-only accesses; moves an access under a manager |
+
+* **Protection ON / OFF** (Protected areas, top card, keepers only). ON: what no group allows is denied to everybody
+  except keepers and exceptions. OFF: everybody works by NetBox alone; PIN-only accesses can only change their PIN
+  ("switched off by the administrator"). If the last keeper's account is deleted the protection goes OFF and cannot be
+  switched on before a keeper exists. Emergency on the server (e-mails every keeper and superuser, audited):
+  `userpin_keeper --add <user>`, `userpin_default_deny --on/--off`.
+* **Section manager**: appointed by a keeper with a section (object types of the area; nothing ticked = the whole
+  area). Needs a PIN and 2FA, no department role. Requests for his object types go to him **and** the keepers; every
+  decision is e-mailed to the requester, the keepers and the manager.
+* **PIN-only accesses**: an access made by a keeper belongs to the keepers; a manager sees only those put under him, and
+  creates them only into the groups of his section (the keepers are e-mailed). Disable / enable, PIN reset, validity,
+  languages, rules - every action is e-mailed to the person (switches: page and access). Changes the person makes in
+  NetBox go to the administrators as a summary every N minutes or at once, with the changed fields.
+* **Working time** (since 2.2): general rules on the PIN-only page (country for the public holidays, working days,
+  hours) and own rules per access (or none). Outside the time nobody signs in and is told the hours. When the time
+  ends during work: 30 minutes and **one save**, then the sign-out. Needs `pip install holidays` for the public
+  holidays (the library works offline; without it only days and hours are checked).
+
 ## Installation
 
 ```bash

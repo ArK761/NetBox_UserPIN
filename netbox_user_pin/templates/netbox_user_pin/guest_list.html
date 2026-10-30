@@ -63,12 +63,32 @@
           <label class="small">{% trans "Language of the NetBox interface" %}</label>
           <select class="form-select form-select-sm mb-1" name="ui_language"><option value="">{% trans "default" %}</option>{% for code, label in languages %}<option value="{{ code }}"{% if r.guest.ui_language == code %} selected{% endif %}>{{ label }}</option>{% endfor %}</select>
           <button class="btn btn-sm btn-outline-primary" type="submit">{% trans "Save" %}</button></form>
+        {% if is_keeper_level %}<div class="fw-bold small">{% trans "Manager" %}</div>
+        <form method="post" class="d-flex gap-1 mb-2">{% csrf_token %}<input type="hidden" name="pk" value="{{ r.guest.pk }}"><input type="hidden" name="action" value="manager">
+          <select class="form-select form-select-sm" name="manager"><option value="">{% trans "the protection keepers" %}</option>{% for m in managers %}<option value="{{ m.pk }}"{% if r.guest.manager_id == m.pk %} selected{% endif %}>{{ m.username }}</option>{% endfor %}</select>
+          <button class="btn btn-sm btn-outline-primary" type="submit">{% trans "Save" %}</button></form>
+        <div class="form-text mb-2">{% trans "Under a section manager he runs this access; the protection keepers always can." %}</div>
+        {% elif r.guest.manager %}<div class="small text-secondary mb-2">{% trans "Manager" %}: {{ r.guest.manager.username }}</div>{% endif %}
         <div class="fw-bold small">{% trans "E-mails" %}</div>
         <form method="post" class="mb-2">{% csrf_token %}<input type="hidden" name="pk" value="{{ r.guest.pk }}"><input type="hidden" name="action" value="mails">
           <div class="form-check small"><input class="form-check-input" type="checkbox" name="mail_person" id="mp{{ r.guest.pk }}"{% if r.guest.mail_person %} checked{% endif %}><label class="form-check-label" for="mp{{ r.guest.pk }}">{% trans "Send to the person (every change of the access)" %}</label></div>
           <div class="form-check small"><input class="form-check-input" type="checkbox" name="mail_changes" id="mc{{ r.guest.pk }}"{% if r.guest.mail_changes %} checked{% endif %}><label class="form-check-label" for="mc{{ r.guest.pk }}">{% trans "Send to the administrators (what the person changed)" %}</label></div>
           {% if not pin_settings.guest_mail_person or not pin_settings.guest_mail_changes %}<div class="form-text text-warning">{% trans "Switched off for everybody on this page – that wins." %}</div>{% endif %}
           <button class="btn btn-sm btn-outline-primary" type="submit">{% trans "Save" %}</button></form>
+        <div class="fw-bold small">{% trans "Working time" %}</div>
+        <form method="post" class="mb-2">{% csrf_token %}<input type="hidden" name="pk" value="{{ r.guest.pk }}"><input type="hidden" name="action" value="work">
+          <select class="form-select form-select-sm mb-1" name="work_mode">
+            <option value="general"{% if r.guest.work_mode == 'general' %} selected{% endif %}>{% trans "the general rules" %}</option>
+            <option value="own"{% if r.guest.work_mode == 'own' %} selected{% endif %}>{% trans "own rules" %}</option>
+            <option value="none"{% if r.guest.work_mode == 'none' %} selected{% endif %}>{% trans "no limit" %}</option></select>
+          <div class="d-flex flex-wrap gap-2 align-items-end">
+            <div><label class="small">{% trans "Country (holidays)" %}</label>
+              <select class="form-select form-select-sm" name="country">{% for code, name in work_countries %}<option value="{{ code }}"{% if code == r.guest.work_country|default:pin_settings.guest_work_country %} selected{% endif %}>{{ name }}</option>{% endfor %}</select></div>
+            <div><label class="small">{% trans "Days" %}</label><div class="d-flex gap-2">{% for num, name in weekdays %}<label class="form-check-label small"><input class="form-check-input" type="checkbox" name="days" value="{{ num }}"{% if num in r.work_days %} checked{% endif %}> {{ name }}</label>{% endfor %}</div></div>
+            <div><label class="small">{% trans "From" %}</label><input class="form-control form-control-sm" type="time" name="start" value="{{ r.work_from }}"></div>
+            <div><label class="small">{% trans "To" %}</label><input class="form-control form-control-sm" type="time" name="end" value="{{ r.work_to }}"></div>
+          </div>
+          <button class="btn btn-sm btn-outline-primary mt-1" type="submit">{% trans "Save" %}</button></form>
         <div class="fw-bold small">{% trans "Account valid until" %}</div>
         <form method="post" class="d-flex gap-1 mb-2">{% csrf_token %}<input type="hidden" name="pk" value="{{ r.guest.pk }}"><input type="hidden" name="action" value="expires">
           <input class="form-control form-control-sm" type="datetime-local" name="expires" value="{{ r.guest.expires|date:'Y-m-d\TH:i' }}">
@@ -101,6 +121,19 @@
   <div class="col-md-2"><button class="btn btn-primary" type="submit">{% trans "Save" %}</button></div>
   <div class="col-12 form-text">{% trans "Each access can switch them off for itself (Activity and rules). Without e-mails to the person, the links for the PIN are shown to you on the screen." %}</div>
 </form></div></div>
+<div class="card mb-3"><h2 class="card-header"><i class="mdi mdi-briefcase-clock-outline"></i> {% trans "Working time (for everybody)" %}</h2>
+<div class="card-body"><form method="post">{% csrf_token %}<input type="hidden" name="action" value="work-default">
+  <div class="form-check form-switch mb-2"><input class="form-check-input" type="checkbox" name="work_on" id="gwo"{% if pin_settings.guest_work_on %} checked{% endif %}><label class="form-check-label" for="gwo">{% trans "Limit the working time of the PIN-only accesses" %}</label></div>
+  <div class="d-flex flex-wrap gap-2 align-items-end">
+            <div><label class="small">{% trans "Country (holidays)" %}</label>
+              <select class="form-select form-select-sm" name="country">{% for code, name in work_countries %}<option value="{{ code }}"{% if code == pin_settings.guest_work_country %} selected{% endif %}>{{ name }}</option>{% endfor %}</select></div>
+            <div><label class="small">{% trans "Days" %}</label><div class="d-flex gap-2">{% for num, name in weekdays %}<label class="form-check-label small"><input class="form-check-input" type="checkbox" name="days" value="{{ num }}"{% if num in pin_settings.guest_work_days %} checked{% endif %}> {{ name }}</label>{% endfor %}</div></div>
+            <div><label class="small">{% trans "From" %}</label><input class="form-control form-control-sm" type="time" name="start" value="{{ pin_settings.guest_work_from|time:"H:i" }}"></div>
+            <div><label class="small">{% trans "To" %}</label><input class="form-control form-control-sm" type="time" name="end" value="{{ pin_settings.guest_work_to|time:"H:i" }}"></div>
+          </div>
+  <div class="form-text mt-2">{% trans "Outside the working days and hours, and on the public holidays of the country, nobody signs in. When the time ends while somebody works, they have 30 minutes and one save, then they are signed out. Each access can have its own rules or none (Activity and rules)." %}{% if not work_available %} <span class="text-danger">{% trans "The library of public holidays is not installed (pip install holidays): only days and hours are checked." %}</span>{% endif %}</div>
+  <div class="mt-2"><button class="btn btn-primary" type="submit"{% if not is_keeper_level %} disabled{% endif %}>{% trans "Save" %}</button></div>
+</form></div></div>
 <div class="card mb-3"><h2 class="card-header"><i class="mdi mdi-shield-lock-outline"></i> {% trans "Rules for wrong PINs (defaults)" %}</h2>
 <div class="card-body"><form method="post" class="row g-2 align-items-end">{% csrf_token %}<input type="hidden" name="action" value="rules-default">
   <div class="col-md-3"><label class="form-label">{% trans "Wrong PINs per step" %}</label><input class="form-control" name="step" type="number" min="1" max="50" value="{{ default_step }}" required></div>
@@ -112,7 +145,7 @@
 <div class="card-body"><form method="post" class="row g-2">{% csrf_token %}<input type="hidden" name="action" value="create">
   <div class="col-md-4"><label class="form-label">{% trans "Name" %}</label><input class="form-control" name="name" required></div>
   <div class="col-md-4"><label class="form-label">{% trans "E-mail" %}</label><input class="form-control" type="email" name="email" required></div>
-  <div class="col-md-4"><label class="form-label">{% trans "Group" %}</label><select class="form-select" name="group" required><option value="">{% trans "— choose a group —" %}</option>{% for pk, label in group_choices %}<option value="{{ pk }}">{{ label }}</option>{% endfor %}</select></div>
+  <div class="col-md-4"><label class="form-label">{% trans "Group" %}</label><select class="form-select" name="group"{% if not is_keeper_level %} required{% endif %}><option value="">{% if is_keeper_level %}{% trans "— no group yet (he can only change his PIN) —" %}{% else %}{% trans "— choose a group —" %}{% endif %}</option>{% for pk, label in group_choices %}<option value="{{ pk }}">{{ label }}</option>{% endfor %}</select></div>
   <div class="col-md-3"><label class="form-label">{% trans "Access ends (optional)" %}</label><input class="form-control" type="datetime-local" name="expires"></div>
   <div class="col-md-3"><label class="form-label">{% trans "Idle (minutes)" %}</label><input class="form-control" type="number" name="idle" value="30" min="5" max="240"></div>
   <div class="col-md-3"><label class="form-label">{% trans "Session (hours)" %}</label><input class="form-control" type="number" name="hours" value="8" min="1" max="24"></div>
@@ -121,6 +154,15 @@
   <div class="col-md-2"><label class="form-label">{% trans "PIN language" %}</label><select class="form-select" name="pin_language"><option value="">{% trans "default" %}</option>{% for code, label in languages %}<option value="{{ code }}">{{ label }}</option>{% endfor %}</select></div>
   <div class="col-md-2"><label class="form-label">{% trans "NetBox language" %}</label><select class="form-select" name="ui_language"><option value="">{% trans "default" %}</option>{% for code, label in languages %}<option value="{{ code }}">{{ label }}</option>{% endfor %}</select></div>
   <div class="col-md-5"><label class="form-label">{% trans "Description (optional)" %}</label><input class="form-control" name="description" maxlength="150" placeholder="{% trans 'e.g. technician of company XY' %}"></div>
+  <div class="col-12"><details><summary class="text-secondary">{% trans "Working time (optional – otherwise the general rules)" %}</summary>
+    <select class="form-select form-select-sm w-auto my-1" name="work_mode"><option value="general">{% trans "the general rules" %}</option><option value="own">{% trans "own rules" %}</option><option value="none">{% trans "no limit" %}</option></select>
+    <div class="d-flex flex-wrap gap-2 align-items-end">
+            <div><label class="small">{% trans "Country (holidays)" %}</label>
+              <select class="form-select form-select-sm" name="country">{% for code, name in work_countries %}<option value="{{ code }}"{% if code == pin_settings.guest_work_country %} selected{% endif %}>{{ name }}</option>{% endfor %}</select></div>
+            <div><label class="small">{% trans "Days" %}</label><div class="d-flex gap-2">{% for num, name in weekdays %}<label class="form-check-label small"><input class="form-check-input" type="checkbox" name="days" value="{{ num }}"{% if num in pin_settings.guest_work_days %} checked{% endif %}> {{ name }}</label>{% endfor %}</div></div>
+            <div><label class="small">{% trans "From" %}</label><input class="form-control form-control-sm" type="time" name="start" value="{{ pin_settings.guest_work_from|time:"H:i" }}"></div>
+            <div><label class="small">{% trans "To" %}</label><input class="form-control form-control-sm" type="time" name="end" value="{{ pin_settings.guest_work_to|time:"H:i" }}"></div>
+          </div></details></div>
   <div class="col-md-6"><div class="form-check"><input class="form-check-input" type="checkbox" name="mail_person" id="nmp" checked><label class="form-check-label" for="nmp">{% trans "Send to the person (every change of the access)" %}</label></div></div>
   <div class="col-md-6"><div class="form-check"><input class="form-check-input" type="checkbox" name="mail_changes" id="nmc" checked><label class="form-check-label" for="nmc">{% trans "Send to the administrators (what the person changed)" %}</label></div></div>
   <div class="col-12 text-end"><button class="btn btn-primary" type="submit">{% trans "Create and send the invitation" %}</button></div>

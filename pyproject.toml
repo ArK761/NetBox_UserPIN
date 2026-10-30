@@ -19,6 +19,7 @@ dependencies = [
     "argon2-cffi>=23.1",
     "cryptography>=42",
     "segno>=1.5",
+    "holidays>=0.50",
 ]
 
 [project.urls]

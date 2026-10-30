@@ -519,15 +519,14 @@ class KeeperForm(forms.Form):
 class AreaOwnerForm(forms.Form):
     user = UserChoiceField(queryset=get_user_model().objects.none(), label=_('User'), with_email=True,
                            widget=forms.Select(attrs=SEARCHABLE),
-                           help_text=_('Department heads and delegates (and CORE deputies). Not the superusers and the protection '
-                                       'keepers: the owners decide about them.'))
+                           help_text=_('Any NetBox account with a PIN and 2FA. Not the superusers, the protection '
+                                       'keepers and the PIN-only accesses.'))
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        from . import roles
-        from .models import PolicyKeeper
-        self.fields['user'].queryset = roles.manager_users(include_superusers=False).exclude(
-            pk__in=PolicyKeeper.objects.values('user_id'))
+        from .models import PinGuest, PolicyKeeper
+        self.fields['user'].queryset = get_user_model().objects.filter(is_active=True, is_superuser=False).exclude(
+            pk__in=PolicyKeeper.objects.values('user_id')).exclude(pk__in=PinGuest.objects.values('user_id'))
 
 
 class AreaProfileForm(forms.Form):
