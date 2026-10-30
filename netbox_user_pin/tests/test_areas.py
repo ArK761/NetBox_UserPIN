@@ -671,34 +671,77 @@ class DefaultDenyTest(AreaTestCase):
         response = self.client.get(reverse('plugins:netbox_user_pin:areas'))
         self.assertRedirects(response, reverse('plugins:netbox_user_pin:my_access'), fetch_redirect_response=False)
 
-    def test_only_people_with_a_pin_are_ruled_by_the_protection(self):
+    def test_switch_on_rules_everybody_but_exceptions_and_keepers_switch_off_leaves_netbox(self):
+        from io import StringIO
+
+        from django.core import mail
+        from django.core.management import call_command
         from netbox_user_pin import area_guard
-        self.add_keeper()
+        from netbox_user_pin.models import AllowedDomain, PinSettings
+        AllowedDomain.objects.create(domain='example.com', verified=timezone.now())
+        settings = service.get_settings()
+        settings.protect_scope = 'pin'  # the rule since 2.1.0
+        settings.save()
+        self.add_keeper()  # the first keeper switches the protection on
         area = self.make_area(targets=('dcim.site',))
         colleague = User.objects.create_superuser('colleague', 'c@example.com', 'x')
+        armed = lambda user: area_guard.arm_user(User.objects.get(pk=user.pk))  # noqa: E731
+        areas.clear_cache()
+        # ON: everybody who is no keeper and has no exception - the colleague admin included - is ruled by the PIN
+        self.assertFalse(areas.is_exempt(armed(colleague)))
+        self.assertFalse(armed(colleague).has_perm('dcim.add_site'))
+        self.assertFalse(armed(colleague).has_perm('users.view_user'))
+        # an exception: NetBox alone; the groups he is in are put aside and named
+        group = areas.create_group(area, 'dcim.site', 'Readers', ['view'], self.owner1, records='all')
+        areas.add_member(group, colleague, None, self.owner1)
+        areas.add_exception(colleague, self.keeper)
+        self.assertTrue(areas.is_exempt(armed(colleague)))
+        self.assertTrue(armed(colleague).has_perm('dcim.add_site'))
+        self.assertIn('Readers', areas.group_names_of(colleague))
+        self.assertTrue(areas.has_exception(colleague))
+        areas.remove_exception(colleague, self.keeper)
+        # OFF: everybody but the PIN-only accesses works by NetBox alone
+        areas.set_default_deny(False, self.keeper)
+        areas.clear_cache()
+        self.assertTrue(areas.is_exempt(armed(colleague)))
+        self.assertTrue(armed(colleague).has_perm('dcim.add_site'))
+        self.assertTrue(areas.switched_off())
+        # the server command switches it back on, audited, and every keeper and superuser hears of it
+        with override_settings(EMAIL={'SERVER': 'localhost', 'FROM_EMAIL': 'netbox@example.com'}):
+            mail.outbox.clear()
+            out = StringIO()
+            call_command('userpin_default_deny', '--on', stdout=out)
+            self.assertTrue(PinSettings.load().default_deny)
+            told = {address for m in mail.outbox for address in m.to}
+            self.assertTrue({'k@example.com', 'c@example.com', 'm@example.com'} <= told, told)
+        areas.clear_cache()
+        self.assertFalse(areas.switched_off())
+
+    def test_last_keeper_gone_switches_the_protection_off_and_the_server_appoints_one(self):
+        from io import StringIO
+
+        from django.core.management import CommandError, call_command
         settings = service.get_settings()
         settings.protect_scope = 'pin'
         settings.save()
+        self.add_keeper()
         areas.clear_cache()
-        armed = area_guard.arm_user(User.objects.get(pk=colleague.pk))
-        self.assertTrue(areas.is_exempt(armed))  # in no group: NetBox decides alone
-        self.assertTrue(armed.has_perm('dcim.add_site'))
-        self.assertTrue(armed.has_perm('users.view_user'))  # "deny everything not allowed" does not reach him either
-        self.assertTrue(armed.has_perm('netbox_user_pin.view_mypin'))  # the menu follows NetBox: a superuser sees it
-        plain = area_guard.arm_user(User.objects.create_user('plaincol', 'pc@example.com', 'x'))
-        self.assertTrue(areas.is_exempt(plain))
-        self.assertFalse(plain.has_perm('netbox_user_pin.view_mypin'))  # no NetBox permission: no menu
-        # put into a group of an area: from now on the PIN rules him
-        group = areas.create_group(area, 'dcim.site', 'Readers', ['view'], self.owner1, records='all')
-        areas.add_member(group, colleague, None, self.owner1)
+        self.assertTrue(areas.default_deny_active())
+        self.keeper.delete()  # somebody deletes the account of the last keeper in NetBox
         areas.clear_cache()
-        armed = area_guard.arm_user(User.objects.get(pk=colleague.pk))
-        self.assertFalse(areas.is_exempt(armed))
-        self.assertFalse(armed.has_perm('dcim.add_site'))
-        self.assertTrue(armed.has_perm('netbox_user_pin.view_mypin'))
-        # the keeper still runs everything
-        self.assertTrue(area_guard.arm_user(User.objects.get(pk=self.keeper.pk)).has_perm(
-            'netbox_user_pin.view_areaspage'))
+        self.assertFalse(areas.default_deny_active())  # off - and it cannot go on without a keeper
+        self.assertTrue(areas.switched_off())
+        with self.assertRaises(CommandError):
+            call_command('userpin_default_deny', '--on', stdout=StringIO())
+        new = User.objects.create_user('newkeeper', 'nk@example.com', 'x')
+        with self.assertRaises(CommandError):
+            call_command('userpin_keeper', '--add', 'newkeeper', stdout=StringIO())  # no PIN and 2FA yet
+        service.set_pin(new, GOOD_PIN)
+        enable_2fa(new)
+        call_command('userpin_keeper', '--add', 'newkeeper', stdout=StringIO())
+        areas.clear_cache()
+        self.assertTrue(areas.is_keeper(new))
+        self.assertTrue(PinEvent.objects.filter(action=PinEventAction.KEEPER_ADDED, user=new).exists())
 
     def test_the_server_test_command_reports_what_a_user_gets(self):
         from io import StringIO
@@ -2558,6 +2601,49 @@ class GuestAccessTest(AreaTestCase):
             self.assertEqual(mail.outbox, [])  # 15 minutes are not over yet
             self.guests.report_changes(force=True)
             self.assertIn('description: from "old" to "newer"', mail.outbox[-1].body)
+
+    def test_pin_only_accesses_are_no_netbox_users_and_wait_while_switched_off(self):
+        from netbox_user_pin import roles
+        settings = service.get_settings()
+        settings.protect_scope = 'pin'
+        settings.save()
+        areas.clear_cache()
+        guest_user = self.guest.user
+        # not in the lists of NetBox users (page, API, drop-downs) nor on the Users page of the plugin
+        admin = User.objects.create_superuser('listadmin', 'la@example.com', 'x')
+        areas.add_exception(admin, self.keeper)  # works by NetBox: sees every NetBox user - but no PIN-only access
+        self.assertFalse(User.objects.restrict(admin, 'view').filter(pk=guest_user.pk).exists())
+        self.assertTrue(User.objects.restrict(admin, 'view').filter(pk=admin.pk).exists())
+        self.assertFalse(roles.visible_users(admin).filter(pk=guest_user.pk).exists())
+        self.client.force_login(admin)
+        page = self.client.get('/users/users/')
+        self.assertNotContains(page, guest_user.username)
+        self.client.logout()
+        # no request for access: the refusal page offers none
+        self.sign_in()
+        page = self.client.get('/dcim/devices/')
+        self.assertNotContains(page, 'name="note"', status_code=page.status_code)
+        # switched off by a keeper: only the own page and the PIN
+        areas.set_default_deny(False, self.keeper)
+        areas.clear_cache()
+        response = self.client.get('/tenancy/tenants/')
+        self.assertRedirects(response, '/plugins/user-pin/guest/', fetch_redirect_response=False)
+        home = self.client.get('/plugins/user-pin/guest/')
+        self.assertContains(home, 'switched off by the administrator')
+        self.assertEqual(self.client.get('/plugins/user-pin/guest/change/').status_code, 200)
+        areas.set_default_deny(True, self.keeper)
+        areas.clear_cache()
+        self.assertEqual(self.client.get('/tenancy/tenants/').status_code, 200)
+
+    def test_without_a_group_only_the_pin_can_be_changed(self):
+        from netbox_user_pin.models import AreaGrant
+        AreaGrant.objects.filter(user=self.guest.user).update(revoked=timezone.now())
+        areas.clear_cache()
+        self.sign_in()
+        home = self.client.get('/plugins/user-pin/guest/')
+        self.assertContains(home, 'No access has been given to you yet')
+        self.assertTrue(self.denied(self.client.get('/tenancy/tenants/')))
+        self.assertEqual(self.client.get('/plugins/user-pin/guest/change/').status_code, 200)
 
     def test_netbox_user_cannot_take_the_address_of_a_pin_only_access(self):
         user = User.objects.create_user('plainx', 'plainx@example.com', 'x')

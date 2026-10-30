@@ -169,7 +169,8 @@ class AreaListView(AreaViewMixin, View):
             'waiting': len(waiting_list), 'waiting_list': waiting_list,
             'deny_on': service.get_settings().default_deny, 'keepers': areas.keepers(),
             'is_keeper': areas.is_keeper(request.user), 'can_keepers': areas.can_manage_keepers(request.user),
-            'exceptions': areas.exceptions() if areas.is_keeper(request.user) else [],
+            'exceptions': [setattr(e, 'groups', areas.group_names_of(e.user)) or e for e in areas.exceptions()]
+            if areas.is_keeper(request.user) else [],
             'exception_users': [(pk, label) for pk, label in _all_user_choices()
                                 if pk not in {k.pk for k in areas.keepers()}] if areas.is_keeper(request.user) else [],
             'denied_view': service.get_settings().denied_view, 'allow_requests': service.get_settings().allow_requests,
@@ -200,6 +201,9 @@ class AreaListView(AreaViewMixin, View):
                 areas.add_exception(user, request.user, end, request.POST.get('note', ''), request=request)
                 messages.success(request, _('The exception is set: %(user)s works with the permissions of NetBox.')
                                  % {'user': user.username})
+                if (groups := areas.group_names_of(user)):
+                    messages.warning(request, _('%(user)s is in groups (%(groups)s): they do not apply to him while '
+                                                'the exception lasts.') % {'user': user.username, 'groups': groups})
                 return redirect('plugins:netbox_user_pin:areas')
             if action == 'exception-remove':
                 from django.contrib.auth import get_user_model
@@ -408,6 +412,9 @@ class AreaView(AreaViewMixin, View):
                     messages.error(request, _('Choose a user.'))
                 for user in chosen:
                     areas.add_member(group, user, None, request.user, request=request)
+                    if areas.has_exception(user):
+                        messages.warning(request, _('%(user)s has an exception: the group does not apply to him while '
+                                                    'the exception lasts.') % {'user': user.username})
                 if chosen:
                     messages.success(request, _('Added to the group.'))
             elif action == 'grant':
@@ -789,6 +796,9 @@ class GroupView(AreaViewMixin, View):
                     messages.error(request, _('Choose a user.'))
                 for user in chosen:
                     areas.add_member(group, user, None, request.user, request=request)
+                    if areas.has_exception(user):
+                        messages.warning(request, _('%(user)s has an exception: the group does not apply to him while '
+                                                    'the exception lasts.') % {'user': user.username})
                 if chosen:
                     messages.success(request, _('Added to the group.'))
             elif action == 'records':

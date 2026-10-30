@@ -26,4 +26,7 @@ class Command(BaseCommand):
         service.log_event(PinEventAction.DENY_ENABLED if options['on'] else PinEventAction.DENY_DISABLED,
                           detail='by the server command userpin_default_deny')
         areas.clear_cache()
+        told = areas.tell_emergency('the protection ("deny everything not allowed") was switched ' +
+                                    ('on' if options['on'] else 'off'))
         self.stdout.write(self.style.SUCCESS('Switched ' + ('on.' if options['on'] else 'off.')))
+        self.stdout.write(f'E-mailed: {", ".join(told) or "nobody (no verified e-mail)"}')

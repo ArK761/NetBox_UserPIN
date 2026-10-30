@@ -7730,6 +7730,55 @@ msgstr ""
 "PIN riadi prístupy len cez PIN a užívateľov, ktorých vložíš do skupiny alebo"
 " urobíš vlastníkmi oblasti. Všetci ostatní pracujú len podľa práv NetBoxu."
 
+msgid ""
+"Protection ON: everybody but the protection keepers and the exceptions sees "
+"only what the groups allow. Protection OFF: everybody works by the NetBox "
+"permissions alone and the PIN-only accesses can only change their PIN. The "
+"PIN-only accesses always see only their own groups."
+msgstr ""
+"Ochrana ZAPNUTÁ: všetci okrem strážcov ochrany a výnimiek vidia len to, čo "
+"dovolia skupiny. Ochrana VYPNUTÁ: všetci pracujú len podľa práv NetBoxu a "
+"ľudia len s PIN-om si môžu iba zmeniť PIN. Ľudia len s PIN-om vždy vidia len"
+" svoje skupiny."
+
+msgid ""
+"The function is switched off by the administrator for now. You can only "
+"change your PIN."
+msgstr "Funkcia je dočasne vypnutá administrátorom. Môžeš si iba zmeniť PIN."
+
+msgid "No access has been given to you yet. You can only change your PIN."
+msgstr "Zatiaľ ti nebol pridelený žiadny prístup. Môžeš si iba zmeniť PIN."
+
+#, python-format
+msgid ""
+"%(user)s is in groups (%(groups)s): they do not apply to him while the "
+"exception lasts."
+msgstr ""
+"%(user)s je v skupinách (%(groups)s): kým trvá výnimka, neplatia pre neho."
+
+#, python-format
+msgid ""
+"%(user)s has an exception: the group does not apply to him while the "
+"exception lasts."
+msgstr "%(user)s má výnimku: kým trvá, skupina pre neho neplatí."
+
+#, python-format
+msgid "is in groups: %(g)s – they do not apply while the exception lasts"
+msgstr "je v skupinách: %(g)s – kým trvá výnimka, neplatia"
+
+msgid "Emergency change of the PIN protection"
+msgstr "Núdzová zmena PIN ochrany"
+
+#, python-format
+msgid ""
+"On the server somebody ran an emergency command: %(what)s.\n"
+"\n"
+"If it was not agreed, check the server and the audit log."
+msgstr ""
+"Na serveri niekto spustil núdzový príkaz: %(what)s.\n"
+"\n"
+"Ak to nebolo dohodnuté, skontroluj server a audit log."
+
 #, python-format
 #~ msgid ""
 #~ "The e-mail address %(email)s belongs to the NetBox user %(user)s. A PIN-only"

@@ -163,9 +163,10 @@ def manager_users(include_superusers=True):
 def visible_users(user):
     """Users whose PIN state ``user`` may see."""
     user_model = get_user_model()
+    people = user_model.objects.filter(pin_guest__isnull=True)  # the PIN-only accesses live on their own page only
     if is_core(user):
-        return user_model.objects.all()
-    return user_model.objects.filter(pin_membership__department__in=managed_departments(user))
+        return people
+    return people.filter(pin_membership__department__in=managed_departments(user))
 
 
 def role_in(user, department):

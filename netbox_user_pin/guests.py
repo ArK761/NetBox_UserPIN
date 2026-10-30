@@ -884,6 +884,8 @@ def guard(request, guest):
     if must_change(guest) and not path.startswith(('/plugins/user-pin/guest/change/', '/plugins/user-pin/guest/logout/',
                                                    '/static/', '/media/')):
         return redirect('plugins:netbox_user_pin:guest_change')  # like 'must change password at next logon'
+    if areas.switched_off() and not path.startswith(('/plugins/user-pin/guest/', '/static/', '/media/')):
+        return redirect('plugins:netbox_user_pin:guest_home')  # switched off by a keeper: only the own page and PIN
     if path.startswith('/plugins/user-pin/guest/') and not path.startswith('/plugins/user-pin/guest/reset/'):
         return None
     if path == '/' or path.startswith('/plugins/user-pin/'):

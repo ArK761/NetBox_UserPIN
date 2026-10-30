@@ -32,7 +32,7 @@ from django.apps import apps
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import DatabaseError, transaction
 from django.db.models import Q
-from django.utils import timezone
+from django.utils import timezone, translation
 from django.utils.translation import gettext as _
 
 from . import roles, service
@@ -163,13 +163,8 @@ def _refresh():
         _cache['exempt'] = frozenset(PolicyException.objects.filter(
             Q(expires__isnull=True) | Q(expires__gt=timezone.now()), user__is_active=True).values_list('user_id', flat=True))
         _cache['scope'] = _settings.protect_scope or 'all'
-        if _cache['scope'] == 'pin':
-            # who the PIN rules: the PIN-only accesses, the members of a group and the owners of an area
-            from .models import PinGuest
-            _cache['governed'] = frozenset(PinGuest.objects.values_list('user_id', flat=True)) | frozenset(
-                AreaGrant.objects.filter(Q(expires__isnull=True) | Q(expires__gt=timezone.now()),
-                                         revoked__isnull=True).values_list('user_id', flat=True)) | frozenset(
-                AreaOwner.objects.values_list('user_id', flat=True))
+        from .models import PinGuest
+        _cache['guests'] = frozenset(PinGuest.objects.values_list('user_id', flat=True))
     except DatabaseError:
         logger.exception('PIN: the keepers cannot be read, the last known state stays')
     _cache['at'] = time.monotonic()
@@ -246,22 +241,28 @@ def is_exempt(user):
     active_areas()
     if not getattr(user, 'is_authenticated', False):
         return False
-    if _cache.get('scope') == 'pin' and user.pk not in _cache.get('governed', ()):
-        return True  # "only people with a PIN": nobody put into the protection - NetBox's permissions alone
+    if _cache.get('scope') == 'pin' and user.pk not in _cache.get('guests', ()) and not _cache['deny']:
+        return True  # the protection is switched off: everybody but the PIN-only accesses works by NetBox alone
     return user.pk in _cache['exempt']
 
 
 def outside(user):
-    """"Only people with a PIN" is chosen and the user has nothing to do with the PIN: the plugin keeps out of sight."""
+    """The PIN does not rule the user (protection off, or an exception) and he has no part in running it."""
     if not getattr(user, 'is_authenticated', False):
         return False
     active_areas()
-    if _cache.get('scope') != 'pin' or user.pk in _cache.get('governed', ()) or is_keeper(user):
+    if _cache.get('scope') != 'pin' or user.pk in _cache.get('guests', ()) or not is_exempt(user) or is_keeper(user):
         return False
     if user.is_superuser and not _cache['keepers']:
         return False  # without keepers the master runs the PIN
     return not (roles.core_roles().filter(user=user).exists() or roles.managed_departments(user).exists()
                 or administers_any(user))
+
+
+def switched_off():
+    """The protection (\"deny everything not allowed\") is off: the PIN-only accesses can do nothing meanwhile."""
+    active_areas()
+    return _cache.get('scope') == 'pin' and not _cache['deny']
 
 
 def own_tokens_allowed():
@@ -1619,6 +1620,18 @@ def keepers():
     return [k.user for k in PolicyKeeper.objects.select_related('user').filter(user__is_active=True)]
 
 
+def tell_emergency(what):
+    """A server command changed the protection: every keeper and every superuser hears of it (nothing happens quietly)."""
+    from django.contrib.auth import get_user_model
+    people = {u.pk: u for u in keepers()}
+    people.update({u.pk: u for u in get_user_model().objects.filter(is_superuser=True, is_active=True)})
+    with translation.override(service.get_settings().language or 'en'):
+        subject = _('Emergency change of the PIN protection')
+        body = _('On the server somebody ran an emergency command: %(what)s.\n\nIf it was not agreed, check the '
+                 'server and the audit log.') % {'what': what}
+    return [u.username for u in people.values() if service.send_user_mail(u, subject, body)]
+
+
 def can_manage_keepers(actor):
     """Keepers; as long as there are none, CORE / the master appoint the first one."""
     if PolicyKeeper.objects.exists():
@@ -1669,6 +1682,19 @@ def remove_keeper(user, actor, request=None):
 def exceptions():
     """Every exception (the active ones and the expired ones, so that they can be seen and cleaned)."""
     return list(PolicyException.objects.select_related('user'))
+
+
+def has_exception(user):
+    """Is the user on the list of exceptions (works by NetBox alone)?"""
+    active_areas()
+    return bool(getattr(user, 'is_authenticated', False) and user.pk in _cache['exempt'])
+
+
+def group_names_of(user):
+    """'Readers (Network), ...': the groups the user is in now - shown when an exception puts them aside."""
+    now = timezone.now()
+    return ', '.join(f'{g.profile.name} ({g.area.name})' for g in AreaGrant.objects.filter(
+        Q(expires__isnull=True) | Q(expires__gt=now), user=user, revoked__isnull=True).select_related('profile', 'area'))
 
 
 def add_exception(user, actor, expires=None, note='', request=None):

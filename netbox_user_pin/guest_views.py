@@ -242,7 +242,9 @@ class GuestHomeView(GuestMixin, View):
         days = left.days if left else None
         hours = left.seconds // 3600 if left else None
         return render(request, T + 'home.html', {
-            'guest': guest, 'doors': _doors(request.user), 'left': guests.seconds_left(request, guest) // 60,
+            'guest': guest, 'switched_off': areas.switched_off(),
+            'doors': [] if areas.switched_off() else _doors(request.user),
+            'left': guests.seconds_left(request, guest) // 60,
             'pin_until': until, 'pin_days': days, 'pin_hours': hours,
             'pin_warn': days is not None and days <= settings.warn_days, 'languages': guests.LANGUAGES[1:],
             'pin_language': guests.language_of(guest)})

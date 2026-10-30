@@ -14,6 +14,7 @@ import time
 
 from django.apps import apps
 from django.conf import settings as django_settings
+from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.db.models import Q
 from django.http import JsonResponse
@@ -234,7 +235,7 @@ def denied_response(request, area, right='view', target=None, tab_label=None, on
             response = render(request, 'netbox_user_pin/area_denied.html', {
                 'area': None, 'deny': True, 'keepers': areas.keepers(), 'next': request.get_full_path(),
                 **_request_context(request, None, right, target), 'tab_label': tab_label,
-                'only_password': only_password, 'can_request': areas.requests_allowed(),
+                'only_password': only_password, 'can_request': areas.requests_allowed() and not guests.is_guest(user),
                 'own_tokens': areas.own_tokens_allowed(),
                 'pending': AreaRequest.objects.filter(user=user, target=target or '', status=AreaRequestStatus.PENDING
                                                       ).first() if getattr(user, 'is_authenticated', False) else None,
@@ -257,7 +258,7 @@ def denied_response(request, area, right='view', target=None, tab_label=None, on
             'area': area, 'right': right, 'pending': pending, 'owners': areas.owners(area),
             'has_owners': True,
             'next': request.get_full_path(), **_request_context(request, area, right, target),
-            'can_request': areas.requests_allowed(),
+            'can_request': areas.requests_allowed() and not guests.is_guest(user),
             'tab_label': tab_label, 'overview': (overview := _overview(user, target)),
             'scope_hint': _scope_hint(overview, target),
         }, status=403)
@@ -775,6 +776,9 @@ def install():
         original = RestrictedQuerySet.restrict
 
         def restrict(self, user, action='view'):
+            if self.model is get_user_model():
+                # the PIN-only accesses are no NetBox users: no list, detail, drop-down or API of NetBox shows them
+                self = self.filter(pin_guest__isnull=True)
             if _token_request() or areas.is_exempt(user):
                 return original(self, user, action)
             meta = self.model._meta
