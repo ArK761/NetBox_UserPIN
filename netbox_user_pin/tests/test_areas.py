@@ -3081,6 +3081,12 @@ class WorkTimeTest(AreaTestCase):
         self.assertEqual(work.state(guest, self.at(2026, 8, 19, 6, 59)), 'before')
         self.assertEqual(work.state(guest, self.at(2026, 8, 19, 7, 0)), 'ok')
         self.assertIn('07:00', work.describe(work.rules_of(guest)))
+        from django.utils import translation
+        with translation.override('sk'):
+            self.assertIn('Slovensko', work.describe(work.rules_of(self.get())) if work.rules_of(self.get()).country == 'SK'
+                          else dict(work.country_choices())['SK'])  # the country is told in the language of the person
+            self.assertEqual(dict(work.country_choices())['SK'], 'Slovensko')
+            self.assertTrue(work.days_text('01234').startswith('Po'))  # Po–Pi, not po–pi
         self.guests.set_work(guest, self.keeper, 'none')
         self.assertEqual(work.state(self.get(), self.at(2026, 12, 26, 3)), 'ok')  # no limit at all
         self.guests.set_work(self.get(), self.keeper, 'general')

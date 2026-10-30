@@ -12,6 +12,7 @@ from collections import namedtuple
 from django.utils import timezone
 from django.utils.dates import WEEKDAYS_ABBR
 from django.utils.translation import gettext as _
+from django.utils.translation import gettext_noop
 
 try:  # the public holidays of the countries (pip install holidays); without it only days and hours are checked
     import holidays
@@ -23,13 +24,38 @@ GRACE_MINUTES = 30
 Rules = namedtuple('Rules', 'country days start end')
 
 # the countries offered (the library knows more; these are the ones a company is likely to work with)
-COUNTRY_NAMES = {
-    'SK': 'Slovakia', 'CZ': 'Czechia', 'HU': 'Hungary', 'AT': 'Austria', 'PL': 'Poland', 'DE': 'Germany',
-    'UA': 'Ukraine', 'HR': 'Croatia', 'SI': 'Slovenia', 'RO': 'Romania', 'BG': 'Bulgaria', 'RS': 'Serbia',
-    'GB': 'United Kingdom', 'IE': 'Ireland', 'FR': 'France', 'ES': 'Spain', 'IT': 'Italy', 'NL': 'Netherlands',
-    'BE': 'Belgium', 'CH': 'Switzerland', 'SE': 'Sweden', 'NO': 'Norway', 'DK': 'Denmark', 'FI': 'Finland',
-    'PT': 'Portugal', 'GR': 'Greece', 'LT': 'Lithuania', 'LV': 'Latvia', 'EE': 'Estonia', 'US': 'United States',
-    'CA': 'Canada',
+COUNTRY_NAMES = {  # marked for translation here; translated where they are shown
+    'SK': gettext_noop('Slovakia'),
+    'CZ': gettext_noop('Czechia'),
+    'HU': gettext_noop('Hungary'),
+    'AT': gettext_noop('Austria'),
+    'PL': gettext_noop('Poland'),
+    'DE': gettext_noop('Germany'),
+    'UA': gettext_noop('Ukraine'),
+    'HR': gettext_noop('Croatia'),
+    'SI': gettext_noop('Slovenia'),
+    'RO': gettext_noop('Romania'),
+    'BG': gettext_noop('Bulgaria'),
+    'RS': gettext_noop('Serbia'),
+    'GB': gettext_noop('United Kingdom'),
+    'IE': gettext_noop('Ireland'),
+    'FR': gettext_noop('France'),
+    'ES': gettext_noop('Spain'),
+    'IT': gettext_noop('Italy'),
+    'NL': gettext_noop('Netherlands'),
+    'BE': gettext_noop('Belgium'),
+    'CH': gettext_noop('Switzerland'),
+    'SE': gettext_noop('Sweden'),
+    'NO': gettext_noop('Norway'),
+    'DK': gettext_noop('Denmark'),
+    'FI': gettext_noop('Finland'),
+    'PT': gettext_noop('Portugal'),
+    'GR': gettext_noop('Greece'),
+    'LT': gettext_noop('Lithuania'),
+    'LV': gettext_noop('Latvia'),
+    'EE': gettext_noop('Estonia'),
+    'US': gettext_noop('United States'),
+    'CA': gettext_noop('Canada'),
 }
 
 
@@ -131,7 +157,7 @@ def days_text(days):
     days = sorted(int(d) for d in days)
     if not days:
         return ''
-    names = [str(WEEKDAYS_ABBR[d]) for d in days]
+    names = [str(WEEKDAYS_ABBR[d]).capitalize() for d in days]
     if len(days) > 2 and days == list(range(days[0], days[-1] + 1)):
         return f'{names[0]}–{names[-1]}'
     return ', '.join(names)

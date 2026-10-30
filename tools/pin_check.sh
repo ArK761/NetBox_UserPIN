@@ -54,7 +54,10 @@ done
 for p in /api/ /api/dcim/devices/ /api/users/users/ /api/plugins/installed-plugins/; do
   code=$(req "$BASE$p"); [[ "$code" =~ ^(401|403)$ ]] && ok "anonymous API refused ($p -> $code)" || bad "anonymous API refused" "$p -> $code"
 done
-for p in /api/schema/swagger-ui/ /api/docs/ /graphql/ /static/docs/; do closed "$p" "anonymous gets no documentation / GraphQL"; done
+for p in /api/schema/swagger-ui/ /api/docs/ /graphql/; do closed "$p" "anonymous gets no API documentation / GraphQL"; done
+code=$(req "$BASE/static/docs/")
+if [[ "$code" =~ ^(401|403|404)$ ]] || [[ "$code" =~ ^30[1-8]$ ]]; then ok "the NetBox offline documentation is closed (/static/docs/ -> $code)"
+else warn "the NetBox offline documentation /static/docs/ -> $code: a static file served by the web server (nginx), not by NetBox, so the plugin cannot close it; to hide it: location /static/docs/ { return 404; }"; fi
 code=$(req "$BASE$PINPATH")
 if [[ "$code" == 200 ]] && body | grep -q 'name="pin"'; then ok "the PIN page is served on $PINPATH itself"; else warn "no PIN page on $PINPATH ($code $(loc)) – another address chosen? use --pin /your/address/"; fi
 body | grep -qE 'User PIN v[0-9]' && bad "no plugin version for anonymous" "version shown" || ok "no plugin version for anonymous"
@@ -100,7 +103,7 @@ if [[ $DO_PIN == 1 ]]; then
   echo "$H" | grep -qiE 'Your working time|pracovný čas' && info "a working time is set: $(echo "$H" | grep -oiE '(Your working time|Tvoj pracovný čas)[^<]{0,80}' | head -1)"
 
   head_ "4. What the PIN-only person must never reach"
-  for p in /api/ /api/dcim/devices/ /api/users/users/ /api/users/tokens/ /api/schema/ /api/schema/swagger-ui/ /api/docs/ /graphql/ /static/docs/ \
+  for p in /api/ /api/dcim/devices/ /api/users/users/ /api/users/tokens/ /api/schema/ /api/schema/swagger-ui/ /api/docs/ /graphql/ \
            /admin/ /user/profile/ /user/password/ /user/api-tokens/ /user/preferences/ /core/ /users/users/ /users/groups/ \
            /plugins/user-pin/guests/ /plugins/user-pin/users/ /plugins/user-pin/settings/ /plugins/user-pin/areas/ /plugins/user-pin/mail/; do
     closed "$p" "closed for the PIN-only person"
@@ -145,11 +148,11 @@ fi
 if [[ $DO_SERVER == 1 ]]; then
   head_ "8. On the server"
   if [[ ! -x "$NB_VENV/bin/python" ]]; then bad "NetBox venv" "$NB_VENV/bin/python not found (set NB_VENV / NB_DIR)"; else
-    run() { (cd "$NB_DIR" && "$NB_VENV/bin/python" manage.py "$@" 2>&1 | grep -v 'staticfiles\|System check\|^WARNINGS\|^$'); }
+    run() { (cd "$NB_DIR" && "$NB_VENV/bin/python" manage.py "$@" 2>&1 | grep -v 'staticfiles\|System check\|^WARNINGS\|^$\|FutureWarning\|warnings.warn'); }
     for s in netbox netbox-rq; do
       systemctl is-active --quiet "$s" && ok "service $s is running" || bad "service $s" "not active (the hourly jobs and the e-mails need netbox-rq)"
     done
-    ver=$("$NB_VENV/bin/python" -c "import netbox_user_pin; print(netbox_user_pin.__version__)" 2>/dev/null)
+    ver=$(cd "$NB_DIR" && "$NB_VENV/bin/python" -c "import importlib.metadata as m; print(m.version('netbox-user-pin'))" 2>/dev/null)
     [[ -n "$ver" ]] && ok "the plugin on disk: version $ver" || bad "the plugin" "cannot import netbox_user_pin"
     "$NB_VENV/bin/python" -c "import holidays; print(holidays.__version__)" >/dev/null 2>&1 && ok "the library of public holidays is installed" || warn "the library 'holidays' is missing (pip install holidays): only days and hours are checked"
     pending=$(run showmigrations netbox_user_pin | grep -c '\[ \]')
