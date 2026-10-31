@@ -1,0 +1,84 @@
+<h1>Globálna ochrana (ZAP / VYP) a strážcovia</h1>
+<div class="facts">
+<div><strong>Kto:</strong> len <strong>strážcovia ochrany</strong>. Kým nie je žiadny strážca, prvého vymenuje CORE / master.</div>
+<div><strong>Kedy:</strong> keď chceš, aby sa všetko, čo žiadna skupina nepovoľuje, zakázalo; vypína sa v núdzi alebo pri údržbe.</div>
+<div><strong>Závisí od:</strong> aspoň jeden strážca s PINom a 2FA. Bez strážcu sa ochrana nedá zapnúť.</div>
+</div>
+<p>Karta <strong>Ochrana</strong> je hore na stránke <em>Chránené oblasti</em>.</p>
+<h2>ZAP a VYP</h2>
+<table>
+<tr><th>Stav</th><th>Čo platí</th></tr>
+<tr><td><strong>ZAP</strong></td><td>všetko, čo žiadna skupina nepovoľuje, je zakázané <strong>všetkým okrem strážcov a výnimiek</strong>. Osoby len s PIN-om vidia len svoje skupiny. Týka sa to každej cesty: zoznamy, detaily, REST API, GraphQL, vyhľadávanie, widgety, menu a tlačidlá. Superuser, ktorý nie je strážca, nevidí Používateľov, Skupiny, Oprávnenia, Úlohy, Pozadie… Vlastný profil, záložky, notifikácie a predvoľby ostávajú otvorené, ale len vlastné</td></tr>
+<tr><td><strong>VYP</strong></td><td>všetci pracujú len podľa oprávnení NetBoxu. Osoby len s PIN-om môžu iba zmeniť svoj PIN a dozvedia sa, že funkciu vypol správca</td></tr>
+</table>
+<p>Tlačidlá <em>Zapnúť ochranu</em> / <em>Vypnúť ochranu</em> vidí a stláča len strážca. Zmena sa zapíše do auditu a pošle sa e-mail ostatným strážcom.</p>
+<h2>Správcovia ochrany (strážcovia)</h2>
+<ul>
+<li>Karta <strong>Správcovia ochrany</strong>: zoznam, <em>Odobrať</em> a <em>Určiť ďalšieho správcu</em>. Kým nie je žiadny, stojí <em>Určiť prvého správcu (zapne ochranu)</em>: <strong>vymenovanie prvého strážcu ochranu zapne</strong>.</li>
+<li>Strážca musí mať <strong>PIN a 2FA</strong>, účet musí byť aktívny a nesmie to byť osoba len s PIN-om. Po vymenovaní dostane e-mail <em>You are a protection keeper</em>.</li>
+<li>Strážca je <strong>vyňatý zo zákazu</strong> (platia preňho oprávnenia NetBoxu), nemôže si vypnúť 2FA a <strong>nemôže odísť sám</strong>: musí ho prevziať iný strážca.</li>
+<li><strong>Posledného strážcu nemožno odobrať.</strong> Ak sa jeho účet zmaže, ochrana sa vypne a nedá sa zapnúť, kým strážca nie je.</li>
+<li><strong>Strážca môže všetko</strong>: oblasti, typy objektov, správcov úsekov, výnimky, prepínač ZAP/VYP a všetky prístupy len cez PIN. Obmedzenia pre výnimky a správcov sa naňho nevzťahujú.</li>
+</ul>
+<h2>Čo používatelia vidia</h2>
+<p>Karta <strong>Čo používatelia vidia</strong> (uloží sa tlačidlom <em>Uložiť</em>):</p>
+<table>
+<tr><th>Voľba</th><th>Predvolené</th><th>Význam</th></tr>
+<tr><td><strong>Čo nie je povolené</strong></td><td>A – dvere</td><td><strong>A – dvere:</strong> používateľ vidí všetko a PIN zablokuje, čo nie je povolené, upozornením (s možnosťou žiadosti). <strong>B – skryté:</strong> používateľ, ktorý nie je v žiadnej skupine, nevidí nič (len zmenu hesla a PINu); v skupine vidí len to, čo skupina povoľuje; žiadne API v prehliadači. Každá oblasť si môže zvoliť vlastné (Nastavenia oblasti)</td></tr>
+<tr><td><strong>Používatelia smú žiadať o prístup</strong></td><td>áno</td><td>vypnuté: žiadosti robia len správcovia (nie je stránka ani tlačidlo)</td></tr>
+<tr><td><strong>Používatelia smú vytvoriť vlastný API kľúč</strong></td><td>nie</td><td>kľúč pracuje s oprávneniami NetBoxu a PIN ho neposudzuje: superuser s kľúčom prečíta všetko cez skript. Povoľ len pri užších oprávneniach. Používateľ potom vidí len <strong>vlastné</strong> kľúče</td></tr>
+</table>
+<div class="note">Existuje aj skrytá voľba <em>Na koho sa ochrana vzťahuje</em>: predvolene <strong>len ľudia s PINom</strong> (osoby len s PIN-om a používatelia v skupine alebo správcovia úsekov; ostatní pracujú podľa oprávnení NetBoxu a plugin nevidia). V rozhraní sa nedá meniť.</div>
+<h2>Núdza na serveri</h2>
+<pre>python manage.py userpin_keeper                 # zobrazí strážcov
+python manage.py userpin_keeper --add &lt;meno&gt;    # vymenuje strážcu
+python manage.py userpin_default_deny --on      # zapne ochranu (potrebuje strážcu)
+python manage.py userpin_default_deny --off     # vypne ochranu</pre>
+<p>Každá zmena cez príkaz sa zapíše do auditu a <strong>e-mailom sa dozvedia všetci strážcovia a superuseri</strong> (nič sa nedeje potichu).</p>
+
+<h1>Výnimky</h1>
+<div class="facts">
+<div><strong>Kto:</strong> len strážca nastavuje, mení a odoberá. Výnimku môže mať bežný používateľ (nie strážca, nie osoba len s PIN-om).</div>
+<div><strong>Kedy:</strong> keď má jeden používateľ pracovať podľa oprávnení NetBoxu bez zákazu (napr. správca siete, ktorého ochrana obmedzuje).</div>
+<div><strong>Závisí od:</strong> zapnutá ochrana (pri vypnutej sa nič neberie).</div>
+</div>
+<p>Používateľ s výnimkou nie je viazaný ochranou: pracuje s oprávneniami, ktoré mu dáva NetBox. Jeho skupiny, prístupy a roly ostávajú a platia znova, keď sa výnimka odoberie alebo skončí. Superuser s výnimkou vidí všetko bez PINu. Karta <strong>Výnimky</strong> je na stránke <em>Chránené oblasti</em>.</p>
+<h2>Pridanie výnimky</h2>
+<p>Formulár: <em>Používateľ</em> (neponúkajú sa strážcovia ani tí, čo už výnimku majú), <em>Do (voliteľné)</em> (koniec; musí byť v budúcnosti), <em>Prečo (voliteľné)</em> (do 200 znakov) a tlačidlo <em>Smie používať</em> s položkami (pozri nižšie), potom <em>Nastaviť výnimku</em>. Ostatným strážcom príde e-mail <em>Protection exception: meno</em> a zapíše sa do auditu. Ak je používateľ v skupinách, stránka upozorní, že pre čas výnimky neplatia. Opätovné pridanie toho istého používateľa sa odmietne (zmeny sa robia v zozname).</p>
+<h2>Čo smie používateľ s výnimkou</h2>
+<p>Výnimka sa týka ochrany, nie účtových stránok a API. Tie smie používateľ používať len ako strážca povolil:</p>
+<table>
+<tr><th>Položka</th><th>Predvolené</th><th>Čo sa pri zákaze stane</th></tr>
+<tr><td>Zmeniť heslo</td><td><span class="ok">povolené</span></td><td>karta Heslo a odkaz v menu zmiznú, adresa vráti 403</td></tr>
+<tr><td>Profil</td><td><span class="no">zakázané</span></td><td>karta a adresa <code>/user/profile/</code></td></tr>
+<tr><td>Predvoľby</td><td><span class="no">zakázané</span></td><td><code>/user/preferences/</code></td></tr>
+<tr><td>Záložky</td><td><span class="no">zakázané</span></td><td><code>/user/bookmarks/</code></td></tr>
+<tr><td>Notifikácie</td><td><span class="no">zakázané</span></td><td><code>/user/notifications/</code> a skrytý zvonček</td></tr>
+<tr><td>Odbery</td><td><span class="no">zakázané</span></td><td><code>/user/subscriptions/</code></td></tr>
+<tr><td>API tokeny (vytvárať a spravovať vlastné)</td><td><span class="no">zakázané</span></td><td><code>/user/api-tokens/</code>, <code>/users/tokens/</code>, <code>/api/users/tokens/</code>; zmizne aj položka <em>Admin → API Tokens</em></td></tr>
+<tr><td>API (REST, GraphQL) s tokenom</td><td><span class="no">zakázané</span></td><td>token takého používateľa je odmietnutý (chyba autentifikácie). Prehliadač sám (UI) pracuje cez reláciu a nie je dotknutý</td></tr>
+</table>
+<ul>
+<li>Pri každom používateľovi je pod menom šípka <strong>▾ Smie používať</strong>, ktorá rozbalí zaškrtávacie polia s tlačidlom <em>Uložiť</em>, a malé štítky: <span class="ok">zelený ✓</span> povolené, <span class="no">červený ✗</span> zakázané.</li>
+<li>Čo nie je povolené, zmizne z menu a kariet a priama adresa vráti 403 (<em>Not allowed for this account</em>, s menami strážcov).</li>
+<li>NetBox nemá v menu používateľa odkaz na heslo (je len ako karta v Profile). Kým je heslo povolené, plugin ho do menu doplní.</li>
+<li><strong>Strážca môže vždy všetko.</strong> Pri vypnutej ochrane sa nič neberie. Superuser, ktorý nie je strážca, kým strážca nie je, tiež nie je obmedzený.</li>
+</ul>
+<div class="note"><strong>Prečo to je dôležité.</strong> NetBox dáva každému prihlásenému právo na vlastné API tokeny (<code>DEFAULT_PERMISSIONS</code>), takže používateľ bez akýchkoľvek práv vidí v menu <em>Admin → API Tokens</em>. Token nesie len oprávnenia svojho majiteľa, no požiadavky s tokenom plugin PIN-om neposudzuje: používateľ s právami by cez token čítal aj mimo svojich oblastí. Zoznam povolení to rieši bez zásahu do konfigurácie NetBoxu.</div>
+
+<h1>Správcovia úsekov</h1>
+<div class="facts">
+<div><strong>Kto vymenúva a odoberá:</strong> strážca (kým nie je, CORE / master). Správca úseku správcov nevymenúva ani neodoberá.</div>
+<div><strong>Kedy:</strong> keď má o časti oblasti rozhodovať niekto iný než strážca: skupiny, polia, členovia, žiadosti.</div>
+<div><strong>Závisí od:</strong> správca musí mať PIN a 2FA, byť bežný účet NetBoxu (nie superuser, nie strážca, nie osoba len s PIN-om).</div>
+</div>
+<ul>
+<li><strong>Úsek</strong> = typy objektov oblasti (aplikácia alebo typ); <strong>nič nezaškrtnuté = celá oblasť</strong>. Pri správcovi je tlačidlo <em>Uložiť úsek</em>; nového určuješ tlačidlom <em>Určiť správcov úsekov</em> (formulár <em>Úsek</em> + výber používateľov).</li>
+<li>Správca má <strong>plnú moc nad svojím úsekom</strong>: skupiny, polia, členov a žiadosti. Strážcovia sú nad ním. Rolu oddelenia nepotrebuje.</li>
+<li>Žiadosti o jeho typy idú <strong>jemu aj strážcom</strong>; každé rozhodnutie sa posiela e-mailom žiadateľovi, strážcom a správcovi.</li>
+<li>Prístupy len cez PIN vytvorené strážcom patria strážcom; správca vidí len tie, ktoré sú <strong>pod ním</strong>, a zakladá ich len do skupín svojho úseku (strážcovia dostanú e-mail). Strážca môže prístup presunúť pod správcu.</li>
+<li>Správca celej oblasti si ponecháva práva nad oblasťou (cieľ, profily); vytváranie oblasti, pridávanie a odoberanie cieľov a správcov patrí strážcom. <strong>Posledného správcu oblasti</strong> môže odobrať len strážca (CORE / master, kým strážca nie je, ho odobrať nemôže, okrem správcu, ktorý sa medzitým stal superuserom alebo strážcom).</li>
+<li>Vymenovaním správcu sa mu automaticky <strong>povolí používanie PINu</strong> (ak ho správca PINov výslovne nezakázal: vtedy vymenovanie zlyhá).</li>
+<li>Stránka pri vymenúvaní ukáže, čo správcovi chýba (<em>Má PIN</em>, <em>Má 2FA</em>, <em>Nie je superuser ani strážca</em>, <em>Je účet NetBoxu</em>).</li>
+<li>Núdza na serveri: <code>python manage.py userpin_area_owners &lt;kľúč-oblasti&gt; --set meno1 meno2</code> (zapíše sa do auditu; odmietne ľudí, ktorí by správcami byť nemohli, ak nedáš <code>--force</code>).</li>
+</ul>

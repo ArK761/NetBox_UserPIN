@@ -1,0 +1,148 @@
+<h1>Príkazy na serveri</h1>
+<div class="facts">
+<div><strong>Kto:</strong> správca servera (root).</div>
+<div><strong>Kedy:</strong> pri inštalácii, výmene kľúča, v núdzi (strata telefónu, zamknutá ochrana, nefunkční správcovia).</div>
+<div><strong>Závisí od:</strong> aktivované virtuálne prostredie NetBoxu. Núdzové príkazy sa zapisujú do auditu.</div>
+</div>
+<p>Spúšťajú sa takto (nahraď <code>&lt;príkaz&gt;</code>):</p>
+<pre>sudo bash -c 'source /opt/netbox/venv/bin/activate &amp;&amp; cd /opt/netbox/netbox &amp;&amp; python manage.py &lt;príkaz&gt;'</pre>
+<table>
+<tr><th>Príkaz</th><th>Čo robí</th></tr>
+<tr><td><code>userpin_generate_key [--key-id k1]</code></td><td>vygeneruje náhodný šifrovací kľúč (vypíše ho, nič neukladá)</td></tr>
+<tr><td><code>userpin_rotate_key</code></td><td>prešifruje všetko pod aktívnym kľúčom (PIN hashe, 2FA, záložné kódy, SMTP heslo); v jednej transakcii, pri chybe sa nič nezmení</td></tr>
+<tr><td><code>userpin_check</code></td><td>overí, že sa všetko uložené pod kľúčmi dá dešifrovať, a ukáže, koľko hodnôt a osôb len s PIN-om čaká na starý kľúč</td></tr>
+<tr><td><code>userpin_keeper [--add meno]</code></td><td>zobrazí strážcov alebo vymenuje jedného (audit, e-mail všetkým strážcom a superuserom)</td></tr>
+<tr><td><code>userpin_default_deny [--on | --off]</code></td><td>zobrazí alebo prepne globálnu ochranu (audit, e-mail; zapnutie potrebuje strážcu)</td></tr>
+<tr><td><code>userpin_area_owners &lt;oblasť&gt; [--set mená…] [--force]</code></td><td>zobrazí alebo nahradí správcov oblasti (audit); bez <code>--force</code> odmietne ľudí, ktorí by správcami byť nemohli</td></tr>
+<tr><td><code>userpin_reset_2fa &lt;používateľ&gt;</code></td><td>núdzovo odstráni 2FA (napr. master bez telefónu a záložných kódov; audit)</td></tr>
+<tr><td><code>userpin_access_test &lt;používateľ&gt; [--url …] [--all] [--writes]</code></td><td>ukáže, čo používateľ dostane zo stránok, REST API (prehliadač) a zoznamov (test ochrany). <code>--url</code> pridá ďalšiu adresu, <code>--all</code> skúsi každú stránku NetBoxu, <code>--writes</code> aj pridanie, zmenu a zmazanie</td></tr>
+</table>
+
+<h1>Kontrola: pin_check.sh</h1>
+<div class="facts">
+<div><strong>Kto:</strong> správca; skript sa dá spustiť aj z iného počítača než server.</div>
+<div><strong>Kedy:</strong> po inštalácii, po aktualizácii pluginu aj NetBoxu.</div>
+<div><strong>Závisí od:</strong> <code>curl</code>; pri voľbe <code>--server</code> root na serveri NetBoxu.</div>
+</div>
+<p>Skript <code>tools/pin_check.sh</code> (v repozitári) kontroluje všetko, čo sa dá zvonku, a so <code>--server</code> aj na serveri. Nikdy neukladá ani nevypisuje PIN či token (PIN sa pýta potichu). Výsledok je počet <strong>OK</strong> / <strong>FAIL</strong> / <strong>WARN</strong>.</p>
+<pre>bash pin_check.sh http://172.30.1.25                                  # len anonymné kontroly
+bash pin_check.sh http://172.30.1.25 --pin /pin/                      # + prihlási osobu len s PIN-om
+NB_TOKEN=xxxx bash pin_check.sh http://172.30.1.25                    # + kontroly s API tokenom
+sudo bash pin_check.sh http://127.0.0.1 --pin /pin/ --server          # + migrácie, služby, kľúče, strážcovia</pre>
+<p>Voľby: <code>--pin &lt;cesta&gt;</code> (adresa stránky PIN-only, predvolene <code>/pin/</code>), <code>--wrong</code> (skúsi <strong>jeden</strong> zlý PIN; počíta sa ako chybný pokus), <code>--write</code> (skúsi pridať tenanta ako osoba len s PIN-om a zmaže ho), <code>--server</code> (vyžaduje root). Premenné: <code>NB_TOKEN</code>, <code>NB_VENV</code>, <code>NB_DIR</code>, <code>LIST</code>.</p>
+<p>Kontroly majú oddiely: 0 dostupnosť; 1 nikto neprihlásený; 2 s API tokenom; 3 osoba len s PIN-om; 4 čo osoba nikdy nesmie dosiahnuť; 5 stránka, ktorú smie otvoriť; 6 pridanie ako osoba len s PIN-om; 7 odhlásenie; 8 na serveri (migrácie, služby, kľúče, strážcovia). Známe neškodné upozornenia: <code>/static/docs/</code> servíruje nginx (zatvorí sa <code>location /static/docs/ { return 404; }</code>) a <code>LOGIN_REQUIRED</code> nie je <code>True</code> (nastav v <code>configuration.py</code>; NetBox 5.0 ho zruší).</p>
+
+<h1>Bezpečnostný model</h1>
+<pre>PIN ──Argon2id + soľ──► hash ──AES-256-GCM (kľúč z konfigurácie, viazaný na ID používateľa)──► databáza</pre>
+<ul>
+<li>Samotný výpis databázy neobsahuje nič použiteľné, ani čo by sa dalo lámať offline.</li>
+<li>Šifrovaný text je viazaný na používateľa: hash skopírovaný do riadku iného používateľa sa nedešifruje.</li>
+<li>Zlé pokusy sa počítajú pod zámkom riadku, takže paralelné hádanie zablokovanie neobíde.</li>
+<li>Zmena alebo reset PINu zneplatní všetky odomknutia. Tajomstvá TOTP sú šifrované rovnako; kód TOTP sa prijme len raz.</li>
+<li>Záložné kódy (100 bitov) a e-mailové kódy sa ukladajú len ako odtlačky, jednorazové a krátko platné.</li>
+<li>Obnova nikdy neobíde 2FA. PIN je len autentifikačný faktor („som to naozaj ja pri tomto počítači“), nepoužíva sa ako kľúč na šifrovanie iných dát.</li>
+<li><strong>Požiadavky s API tokenom plugin PIN-om neposudzuje</strong> (token nesie oprávnenia NetBoxu): preto sú vlastné tokeny predvolene zakázané a pri výnimkách sa povoľujú po jednom.</li>
+<li>Prístup na server riadi firewall; samostatný port alebo hostname pre prihlásenie osôb len s PIN-om plugin nevynucuje, ak treba, rieši sa v nginxe a firewalle.</li>
+<li>Kto má root alebo prístup do databázy na serveri, obíde akýkoľvek plugin: odpoveďou je audit.</li>
+</ul>
+
+<h1>Použitie z iného pluginu</h1>
+<div class="facts">
+<div><strong>Kto:</strong> vývojár pluginu pre NetBox.</div>
+<div><strong>Kedy:</strong> keď chce iný plugin chrániť citlivé stránky PINom.</div>
+<div><strong>Závisí od:</strong> <code>netbox-user-pin</code> ako závislosť pluginu; verzia API (<code>service.API_VERSION</code> = 2, <code>areas.API_VERSION</code> = 1; API len rastie).</div>
+</div>
+<pre>from netbox_user_pin.mixins import PinRequiredMixin, StepUpRequiredMixin, pin_required, step_up_required
+
+class ProjectView(PinRequiredMixin, generic.ObjectView):
+    pin_scope = 'projects'          # pri režime rozsahu „osobitné podľa rozsahu“
+
+class ProjectDeleteView(StepUpRequiredMixin, generic.ObjectDeleteView):
+    ...                             # citlivá akcia: čerstvé PIN + 2FA
+
+@pin_required(scope='projects')
+def download(request, pk): ...</pre>
+<p>Používateľ je presmerovaný na <em>nastaviť PIN</em>, <em>zmeniť PIN</em> (vypršal) alebo <em>zadať PIN</em> a potom späť. Požiadavky HTMX dostanú hlavičku <code>HX-Redirect</code>.</p>
+<p>Servisné API <code>netbox_user_pin.service</code>: <code>has_pin(user)</code>, <code>is_unlocked(request, scope)</code>, <code>unlock(request, pin, scope)</code>, <code>verify_pin(user, pin)</code>, <code>lock(request)</code>, <code>has_step_up(request)</code>, <code>has_2fa(user)</code>, <code>is_allowed(user)</code>. Signály (<code>netbox_user_pin.signals</code>, <code>sender=UserPin</code>): <code>pin_set</code>, <code>pin_changed</code>, <code>pin_reset</code>, <code>pin_unlocked</code>, <code>pin_failed</code>, <code>pin_locked_out</code>, <code>pin_locked</code>.</p>
+<h2>Oblasť pluginu</h2>
+<pre>from netbox_user_pin import areas
+
+# v ready(): oblasť je aktívna, kým je zapnutý vlastný prepínač „PIN integrácia“ pluginu
+areas.register('netbox_libreoxi', 'LibreOXI', targets=['netbox_libreoxi'],
+               rights={'config': 'Zobraziť konfigurácie zariadení'},
+               profiles=[('Len logy', ['view']), ('Konfigurácie', ['view', 'config'])],
+               enabled=lambda: LibreOXISettings.objects.first().pin_integration)
+
+# vo view, pre jemnejšie práva
+if (response := areas.require(request, 'netbox_libreoxi', 'config')) is not None:
+    return response            # stránka „bez prístupu – požiadaj o ňu“
+areas.can(request.user, 'netbox_libreoxi', 'config')   # True / False</pre>
+
+<h1>Riešenie problémov</h1>
+<table>
+<tr><th>Hlásenie / príznak</th><th>Príčina a riešenie</th></tr>
+<tr><td><code>ModuleNotFoundError: No module named 'argon2'</code></td><td>Pri inštalácii s <code>--no-deps</code> sa nenainštalovali závislosti: <code>pip install "argon2-cffi&gt;=23.1" "cryptography&gt;=42" "segno&gt;=1.5" "holidays&gt;=0.50"</code>.</td></tr>
+<tr><td><code>CommandError: No installed app with label 'netbox_user_pin'</code></td><td>Plugin nie je v zozname <code>PLUGINS</code> v <code>configuration.py</code>. Pridaj <code>'netbox_user_pin'</code> a zopakuj <code>migrate</code>.</td></tr>
+<tr><td>NetBox sa po zmene konfigurácie nespustí</td><td>Chyba kľúča pri štarte (pozri kapitolu Inštalácia), alebo chyba v <code>configuration.py</code> (čiarka, apostrof). Pozri <code>journalctl -u netbox -n 80</code>.</td></tr>
+<tr><td>pip: <em>holidays requires python-dateutil&lt;3 but you have 3.0.0</em></td><td>Neškodné upozornenie: <code>holidays</code> s dateutil 3 funguje (over výpisom sviatkov). Neinštaluj <code>python-dateutil&lt;3</code>, mohol by si pokaziť NetBox.</td></tr>
+<tr><td><code>userpin_check</code> hlási chybu</td><td>Zlý alebo chýbajúci kľúč. Nemeň <code>k1</code>, kým sa nepotvrdí, že plugin funguje.</td></tr>
+<tr><td>Nechodia e-maily</td><td>Pozri kapitolu E-maily: keď nejdú.</td></tr>
+<tr><td>Rola sa nedá pridať: „nemá e-mail v overenej doméne“</td><td>Pozvaný nemá adresu v overenej doméne alebo nie je pošta. Over doménu na stránke Mail.</td></tr>
+<tr><td>Používateľ bez práv vidí Admin → API Tokens</td><td>Štandard NetBoxu (<code>DEFAULT_PERMISSIONS</code>). Pri výnimke ho plugin skryje, ak nie je povolené „API tokeny“.</td></tr>
+<tr><td>403 na stránke účtu pri výnimke</td><td>Táto časť nie je povolená: strážca ju zaškrtne pri výnimke.</td></tr>
+<tr><td>Skupina používateľovi nič nedá</td><td>Má výnimku: skupina sa neuplatňuje, kým výnimka trvá.</td></tr>
+<tr><td>Osoba len s PIN-om môže len čítať</td><td>Je mimo pracovného času (alebo sviatok), alebo je ochrana vypnutá.</td></tr>
+<tr><td>Osoba len s PIN-om nevidí nič</td><td>Nemá skupinu, alebo je ochrana vypnutá.</td></tr>
+<tr><td>Zhrnutia zmien osôb nechodia</td><td>Nebeží <code>netbox-rq</code> alebo je vypnuté <em>Posielať správcom</em>.</td></tr>
+<tr><td>Upgrade vrátil plugin na staršiu verziu</td><td>V <code>local_requirements.txt</code> chýba pripnutý tag alebo commit, alebo riadok nemá <code>@…</code> (potom sa berie <code>main</code>).</td></tr>
+</table>
+
+<h1>Zmeny</h1>
+<p>Verzia v kóde je <strong>2.0.0</strong> (vydanie na GitHube) a <strong>2.0.1</strong> (vetva <code>feature/exception-allowlist</code>). Pôvodný základ bol 0.38.4 (commit 7bed7de); priebežné čísla 2.0.1 až 2.2.2 v histórii commitov boli pracovné označenia, všetko patrí do línie 2.0.0 a je rozdelené podľa tém.</p>
+<h2>2.0.1: oprávnenia výnimiek</h2>
+<ul>
+<li>Výnimka už nie je „všetko alebo nič“: strážca zaškrtáva, čo smie používateľ používať (heslo predvolene povolené; profil, predvoľby, záložky, notifikácie, odbery, API tokeny a API s tokenom na povolenie).</li>
+<li>Čo nie je povolené, je skryté z menu a kariet a zakázané priamou adresou (403); token bez povoleného API je odmietnutý. Strážca je bez obmedzení.</li>
+<li>Odkaz „Zmeniť heslo“ v menu používateľa; zvonček sa skryje, ak nie sú povolené notifikácie.</li>
+<li>Šípka ▾ pod menom používateľa so zaškrtávacími poľami a zelenými/červenými štítkami; existujúci používateľ sa neponúka znova a opätovné pridanie nič neprepíše.</li>
+<li>Nové pole <code>PolicyException.allowed</code> (migrácia <code>0042</code>); slovenský preklad.</li>
+</ul>
+<h2>Kľúče a bezpečnosť</h2>
+<ul>
+<li>Rotácia kľúča pokrýva aj 2FA, záložné kódy, SMTP heslo a index osôb len s PIN-om; <code>userpin_check</code> overí všetky šifrované hodnoty.</li>
+<li>Odstránenie PINu používateľa bez 2FA; <code>userpin_area_owners</code> kontroluje oprávnenosť.</li>
+<li>Master spravuje PINy, kým nie je zástupca CORE, aj pri existujúcich strážcoch.</li>
+</ul>
+<h2>Nový model ochrany</h2>
+<ul>
+<li>PIN riadi iba osoby len s PIN-om a používateľov v skupine alebo správcov úsekov; ostatní pracujú podľa oprávnení NetBoxu (menu a API kľúče vrátane).</li>
+<li>Osoby len s PIN-om nie sú používatelia NetBoxu (skryté v zoznamoch), nemajú žiadosti a bez skupiny môžu len zmeniť PIN.</li>
+<li>Ochrana ZAP riadi všetkých okrem strážcov a výnimiek; VYP necháva NetBox a pozastaví osoby len s PIN-om. Prepínač ZAP/VYP je v rozhraní (len strážcovia) a ukazuje skutočný stav. Výnimka vs. skupina: skupina čaká pod výnimkou.</li>
+<li>Strážcovia ochrany: pravidlo posledného strážcu, núdzové príkazy (<code>userpin_keeper</code>, <code>userpin_default_deny</code>).</li>
+</ul>
+<h2>Správcovia úsekov a žiadosti</h2>
+<ul>
+<li>Správca úseku s plnou mocou nad svojím úsekom (strážcovia nad ním); osoby len s PIN-om pod správcom; žiadosti správcovi aj strážcom s e-mailami o rozhodnutiach.</li>
+<li>Vymenúva len strážca; uvoľnená oprávnenosť (PIN + 2FA, bez roly oddelenia).</li>
+</ul>
+<h2>Osoby len s PIN-om</h2>
+<ul>
+<li>E-maily oboma smermi: osoba o zmenách správcu; správcovia zhrnutie každých N minút alebo pri každej zmene (nie oboje), predmet <em>PinUserNNNN vykonal zmenu</em>, telo: čas, objekt, zmenené polia (z → na); odosielanie po uložení cez <code>netbox-rq</code>.</li>
+<li>Rozbaľovacie zoznamy vo formulároch fungujú; ukladanie vlastných stĺpcov tabuliek.</li>
+<li>Podmienky pre polia typu relácia: obsahuje / začína na / je jedno z, viac hodnôt, tlačidlo Podmienky.</li>
+</ul>
+<h2>Pracovný čas</h2>
+<ul>
+<li>Všeobecné a vlastné pravidlá, krajina so štátnymi sviatkami (knižnica <code>holidays</code>), pracovné dni a hodiny; vždy zobrazený pracovný čas.</li>
+<li>Mimo času len čítanie; po konci 30 minút a jedno uloženie; krajina v jazyku osoby, dni Po–Pi.</li>
+</ul>
+<h2>Nástroje</h2>
+<ul>
+<li><code>tools/pin_check.sh</code>: kontrola zvonku aj na serveri; závislosť <code>holidays</code> v <code>pyproject.toml</code>; slovenské preklady; príprava <code>local_requirements.txt</code> pre upgrade NetBoxu v rámci 4.7.x.</li>
+</ul>
+<h2>Čo plugin zatiaľ nerobí</h2>
+<ul>
+<li>Dovolenky a vlastné firemné voľné dni v pracovnom čase.</li>
+<li>API pre bežných používateľov v skupine je stále riadené právami skupiny (nie je úplne uzavreté).</li>
+<li>Samostatný port alebo hostname pre prihlásenie osôb len s PIN-om (rieši sa v nginxe a firewalle).</li>
+</ul>

@@ -1,0 +1,83 @@
+<h1>Môj PIN</h1>
+<div class="facts">
+<div><strong>Kto:</strong> každý používateľ, ktorý smie používať PIN. Stránku <em>Môj PIN</em> vidí každý prihlásený.</div>
+<div><strong>Kedy:</strong> pri prvom použití, pri vypršaní platnosti (predvolene po 180 dňoch), po resete.</div>
+<div><strong>Závisí od:</strong> povolenie používať PIN (nižšie); 2FA a e-mail v overenej doméne pre obnovu zabudnutého PINu.</div>
+</div>
+<h2>Kto smie používať PIN</h2>
+<p>Rozhoduje nastavenie <em>Kto smie používať PIN</em> (Nastavenia → Prístup a pravidlá PINu) a príznak pri každom používateľovi (stránka <em>Používatelia</em>):</p>
+<table>
+<tr><th>Príznak používateľa</th><th>Režim „len výslovne povolení“ (predvolený)</th><th>Režim „všetci okrem zakázaných“</th></tr>
+<tr><td><strong>Povolený</strong></td><td>smie</td><td>smie</td></tr>
+<tr><td><strong>Zakázaný</strong></td><td>nesmie</td><td>nesmie</td></tr>
+<tr><td><strong>Podľa predvolenia</strong> (nové účty)</td><td>nesmie</td><td>smie</td></tr>
+</table>
+<ul>
+<li><strong>Superuser</strong> smie vždy.</li>
+<li>Kto má <strong>rolu</strong> v správe PINov (CORE, vedúci, delegát) alebo čaká na prijatie pozvánky, smie vždy: PIN potrebuje na prijatie a na prácu.</li>
+<li>Kto nesmie, na stránke <em>Môj PIN</em> vidí <em>Povolené používať PIN: Nie – opýtajte sa správcu</em>.</li>
+</ul>
+<h2>Stránka Môj PIN</h2>
+<table>
+<tr><th>Položka</th><th>Čo ukazuje</th></tr>
+<tr><td>Povolené používať PIN</td><td>Áno / Nie – opýtajte sa správcu</td></tr>
+<tr><td>PIN</td><td>Aktívny / Nenastavený / Vyžaduje sa zmena</td></tr>
+<tr><td>Naposledy zmenený; Platný do</td><td>dátum; počet dní do konca (<em>rotácia každých N dní</em>) alebo <em>vypršal</em></td></tr>
+<tr><td>Posledné úspešné použitie</td><td>dátum a čas</td></tr>
+<tr><td>Zablokovanie</td><td>do kedy je účet zablokovaný (po prekročení zlých pokusov)</td></tr>
+<tr><td>Odomknuté teraz</td><td>rozsah odomknutia (alebo <em>všetko</em>)</td></tr>
+<tr><td>Požadovaná dĺžka</td><td>N číslic</td></tr>
+</table>
+<p>Tlačidlá: <strong>Zamknúť teraz</strong> (okamžite zamkne všetko v tejto relácii), <strong>Skúška rotácie</strong> (vynúti zmenu vlastného PINu, aby si si vyskúšal postup), <strong>Zabudnutý PIN</strong>, <strong>Zmeniť PIN</strong> alebo <strong>Nastaviť PIN</strong>. Pod tým je <em>Posledná aktivita</em> (čas, udalosť, rozsah).</p>
+<p>Upozornenia na stránke: <em>PIN vyprší o N dní</em> (so zmenou na jedno kliknutie), <em>2FA nie je nastavené</em>, <em>PIN je pozastavený</em>, <em>správca spustil reset</em>, <em>pozvánka do roly</em>.</p>
+<h2>Nastavenie a zmena PINu</h2>
+<ul>
+<li>Len <strong>číslice</strong>, presne taká dĺžka, aká je v nastaveniach (<em>Dĺžka PINu</em>, predvolene 6, rozsah 4 až 12). Starý PIN inej dĺžky ostáva platný, kým sa nezmení.</li>
+<li><strong>Slabé PINy</strong> sa odmietnu (ak je zapnuté <em>Blokovať slabé PINy</em>, predvolene áno): opakujúce sa číslice a vzory (<code>111111</code>, <code>121212</code>, <code>123123</code>), súvislé postupnosti nahor alebo nadol (<code>123456</code>, <code>654321</code>) a vlastný zoznam <em>Ďalšie blokované PINy</em> (po jednom na riadok alebo oddelené čiarkou).</li>
+<li>Nikto, ani správca, PIN neprečíta: správca ho môže len resetovať.</li>
+<li>Zmena alebo reset PINu <strong>zruší všetky existujúce odomknutia</strong> používateľa (vo všetkých reláciách).</li>
+</ul>
+<h2>Odomknutie</h2>
+<p>Chránená stránka vypýta PIN (<em>Zadajte PIN</em>). Po správnom PINe sa odomkne na <em>Trvanie odomknutia</em> minút (predvolene 15; 1 až 1440). Pri zapnutom <em>Predĺžiť odomknutie pri aktivite</em> (predvolene áno) každé zobrazenie chránenej stránky časovač znovu spustí, takže odomknutie vyprší po nečinnosti. <em>Rozsah odomknutia</em>: <strong>jedno odomknutie pre všetko</strong> (predvolené) alebo <strong>osobitné podľa rozsahu</strong> (plugin / oblasť). Voľba <em>Vyžadovať 2FA pri každom odomknutí</em> (predvolene vypnutá) vyžaduje aj kód 2FA; používateľ bez 2FA sa vtedy neodomkne.</p>
+<p>Odomknutie neplatí, ak je PIN pozastavený, vypršal, alebo používateľ už nesmie používať PIN. Stránka <em>Test odomknutia</em> v menu je chránená vlastným rozsahom <em>test</em> a slúži na vyskúšanie.</p>
+<h2>Zlé pokusy a zablokovanie</h2>
+<p>Po <em>Max. neúspešných pokusoch</em> (predvolene 5; 1 až 50) sa účet zablokuje na <em>Trvanie zablokovania</em> minút (predvolene 30; až 7 dní). Zlé PINy a zlé kódy 2FA sa počítajú <strong>zvlášť</strong>: správny PIN nevynuluje zlé kódy 2FA a naopak. Počítanie prebieha pod zámkom riadku, takže paralelné hádanie zablokovanie neobíde. Zablokovaný vidí <em>Príliš veľa neúspešných pokusov. Skúste znova po …</em>. Odblokuje ho správca (<em>Zrušiť zablokovanie</em>) alebo uplynutie času.</p>
+<h2>Platnosť a rotácia</h2>
+<p>PIN platí <em>Max. vek PINu</em> dní (predvolene 180; 1 až 3650). <em>Upozornenie pred vypršaním</em> (predvolene 14 dní) pošle <strong>raz</strong> e-mail a ukáže upozornenie na stránke. Po vypršaní, alebo keď správca vynúti zmenu, treba PIN zmeniť pred ďalším použitím (<em>Vyžaduje sa zmena</em>). Pravidelné zmeny odporúča firemná politika, NIST SP 800-63B-4 ich neodporúča: nastav podľa svojich pravidiel.</p>
+<h2>Zabudnutý PIN (samoobsluha)</h2>
+<ol>
+<li><em>Môj PIN → Zabudnutý PIN</em> (alebo odkaz <em>Zabudli ste PIN?</em> na stránke odomknutia) → <strong>Poslať kód</strong>. Prijíma sa len na adresu v overenej doméne. Pošle sa 8-miestny kód; platí <em>Platnosť kódu na obnovu</em> minút, najviac 5 pokusov, nový kód najskôr po 60 s.</li>
+<li>Zadaj kód z e-mailu <strong>a</strong> kód 2FA (alebo záložný kód) a nový PIN. Po úspechu príde e-mail <em>Your PIN was recovered</em>.</li>
+</ol>
+<p>Obnova sa neponúka (stránka vypíše dôvody), ak: je vypnutá, používateľ nesmie používať PIN, NetBox nevie posielať e-maily, účet nemá e-mail, e-mail nie je v overenej doméne, alebo nie je nastavené 2FA. Vtedy PIN resetuje správca. Obnova <strong>nikdy neobíde 2FA</strong>.</p>
+
+<h1>Dvojfaktorové overenie (2FA)</h1>
+<div class="facts">
+<div><strong>Kto:</strong> každý používateľ si ho nastavuje sám (<em>Môj PIN → Nastaviť 2FA</em>).</div>
+<div><strong>Kedy:</strong> čo najskôr: bez 2FA nemožno potvrdzovať administratívne akcie ani obnoviť zabudnutý PIN, a rolu (vedúci, delegát, zástupca CORE) nemožno prijať.</div>
+<div><strong>Závisí od:</strong> aplikácia na telefóne s TOTP (Microsoft / Google Authenticator a pod.), balík <code>segno</code> (QR kód).</div>
+</div>
+<ol>
+<li><em>Nastaviť 2FA</em> → <strong>1. Naskenuj aplikáciou</strong> QR kód (alebo zadaj kľúč ručne: <em>Nemôžeš skenovať? Zadaj tento kľúč ručne</em>).</li>
+<li><strong>2. Zadaj 6-miestny kód</strong> z aplikácie. Hneď sa zobrazia záložné kódy (<em>Uložte si tieto kódy teraz</em>, tlačidlá <em>Kopírovať</em> a <em>Uložil som ich</em>).</li>
+</ol>
+<ul>
+<li>Kód TOTP sa prijme <strong>len raz</strong> (ochrana proti zopakovaniu).</li>
+<li><strong>Vypnutie 2FA</strong> (<em>Môj PIN → Vypnúť 2FA</em>) vyžaduje PIN a kód 2FA. Bez 2FA nemožno potvrdzovať administratívne akcie ani samoobslužne obnoviť PIN. Príde e-mail <em>Two-factor authentication disabled</em>.</li>
+</ul>
+<h2>Záložné kódy</h2>
+<p>Jednorazové kódy namiesto aplikácie (napr. po strate telefónu). <em>Môj PIN → Zobraziť záložné kódy</em> vyžaduje PIN a buď <strong>kód 2FA</strong>, alebo (bez telefónu) <strong>overovací kód z e-mailu</strong> (<em>Nemáte telefón? Získajte overovací kód e-mailom</em>). Kódy sa ukážu len v prehliadači (použité sú označené <em>použitý</em>); <strong>Vygenerovať nové kódy</strong> všetky staré zneplatní. Samotné kódy sa nikdy neposielajú e-mailom. Po každom zobrazení príde používateľovi e-mail a zapíše sa do auditu.</p>
+<h2>Strata telefónu</h2>
+<ol>
+<li>Použi záložný kód.</li>
+<li>Ak nemáš ani tie: iný správca spustí <strong>Reset 2FA</strong> (používateľ ho potvrdí PINom a nastaví nový telefón).</li>
+<li>Ak nie je nikto, kto by to mohol urobiť (napr. master bez telefónu a kódov): správca servera spustí <code>python manage.py userpin_reset_2fa &lt;používateľ&gt;</code>. 2FA sa odstráni hneď a zapíše sa do auditu. Príkaz s presnými cestami ukazuje <em>Môj PIN</em> aj <em>Používatelia → Núdzovo: príkaz na serveri</em>.</li>
+</ol>
+<h2>Potvrdenie administratívnych akcií</h2>
+<p>Administratívna akcia sa potvrdzuje v okne priamo na stránke (<em>Potvrďte svoju totožnosť</em>): <em>Váš PIN</em> a <em>kód 2FA</em> (6 číslic z aplikácie, alebo záložný kód). Potvrdenie platí <em>Administratívne okno</em> minút (predvolene 5; 1 až 60) a akcia pokračuje bez opustenia stránky. Akcie delia na dve úrovne:</p>
+<table>
+<tr><th>Úroveň</th><th>Čo vyžaduje</th><th>Príklady</th></tr>
+<tr><td><strong>Len PIN</strong> (predvolene)</td><td>PIN; pri zapnutom <em>Vyžadovať 2FA aj pre nastavenia</em> aj 2FA</td><td>uloženie Nastavení a Mailu, povoliť/zakázať PIN, zrušiť zablokovanie, vynútiť zmenu PINu, presuny medzi oddeleniami</td></tr>
+<tr><td><strong>PIN + 2FA</strong></td><td>vždy aj 2FA</td><td>resety, pozastavenie, roly, zrušenie oddelenia</td></tr>
+</table>
+<p>Ak vypneš <em>Vyžadovať PIN + 2FA pre administratívne akcie</em>, stačí PIN. Správa chránených oblastí sa potvrdzuje inak: PIN sa odomkne raz a 2FA sa pýta len každých <em>2FA sa pýta znova po</em> hodín (predvolene 8; 1 až 168), nie pri každej zmene.</p>

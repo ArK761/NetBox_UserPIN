@@ -1,0 +1,62 @@
+<h1>Roly: CORE a oddelenia</h1>
+<div class="facts">
+<div><strong>Kto:</strong> master (superuser) vymenúva zástupcov CORE. CORE zakladá oddelenia a vymenúva vedúcich. Vedúci pozývajú delegátov. Delegát spravuje členov bez roly.</div>
+<div><strong>Kedy:</strong> keď PINy nespravuje jeden človek, ale viacero: po jedinej inštalácii stačí master.</div>
+<div><strong>Závisí od:</strong> PIN a 2FA každého nositeľa roly, e-mail v overenej doméne (pozvánka), nastavená pošta, bežiaci <code>netbox-rq</code> (pripomienky, vypršanie pozvánok).</div>
+</div>
+<pre>CORE        master (superuseri) + zástupcovia CORE        spravuje všetkých
+Oddelenie   vedúci + delegáti (min. 2) + členovia           PINy členov oddelenia</pre>
+<h2>Kto čo vidí a robí</h2>
+<table>
+<tr><th>Menu</th><th>Master</th><th>Zástupca CORE</th><th>Vedúci</th><th>Delegát</th><th>Používateľ</th></tr>
+<tr><td>Môj PIN, Moje roly</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td></tr>
+<tr><td>Používatelia</td><td>všetci</td><td>všetci</td><td>vlastné oddelenie</td><td>vlastné oddelenie</td><td>–</td></tr>
+<tr><td>Oddelenia</td><td>všetko</td><td>všetko</td><td>vlastné: pozvať delegátov, odovzdať, žiadať o presun</td><td>vlastné: čítať, s druhým delegátom pozvať a odovzdať</td><td>–</td></tr>
+<tr><td>Audit log, Schvaľovania</td><td>všetko</td><td>všetko</td><td>vlastné oddelenie</td><td>vlastné oddelenie</td><td>–</td></tr>
+<tr><td>Nastavenia, Mail</td><td>úprava</td><td>čítanie (úprava s oprávnením)</td><td>–</td><td>–</td><td>–</td></tr>
+<tr><td>CORE (zástupcovia)</td><td>✓</td><td>–</td><td>–</td><td>–</td><td>–</td></tr>
+</table>
+<p>Kto koho smie spravovať (akcie na stránke Používatelia) je v kapitole Používatelia.</p>
+<h2>Pozvánka na rolu</h2>
+<p>Každá rola (zástupca CORE, vedúci, delegát, dočasný vedúci, náhrada) je <strong>pozvánka</strong>:</p>
+<ol>
+<li>Pozývajúci vyberie používateľa a <strong>platnosť pozvánky: 12, 24, 36 alebo 48 hodín</strong> (inú hodnotu stránka odmietne).</li>
+<li>Pozvanému príde e-mail s vysvetlením roly a zodpovednosti, odkazom a kódom, a upozornenie vo zvončeku.</li>
+<li>Pozvaný otvorí pozvánku. Ak ešte nemá PIN alebo 2FA, stránka ho najprv odošle ich <strong>nastaviť</strong> (<em>Najprv nastavte</em> PIN a 2FA) a potom sa vráti.</li>
+<li>Pozvaný pozvánku <strong>prijme</strong> kódom z e-mailu, svojím PINom a kódom 2FA (kód sa dá zadať najviac 5-krát) alebo ju <strong>odmietne</strong>. Až prijatím rola začne platiť.</li>
+</ol>
+<p><strong>Kto môže byť pozvaný:</strong> aktívny používateľ, ktorý nie je superuser (master rolu nepotrebuje), nemá zakázaný PIN, <strong>má e-mail v overenej doméne a pošta je nastavená</strong> (inak by pozvánka nedorazila; stránka to odmietne a napíše prečo), nemá už rovnakú rolu ani otvorenú pozvánku. Zástupca CORE nemôže mať rolu v oddelení; človek v inom oddelení musí byť najprv presunutý. <strong>Delegát sa dá pozvať až keď má oddelenie vedúceho</strong>: najprv vedúci, potom delegáti. Ak pozvánka vyprší, dá sa poslať znova (<em>Poslať znova</em>) alebo zrušiť.</p>
+<h2>Minimum a zánik roly</h2>
+<ul>
+<li><strong>Minimum:</strong> so zapnutými štyrmi očami aspoň <strong>2 zástupcovia CORE</strong>; každé oddelenie <strong>vedúci a aspoň 2 delegáti</strong>.</li>
+<li><strong>Odstúpenie:</strong> nositeľ roly ju vzdá v <em>Moje roly</em>. Pod minimum rola ostáva v platnosti (<em>odstupuje</em>), kým neprijme náhrada. Nadriadení sa dozvedia e-mailom (delegáta vedúci, vedúceho CORE, zástupcu CORE master).</li>
+<li><strong>Odstránenie / výmena</strong> (tlačidlo <em>Odstrániť / nahradiť</em>): pod minimum len spolu s náhradou, stará osoba ostáva, kým náhrada nepríjme. <strong>Riadny vedúci</strong> sa končí hneď (oddelenie dočasne spravuje CORE, kým nový vedúci pozvánku neprijme).</li>
+<li>Oddelenie bez aktívneho vedúceho hlási <em>The department has no active head – CORE manages it until a head accepts the invitation.</em></li>
+</ul>
+<h2>Zástupcovia CORE (stránka CORE (zástupcovia), len master)</h2>
+<ul>
+<li><strong>Pozvať zástupcu</strong> (s voľbou <em>Môže upravovať nastavenia</em>).</li>
+<li>Pri zástupcovi: <strong>Povoliť nastavenia</strong> / <strong>Len na čítanie</strong> (prepne, či smie meniť Nastavenia a Mail), <strong>Odstrániť / nahradiť</strong>, <strong>Poslať znova</strong>, <strong>Zrušiť</strong>. Dole je <em>História</em>.</li>
+<li>Stránka ukazuje počet aktívnych zástupcov a či sú zapnuté štyri oči (potrebujú aspoň 2).</li>
+<li>Zástupca vidí všetkých používateľov a oddelenia (po potvrdení PIN + 2FA), zakladá oddelenia a vymenúva vedúcich. Nespravuje mastera ani iných zástupcov.</li>
+</ul>
+<h2>Oddelenia</h2>
+<p>Stránka <strong>Oddelenia</strong>: tabuľka (oddelenie, vedúci, delegáti, členovia; <em>bez vedúceho – spravuje CORE</em>), čakajúce presuny na rozhodnutie, počet aktívnych používateľov bez oddelenia (spravuje ich len CORE) a formulár <strong>Nové oddelenie</strong> (názov musí byť jedinečný). Detail oddelenia:</p>
+<table>
+<tr><th>Časť</th><th>Čo robí a kto</th></tr>
+<tr><td><strong>Vedúci a delegáti</strong></td><td>tabuľka (osoba, rola, stav; <em>dočasný vedúci</em> s „namiesto …“); <em>Pozvať vedúceho</em> / <em>Nahradiť vedúceho</em> (CORE); <em>Pozvať delegáta</em> (vedúci, CORE; delegát potrebuje druhého delegáta, vedúceho alebo CORE na potvrdenie)</td></tr>
+<tr><td><strong>Dočasné odovzdanie vedúceho</strong></td><td>pozvánka člena oddelenia na <strong>dočasného vedúceho do dátumu</strong> (dovolenka, choroba). Člen ju musí <strong>prijať</strong>. Vedúci a CORE bez obmedzenia dĺžky; <strong>dvaja delegáti spolu najviac na 30 dní</strong>, keď vedúci nie je dostupný. Naraz môže byť len jedno. Celé oddelenie dostane e-mail a deň vopred pripomienku. Po dátume sa práva vrátia sami (systémová úloha každých 5 minút). Predčasne: <em>Ukončiť odovzdanie</em></td></tr>
+<tr><td><strong>Členovia</strong></td><td>tabuľka členov (PIN, 2FA, e-mail, rola); odkaz <em>Spravovať PINy členov</em></td></tr>
+<tr><td><strong>Presuny</strong></td><td>pozri nižšie</td></tr>
+<tr><td><strong>Zrušiť oddelenie</strong></td><td>CORE (PIN + 2FA). Všetky roly sa ukončia, členovia dostanú e-mail; ich vlastný PIN to neovplyvní</td></tr>
+<tr><td><strong>História</strong></td><td>zmeny rolí v oddelení</td></tr>
+</table>
+<h2>Presuny medzi oddeleniami</h2>
+<ul>
+<li><strong>CORE presúva priamo.</strong> Vedúci o presun <strong>žiada</strong> (<em>Žiadať o presun</em>); o žiadosti rozhoduje vedúci druhého oddelenia (u ľudí bez oddelenia CORE; ak druhé oddelenie nemá vedúceho, rozhoduje CORE).</li>
+<li>Žiadosť platí <em>Platnosť žiadosti</em> minút (predvolene 24 hodín); rozhodujúci ju <strong>schváli</strong> alebo <strong>zamietne</strong>, žiadateľ ju môže <strong>zrušiť</strong>. Rozhodujúci dostane e-mail a upozornenie. Pre človeka môže čakať len jeden presun.</li>
+<li>Presunutý, obaja vedúci a obe oddelenia sa dozvedia e-mailom. Delegáta potrebného do minima nemožno presunúť pred príchodom náhrady.</li>
+<li>Člen sa dá priradiť k oddeleniu aj z formulára <em>Dostať niekoho do tohto oddelenia</em>.</li>
+</ul>
+<h2>Moje roly</h2>
+<p>Každý vidí, do ktorého oddelenia patrí, svoje roly (čo to znamená a aká je zodpovednosť), čakajúcu pozvánku, upozornenie o dočasnom odovzdaní a stav odstúpenia, a môže rolu <strong>vzdať</strong>. Rola sa synchronizuje do oprávnení NetBoxu s názvami <code>User PIN: …</code>: neupravuj ich ručne.</p>

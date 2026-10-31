@@ -15,9 +15,9 @@ DATE = '2026-10-31'
 
 DOCS = {
     'sk': dict(src='sk', out='../NAVOD_User_PIN_SK.pdf', lang='sk',
-               title='User PIN – návod', subtitle='Plugin pre NetBox 4.7+ · rozpracovaný návod, overený v kóde',
+               title='User PIN – návod', subtitle='Kompletný návod pre NetBox 4.7+, overený v kóde',
                toc='Obsah', meta='Verzia %s · %s' % (VERSION, DATE),
-               parts='Hotové kapitoly: inštalácia, šifrovací kľúč, e-maily',
+               parts='Inštalácia · kľúč · e-maily · PIN a 2FA · používatelia · roly · schvaľovanie · nastavenia · oblasti · ochrana a výnimky · osoby len s PIN-om · pracovný čas · príkazy · riešenie problémov · zmeny',
                foot='User PIN %s · návod' % VERSION),
 }
 

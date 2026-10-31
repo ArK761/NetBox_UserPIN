@@ -1,0 +1,52 @@
+<h1>Schvaľovanie „štyri oči“</h1>
+<div class="facts">
+<div><strong>Kto zapína:</strong> ten, kto môže meniť Nastavenia (master, zástupca CORE s oprávnením).</div>
+<div><strong>Kedy:</strong> keď má citlivú zmenu potvrdiť druhá osoba.</div>
+<div><strong>Závisí od:</strong> aspoň <strong>dvaja aktívni zástupcovia CORE</strong> s PINom a 2FA; bez nich sa zapnúť nedá.</div>
+</div>
+<h2>Zapnutie a kategórie</h2>
+<p>Nastavenia → <em>Schvaľovanie „štyri oči“</em> (predvolene vypnuté). Po zapnutí sa vyberie, na čo sa vzťahuje:</p>
+<table>
+<tr><th>Kategória</th><th>Predvolene</th><th>Ktoré akcie vytvoria žiadosť</th></tr>
+<tr><td>… pre roly (CORE, vedúci a delegáti)</td><td>áno</td><td>pozvať do roly, ukončiť alebo nahradiť rolu, zmeniť oprávnenie zástupcu upravovať nastavenia, zrušiť oddelenie</td></tr>
+<tr><td>… pre nastavenia a mailové nastavenia</td><td>áno</td><td>uloženie Nastavení, uloženie Mailu, pridanie povolenej domény</td></tr>
+<tr><td>… pre povoľovanie / zakazovanie PINu</td><td>nie</td><td>Povoliť / Zakázať / Podľa predvolenia pri používateľovi</td></tr>
+</table>
+<ul>
+<li><strong>Zapnutie</strong> vyžaduje aspoň 2 aktívnych zástupcov CORE. Informuje sa zástupcov (e-mail <em>Four-eyes approval switched on</em>).</li>
+<li><strong>Vypnutie</strong> sa <strong>nedá</strong>, kým existuje oddelenie. Vypnutie vyžaduje dvoch ľudí a <strong>ukončí delegovanie CORE</strong>: zástupcovia sa dozvedia e-mailom a odvtedy spravujú len svoj vlastný PIN.</li>
+</ul>
+<h2>Priebeh žiadosti</h2>
+<ol>
+<li>Žiadateľ urobí zmenu: zobrazí sa žiadosť <em>Žiadosť štyroch očí č. N</em> s dôvodom. Žiadateľ ju potvrdí PINom + 2FA (<em>Potvrdiť svoju žiadosť</em>).</li>
+<li>Iná oprávnená osoba dostane upozornenie vo zvončeku a e-mail. Oprávnení sú: master a zástupcovia CORE; pri žiadosti oddelenia aj jeho vedúci a delegáti.</li>
+<li>Otvorí <em>Schvaľovania</em> (alebo odkaz) a <strong>Potvrdí</strong> alebo <strong>Zamietne</strong> svojím PINom + 2FA. Nemožno hlasovať dvakrát.</li>
+<li>Stránka žiadosti sa sama obnovuje a obaja vidia potvrdenia (kto, čas, IP). Hneď po druhom potvrdení sa zmena vykoná.</li>
+</ol>
+<ul>
+<li>Žiadosť platí <em>Platnosť žiadosti</em> minút (predvolene 1440 = 24 h; 5 až 10080) a potom vyprší.</li>
+<li>Žiadateľ ju môže <strong>zrušiť</strong>. Zamietnutie sa oznámi e-mailom.</li>
+<li><strong>Break-glass</strong> (predvolene vypnuté, <em>Povoliť break-glass pre mastera</em>): superuser smie žiadosť v nevyhnutnom prípade vykonať <strong>sám</strong> s dôvodom (<em>Vykonať sám</em>). Všetci správcovia a delegáti dostanú e-mail a v audite je to označené.</li>
+</ul>
+<p>Stránka <strong>Schvaľovania (štyri oči)</strong>: <em>Čakajúce</em> (zmena, žiadateľ, potvrdené, platí do; <em>Potvrdiť</em>/<em>Otvoriť</em>) a <em>História</em> (zmena, žiadateľ, potvrdil, stav, dokončené). Ak je schvaľovanie vypnuté, stránka to hlási.</p>
+
+<h1>Audit log</h1>
+<div class="facts">
+<div><strong>Kto ho vidí:</strong> CORE (master a zástupcovia) všetko; vedúci a delegáti len udalosti ľudí zo svojho oddelenia a svoje.</div>
+<div><strong>Kedy:</strong> pri vyšetrovaní, kto čo urobil a kedy.</div>
+<div><strong>Závisí od:</strong> nič: zapisuje sa vždy.</div>
+</div>
+<p>Menu <strong>User PIN → Audit log</strong> (<em>Audit log PINov</em>). Záznamy sa len pridávajú (nedajú sa meniť) a <strong>nikdy neobsahujú PIN, hash ani kód</strong>. Stránka má 50 záznamov na stranu a filtre: <em>Používateľ</em> (text: účet alebo ten, kto akciu urobil) a <em>Udalosť</em> (výber z typov). Stĺpce: <em>Čas</em>, <em>Používateľ</em>, <em>Udalosť</em>, <em>Kto</em>, <em>Rozsah</em>, <em>Detail</em>.</p>
+<h2>Čo sa zapisuje</h2>
+<table>
+<tr><th>Oblasť</th><th>Udalosti</th></tr>
+<tr><td>PIN</td><td>nastavený, zmenený, resetovaný, overený, nesprávny, zablokovaný, odmietnutý (zablokovaný), zrušené zablokovanie, vynútená zmena, pozastavený, obnovený, zamknutý, nepovolený</td></tr>
+<tr><td>2FA</td><td>zapnuté, vypnuté, resetované, nesprávny kód, použitý záložný kód, nové záložné kódy, zobrazené záložné kódy</td></tr>
+<tr><td>Potvrdenie a obnova</td><td>potvrdenie (úspech aj zlyhanie), poslaný/správny/nesprávny kód na obnovu, poslaný overovací kód e-mailom, reset spustený / dokončený / zrušený</td></tr>
+<tr><td>E-mail</td><td>e-mail odoslaný / zlyhal, doména pridaná / overená / zlyhalo overenie / odstránená</td></tr>
+<tr><td>Roly a oddelenia</td><td>pozvanie, prijatie, odmietnutie, vypršanie, odstupovanie, ukončenie, dočasné odovzdanie, návrat, zástupca pridaný/odobraný/zmenený, oddelenie vytvorené/zrušené, člen pridaný/odobraný, presun (žiadosť, schválenie, zamietnutie)</td></tr>
+<tr><td>Schvaľovanie</td><td>žiadosť, potvrdenie, zamietnutie, zrušenie, vykonanie, break-glass</td></tr>
+<tr><td>Nastavenia a kľúče</td><td>zmena nastavení (aj výnimiek a ochrany), rotácia kľúča, chyby</td></tr>
+<tr><td>Oblasti</td><td>oblasť vytvorená/zmenená/zmazaná, správca pridaný/odobraný, žiadosť, udelenie, zamietnutie, odvolanie, zrušenie, odmietnutý prístup, strážca pridaný/odobraný, ochrana zapnutá/vypnutá</td></tr>
+<tr><td>Osoby len s PIN-om</td><td>vytvorenie, pozvánka, prihlásenie, nesprávny PIN, nový PIN, reset, odvolanie, zmazanie, zablokovanie a odblokovanie, pravidlá, žiadosť o odblokovanie, koniec platnosti a upozornenie naň, správca, pracovný čas</td></tr>
+</table>

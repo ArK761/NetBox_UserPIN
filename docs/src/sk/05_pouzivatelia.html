@@ -1,0 +1,49 @@
+<h1>Používatelia (stránka PINov)</h1>
+<div class="facts">
+<div><strong>Kto ju vidí:</strong> CORE (master a zástupcovia) všetkých; vedúci a delegáti len svoje oddelenie. Bežný používateľ stránku nemá.</div>
+<div><strong>Kedy:</strong> pri správe PINov: povoľovanie, resety, pozastavenie, zrušenie zablokovania.</div>
+<div><strong>Závisí od:</strong> rola správcu (kapitola Roly); potvrdenie PIN alebo PIN + 2FA pred prvou akciou.</div>
+</div>
+<p>Menu <strong>User PIN → Používatelia</strong>, nadpis <em>PINy používateľov</em>.</p>
+<h2>Filtre</h2>
+<ul>
+<li><strong>Hľadanie</strong> (meno, e-mail).</li>
+<li><strong>Stav:</strong> Všetci / PIN aktívny / Zatiaľ bez PINu / Bez 2FA / Problém s e-mailom (chýba alebo doména) / Zablokovaní / Pozastavení / Nepovolení.</li>
+<li><strong>Oddelenie:</strong> všetky / bez oddelenia / konkrétne. <strong>Rola:</strong> všetky / master / vedúci / delegát / pozvaný / bez roly.</li>
+<li><strong>Zobrazenie:</strong> <em>Zoznam</em> alebo <em>Podľa oddelení</em> (strom: vedúci → delegáti → členovia; farby oddelenia: zelená = vedúci a aspoň 2 delegáti, žltá = chýbajú delegáti, červená blikajúca = chýba vedúci).</li>
+</ul>
+<h2>Stĺpce</h2>
+<table>
+<tr><th>Stĺpec</th><th>Hodnoty</th></tr>
+<tr><td>Používateľ</td><td>účet (+ meno, ak je zapnuté <em>Zobrazovať meno a priezvisko</em>); značky <em>vy</em>, <em>master</em>, <em>vedúci</em>, <em>delegát</em>, <em>pozvaný</em>, <em>neaktívny</em></td></tr>
+<tr><td>Povolený</td><td><em>povolený</em> / <em>zakázaný</em> / predvolené (rozhodne režim v Nastaveniach); <em>Áno</em> / <em>Nie</em> = či môže teraz používať PIN</td></tr>
+<tr><td>PIN</td><td><em>Aktívny</em>, <em>Nenastavený</em>, <em>musí zmeniť</em>, <em>pozastavený</em>, <em>čaká reset PINu</em>, <em>čaká reset 2FA</em></td></tr>
+<tr><td>2FA</td><td>Zapnuté / Vypnuté</td></tr>
+<tr><td>E-mail</td><td>adresa, alebo <em>bez e-mailu</em> / <em>doména</em> (mimo overených domén): bez toho e-maily nechodia</td></tr>
+<tr><td>Platný do</td><td>dátum alebo <em>vypršal</em> (a rotácia každých N dní)</td></tr>
+<tr><td>Naposledy použitý; Zablokovanie</td><td>čas; do kedy je zablokovaný</td></tr>
+</table>
+<h2>Akcie pri používateľovi</h2>
+<table>
+<tr><th>Akcia</th><th>Potvrdenie</th><th>Čo urobí</th></tr>
+<tr><td><strong>Povoliť</strong> / <strong>Zakázať</strong> / <strong>Podľa predvolenia</strong></td><td>PIN</td><td>nastaví príznak používateľa (viď tabuľku v kapitole Môj PIN). Pri zapnutých štyroch očiach s kategóriou „povoľovanie PINu“ vytvorí žiadosť</td></tr>
+<tr><td><strong>Reset PINu</strong></td><td>PIN + 2FA</td><td>spustí reset; používateľ ho potvrdí vo vlastnej relácii <strong>kódom 2FA</strong> a nastaví nový PIN. Platí <em>Platnosť resetu správcom</em> hodín (predvolene 24). Starý PIN funguje, kým používateľ nepotvrdí</td></tr>
+<tr><td><strong>Reset 2FA</strong></td><td>PIN + 2FA</td><td>spustí reset; používateľ ho potvrdí <strong>PINom</strong> a nastaví 2FA na novom telefóne</td></tr>
+<tr><td><strong>Zrušiť reset</strong></td><td>PIN + 2FA</td><td>zruší čakajúci reset</td></tr>
+<tr><td><strong>Pozastaviť</strong> / <strong>Zrušiť pozastavenie</strong></td><td>PIN + 2FA</td><td>PIN okamžite zablokuje (podozrenie z úniku, neprítomnosť), sám, bez druhej osoby; používateľ dostane e-mail</td></tr>
+<tr><td><strong>Zrušiť zablokovanie</strong></td><td>PIN</td><td>zruší zablokovanie po zlých pokusoch</td></tr>
+<tr><td><strong>Vynútiť zmenu</strong></td><td>PIN</td><td>pri ďalšom použití musí používateľ zmeniť PIN</td></tr>
+<tr><td><strong>Odstrániť PIN</strong></td><td>PIN + 2FA</td><td>len pre používateľa <strong>bez 2FA</strong>, ktorý reset potvrdiť nemôže: PIN sa odstráni a pri najbližšej výzve si nastaví nový. Ak má 2FA, treba spustiť reset</td></tr>
+</table>
+<div class="note">Reset nikdy neprezradí nový PIN správcovi. Reset začne správca a dokončí ho používateľ sám.</div>
+<h2>Kto koho smie spravovať</h2>
+<table>
+<tr><th>Správca</th><th>Koho smie spravovať</th></tr>
+<tr><td>Master (superuser)</td><td>všetkých okrem seba</td></tr>
+<tr><td>Zástupca CORE</td><td>všetkých okrem mastera, iných zástupcov CORE a seba</td></tr>
+<tr><td>Vedúci oddelenia</td><td>členov svojho oddelenia okrem seba a iných vedúcich</td></tr>
+<tr><td>Delegát oddelenia</td><td>členov svojho oddelenia, ktorí <strong>nemajú žiadnu rolu</strong></td></tr>
+</table>
+<p>Nikto nespravuje sám seba (svoj PIN mení v <em>Môj PIN</em>). Pri pokuse o zakázanú akciu stránka odpovie: <em>Delegáti nemôžu spravovať mastera, iných delegátov ani seba.</em></p>
+<h2>Núdzový reset 2FA</h2>
+<p>V menu <em>Akcie</em> pri používateľovi je <em>Núdzovo: príkaz na serveri (2FA)</em>: hotový príkaz <code>userpin_reset_2fa</code> na spustenie ako root. Použi ho len keď bežný postup (reset potvrdený používateľom PINom) nie je možný. 2FA sa odstráni okamžite a udalosť sa zapíše do auditu.</p>

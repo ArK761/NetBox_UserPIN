@@ -1,0 +1,70 @@
+<h1>Nastavenia</h1>
+<div class="facts">
+<div><strong>Kto ich vidí:</strong> CORE (master a zástupcovia). Ostatní ich nemajú. (Ak existujú strážcovia aj aktívni zástupcovia CORE, superuser, ktorý nie je zástupca CORE, ich nevidí.)</div>
+<div><strong>Kto môže meniť:</strong> master a zástupca CORE s oprávnením <em>Môže upravovať nastavenia</em>. Ostatní vidia stránku s nápisom <em>Iba na čítanie</em>.</div>
+<div><strong>Potvrdenie:</strong> uloženie vyžaduje PIN (a 2FA pri zapnutom <em>Vyžadovať 2FA aj pre nastavenia</em>). So zapnutými štyrmi očami a kategóriou „nastavenia“ vytvorí žiadosť.</div>
+<div><strong>Kedy:</strong> po inštalácii a pri zmene firemnej politiky.</div>
+</div>
+<p>Menu <strong>User PIN → Nastavenia</strong> (<em>Nastavenia PINu</em>). Stránka má karty: Všeobecné, Prístup a pravidlá PINu, Rotácia, Odomknutie, Ochrana, Schvaľovanie štyri oči, Chránené oblasti a dole <em>Šifrovací kľúč</em> (aktívny kľúč, odtlačok, nastavené kľúče). <strong>Pošta</strong> (SMTP, domény, upozornenia, obnova zabudnutého PINu) je na osobitnej stránke <em>Mail</em>; <strong>Zakázať všetko, čo nie je povolené</strong> a ďalšie voľby ochrany sú na stránke <em>Chránené oblasti</em>; pravidlá osôb len s PIN-om sú na stránke <em>Ľudia len s PIN-om</em>.</p>
+<h2>Všeobecné</h2>
+<table>
+<tr><th>Voľba</th><th>Predvolené</th><th>Význam</th></tr>
+<tr><td>Jazyk</td><td>English</td><td>jazyk stránok pluginu a e-mailov: <em>English</em> alebo <em>Slovenčina</em></td></tr>
+<tr><td>Zobrazovať meno a priezvisko</td><td>áno</td><td>meno vedľa účtu (Používatelia, CORE, Oddelenia, príjemcovia e-mailov)</td></tr>
+</table>
+<h2>Prístup a pravidlá PINu</h2>
+<table>
+<tr><th>Voľba</th><th>Predvolené</th><th>Význam</th></tr>
+<tr><td>Kto smie používať PIN</td><td>len výslovne povolení</td><td><em>Len výslovne povolení</em> alebo <em>Všetci, okrem zakázaných</em>. Povolenie pre jednotlivca je na stránke Používatelia. Superuseri smú vždy</td></tr>
+<tr><td>Dĺžka PINu</td><td>6</td><td>počet číslic, 4 až 12. Staré PINy inej dĺžky platia, kým sa nezmenia</td></tr>
+<tr><td>Blokovať slabé PINy</td><td>áno</td><td>odmietne opakované číslice (111111), postupnosti (123456) a vzory (121212)</td></tr>
+<tr><td>Ďalšie blokované PINy</td><td>prázdne</td><td>vlastný zoznam; jeden na riadok alebo oddelené čiarkou</td></tr>
+</table>
+<h2>Rotácia</h2>
+<table>
+<tr><th>Voľba</th><th>Predvolené</th><th>Význam</th></tr>
+<tr><td>Max. vek PINu (dni)</td><td>180</td><td>1 až 3650; po uplynutí treba PIN zmeniť</td></tr>
+<tr><td>Upozornenie pred vypršaním (dni)</td><td>14</td><td>0 až 365; raz pošle e-mail a ukáže upozornenie</td></tr>
+</table>
+<h2>Odomknutie</h2>
+<table>
+<tr><th>Voľba</th><th>Predvolené</th><th>Význam</th></tr>
+<tr><td>Trvanie odomknutia (minúty)</td><td>15</td><td>1 až 1440</td></tr>
+<tr><td>Predĺžiť odomknutie pri aktivite</td><td>áno</td><td>každé zobrazenie chránenej stránky obnoví časovač (vyprší po nečinnosti)</td></tr>
+<tr><td>Rozsah odomknutia</td><td>jedno odomknutie pre všetko</td><td>alebo osobitné odomknutie podľa rozsahu (plugin / oblasť)</td></tr>
+<tr><td>Vyžadovať 2FA pri každom odomknutí</td><td>nie</td><td>PIN aj kód 2FA</td></tr>
+</table>
+<h2>Ochrana</h2>
+<table>
+<tr><th>Voľba</th><th>Predvolené</th><th>Význam</th></tr>
+<tr><td>Max. neúspešných pokusov</td><td>5</td><td>1 až 50; PIN a 2FA sa počítajú zvlášť</td></tr>
+<tr><td>Trvanie zablokovania (minúty)</td><td>30</td><td>1 až 10080 (7 dní)</td></tr>
+<tr><td>Vyžadovať PIN + 2FA pre administratívne akcie</td><td>áno</td><td>povoliť/zakázať, reset, vynútiť zmenu, nastavenia a delegáti vyžadujú čerstvé potvrdenie; keď je vypnuté, stačí PIN</td></tr>
+<tr><td>Vyžadovať 2FA aj pre nastavenia</td><td>nie</td><td>vypnuté: Nastavenia, Mail a každodenné akcie vyžadujú len PIN. Resety, pozastavenie a roly vždy PIN + 2FA</td></tr>
+<tr><td>Administratívne okno (minúty)</td><td>5</td><td>1 až 60; ako dlho platí potvrdenie</td></tr>
+<tr><td>2FA sa pýta znova po (hodiny)</td><td>8</td><td>1 až 168; pri správe chránených oblastí</td></tr>
+<tr><td>Platnosť resetu správcom (hodiny)</td><td>24</td><td>1 až 336; ako dlho má používateľ na potvrdenie resetu</td></tr>
+</table>
+<h2>Schvaľovanie štyri oči</h2>
+<table>
+<tr><th>Voľba</th><th>Predvolené</th><th>Význam</th></tr>
+<tr><td>Schvaľovanie štyri oči</td><td>nie</td><td>zapnutie vyžaduje 2 aktívnych zástupcov CORE; vypnúť sa nedá, kým existuje oddelenie</td></tr>
+<tr><td>… pre roly</td><td>áno</td><td>pozri kapitolu Schvaľovanie</td></tr>
+<tr><td>… pre nastavenia a mailové nastavenia</td><td>áno</td><td>vrátane pridania domény</td></tr>
+<tr><td>… pre povoľovanie / zakazovanie PINu</td><td>nie</td><td></td></tr>
+<tr><td>Platnosť žiadosti (minúty)</td><td>1440</td><td>5 až 10080; platí aj pre žiadosti o presun</td></tr>
+<tr><td>Povoliť break-glass pre mastera</td><td>nie</td><td>superuser môže žiadosť vykonať sám s dôvodom</td></tr>
+</table>
+<p>Uloženie hlási chybu, ak zapínaš štyri oči bez dvoch aktívnych zástupcov CORE (<em>At least two active CORE deputies with PIN and 2FA are needed</em>) alebo ich vypínaš pri existujúcom oddelení.</p>
+<h2>Chránené oblasti</h2>
+<table>
+<tr><th>Voľba</th><th>Predvolené</th><th>Význam</th></tr>
+<tr><td>Chrániť oblasti a objekty</td><td>nie</td><td>oblasti definované na stránke Chránené oblasti začnú platiť. Pluginy s vlastnou „PIN integráciou“ sú chránené, keď je zapnutý ich vlastný prepínač, aj keď je táto voľba vypnutá. <strong>Vypnúť sa nedá, kým sú aktívne oblasti so správcami</strong></td></tr>
+</table>
+<h2>Čo je na iných stránkach</h2>
+<table>
+<tr><th>Voľba</th><th>Kde</th></tr>
+<tr><td>Bezpečnostné upozornenia e-mailom; Samoobslužná obnova; Platnosť kódu na obnovu</td><td>Mail</td></tr>
+<tr><td>Zakázať všetko, čo nie je povolené; Čo sa nepovolené zobrazuje (A / B); Používatelia smú žiadať o prístup; Používatelia smú vytvoriť vlastný API kľúč</td><td>Chránené oblasti (karta Ochrana)</td></tr>
+<tr><td>Adresa prihlásenia osôb len s PIN-om; zlé PINy; e-maily; pracovný čas</td><td>Ľudia len s PIN-om</td></tr>
+</table>

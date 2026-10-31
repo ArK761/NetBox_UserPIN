@@ -1,0 +1,95 @@
+<h1>Ľudia len s PIN-om (PIN-only)</h1>
+<div class="facts">
+<div><strong>Kto ich vytvára a spravuje:</strong> strážca ochrany (všetky) a správca úseku (len tie, ktoré sú pod ním a do skupín jeho úseku). Menu <em>Ľudia len s PIN-om</em> vidí strážca a správca.</div>
+<div><strong>Kedy:</strong> pre ľudí, ktorí nemajú účet v NetBoxe a majú vidieť alebo meniť len časť (napr. technik na tenantoch).</div>
+<div><strong>Závisí od:</strong> nastavená pošta (osobný odkaz príde e-mailom; bez nej ho vidíš na obrazovke), skupina v chránenej oblasti, zapnutá ochrana (pri vypnutej môže osoba len meniť PIN), bežiaci <code>netbox-rq</code> (zhrnutia zmien).</div>
+</div>
+<p>Za osobou stojí technický používateľ <code>PinUser0001</code>, <code>PinUser0002</code> … (číslo sa nikdy nepoužije znova ani nezmení; <em>alias</em> a popis sú voľné texty a nič sa v NetBoxe nepremenúva). Technický účet <strong>nemá použiteľné heslo</strong>: prihlásiť sa dá len cez stránku PIN. V zozname používateľov, v rozbaľovacích zoznamoch ani v API ho nikto nevidí. Záznam zmien NetBoxu ukazuje technického používateľa.</p>
+<h2>Nový prístup (formulár)</h2>
+<table>
+<tr><th>Pole</th><th>Povinné</th><th>Význam</th></tr>
+<tr><td>Meno</td><td>áno</td><td>meno osoby (do 150 znakov)</td></tr>
+<tr><td>E-mail</td><td>áno</td><td>platná adresa. <strong>Nesmie</strong> patriť inému prístupu ani účtu NetBoxu: ak ju už má účet, stránka vysvetlí, že osoba sa má prihlasovať vlastným účtom (pridaj ho do skupiny ako bežného používateľa)</td></tr>
+<tr><td>Skupina</td><td>strážca nie; správca áno</td><td>skupina z chránenej oblasti. Bez skupiny (len strážca) môže osoba iba meniť svoj PIN. Správca vyberá len zo skupín svojho úseku</td></tr>
+<tr><td>Prístup končí (voliteľné)</td><td>nie</td><td>dátum a čas v budúcnosti; potom sa osoba neprihlási. Prázdne = bez konca</td></tr>
+<tr><td>Nečinnosť (minúty)</td><td>–</td><td>predvolene 30 (5 až 240)</td></tr>
+<tr><td>Relácia (hodiny)</td><td>–</td><td>predvolene 8 (1 až 24)</td></tr>
+<tr><td>Povolené IP adresy (voliteľné)</td><td>nie</td><td>adresy alebo siete (napr. <code>10.0.0.0/24</code>), oddelené čiarkou, bodkočiarkou alebo riadkom; neplatný záznam sa odmietne</td></tr>
+<tr><td>Alias, Popis (voliteľné)</td><td>nie</td><td>alias do 100, popis do 150 znakov</td></tr>
+<tr><td>Jazyk PIN stránok; Jazyk NetBoxu</td><td>nie</td><td>predvolený / Slovenčina / English; jazyk PIN stránok a e-mailov, a jazyk rozhrania NetBoxu pre túto osobu</td></tr>
+<tr><td>Pracovný čas</td><td>nie</td><td>všeobecné pravidlá / vlastné pravidlá / bez obmedzenia (pozri kapitolu Pracovný čas)</td></tr>
+<tr><td>Posielať osobe e-maily o zmenách</td><td>–</td><td>pozri nižšie</td></tr>
+</table>
+<h2>Prvé prihlásenie osoby</h2>
+<ol>
+<li>Osoba dostane e-mailom <strong>osobný odkaz</strong> (platí <strong>7 dní</strong>; <em>Poslať odkaz znova</em> vydá nový a starý prestane platiť). Odkaz otvorí stránku <em>Ahoj meno</em>.</li>
+<li>Zvolí si <strong>vlastný PIN</strong>: <strong>8 až 64 znakov</strong> (nie len číslice), aspoň 4 rôzne znaky, <strong>jedinečný</strong> medzi všetkými prístupmi (<em>Zvoľte iný PIN</em>, ak ho už niekto má). Nikto ho neprečíta, ani správca.</li>
+<li>Tlačidlo <em>Nastaviť PIN a prihlásiť sa</em>. Ak pozvánka vypršala: <em>Požiadajte správcu o novú.</em></li>
+</ol>
+<p>Ak nie je nastavená pošta, odkaz sa správcovi <strong>ukáže na obrazovke</strong> (iba raz, <em>Odovzdajte tento osobný odkaz sami</em>).</p>
+<h2>Bežné prihlasovanie: jedna spoločná adresa</h2>
+<ul>
+<li>Všetci používajú <strong>jednu spoločnú stránku</strong> (predvolene <code>/pin/</code>) a zadajú <strong>len PIN</strong>: PIN povie, kto to je. Adresu volí strážca na stránke (<em>Adresa prihlásenia PINom</em>: časť A a voliteľne B, napr. <code>/tenanti/</code> alebo <code>/aqer/x2/</code>; nerozlišuje veľkosť písmen). Osoba si ju uloží ako záložku; <strong>nemení sa</strong>, kým ju strážca nezmení (po zmene si ju musia uložiť znova).</li>
+<li>Osobný odkaz z e-mailu funguje tiež (osoba je na ňom známa).</li>
+<li>Ak PIN zabudla: <em>Zabudol som PIN – pošlite mi odkaz na nový</em> (adresa, odkaz platí <strong>1 hodinu, raz</strong>, najviac jeden za minútu; nefunguje pre zakázaný alebo skončený prístup).</li>
+</ul>
+<h2>Čo osoba vidí a nemôže</h2>
+<ul>
+<li>Úvodná stránka: <em>Ste prihlásený ako meno</em>, platnosť PINu (dni a hodiny), <strong>pracovný čas</strong> (<em>Váš pracovný čas</em>), po konci času <em>Je po čase: ešte jedno uloženie, potom len čítanie</em>, nečinnosť po ktorej relácia končí a zoznam prístupov (<em>skupina X, smiete…, platí do …</em>) s tlačidlom <em>Pokračovať</em>. Bez skupiny: <em>Zatiaľ vám nebol daný žiadny prístup. Môžete len zmeniť PIN.</em> Pri vypnutej ochrane: <em>Funkciu zatiaľ vypol správca. Môžete len zmeniť PIN.</em></li>
+<li>Menu používateľa: <em>Môj prístup</em>, <em>Zmeniť môj PIN</em>, <em>Odhlásiť</em>. Nemá heslo, 2FA, API ani token; nikdy nie je strážca, správca ani výnimka. Účtové stránky a stránky pluginu sú jej zatvorené. Žiadosti o prístup robiť nemôže.</li>
+<li>Rozbaľovacie zoznamy vo formulároch jej fungujú (stručné zoznamy API); zvyšok API je zatvorený. Ukladá si vlastné stĺpce tabuliek.</li>
+<li><strong>Zmena PINu</strong> (<em>Zmeniť môj PIN</em>): aktuálny PIN, nový PIN, nový PIN znova. Po vypršaní alebo vynútení sa pýta pred pokračovaním.</li>
+</ul>
+<h2>Zlé PINy</h2>
+<p>Pravidlá sú <em>Zlé PINy na krok</em> (predvolene 5; 1 až 50) a <em>Čakanie po každom kroku (sekundy)</em> (predvolene <code>10,20,30</code>; 1 až 10 čakaní po 1 až 3600 s). Nastavujú sa pre všetkých (<em>Pravidlá pre zlé PINy (predvolené)</em>) a môžu mať aj vlastné pre jednu osobu; prázdne = predvolené.</p>
+<table>
+<tr><th>Kde</th><th>Čo sa stane</th></tr>
+<tr><td><strong>Osobný odkaz</strong></td><td>osoba je známa: po každých 5 zlých PINoch čakanie (10, 20, 30 s); po poslednom kroku je prístup <strong>zablokovaný</strong> (osoba aj strážcovia dostanú e-mail). Odblokuje len správca (<em>Odblokovať</em>), alebo osoba nastaví nový PIN cez e-mail s odkazom</td></tr>
+<tr><td><strong>Spoločná stránka</strong></td><td>zlý PIN sa nedá pripísať osobe: čaká <strong>počítač</strong> (jeho adresa) podľa rovnakých krokov, posledné čakanie sa opakuje, <strong>nikto sa neblokuje</strong>, a strážcovia dostanú e-mail po každom plnom kole (15 zlých PINov) <em>Wrong PINs from …</em></td></tr>
+</table>
+<p>Zablokovaná osoba vidí <em>Prihlásenie nie je možné</em> a tlačidlo <em>Požiadať správcu o odblokovanie</em> (najviac raz za hodinu; e-mail správcovi, ktorý prístup zakázal, alebo strážcom).</p>
+<h2>Akcie pri osobe</h2>
+<table>
+<tr><th>Akcia</th><th>Čo robí</th></tr>
+<tr><td>Odblokovať</td><td>starý PIN znova funguje, počítanie od nuly</td></tr>
+<tr><td>Poslať e-mail na reset</td><td>odkaz na nový PIN (platí 1 hodinu, raz); nový PIN aj odblokuje</td></tr>
+<tr><td>Vynútiť zmenu PINu</td><td>pri najbližšom prihlásení sa pýta nový PIN</td></tr>
+<tr><td>Poslať odkaz znova</td><td>nový osobný odkaz (starý prestane platiť)</td></tr>
+<tr><td>Resetovať PIN</td><td>PIN sa vymaže a pošle sa <strong>nový osobný odkaz</strong>, cez ktorý si osoba zvolí nový PIN (bez pošty sa odkaz ukáže na obrazovke)</td></tr>
+<tr><td>Zakázať / Povoliť</td><td>zakázanie ukončí všetky relácie a zablokuje prihlásenie (osoba vidí „zakázal X od …“); povolenie prístup vráti</td></tr>
+<tr><td>Zmazať</td><td>odstráni prístup aj technického používateľa</td></tr>
+</table>
+<p>Pri každej osobe je rozbaliteľná <strong>Aktivita a pravidlá</strong>: <em>Prihlásenia a udalosti PINu</em>, <em>Zmeny v NetBoxe</em>, formuláre <em>Alias a popis</em> (a <em>Jazyk PIN stránok a e-mailov</em>, <em>Jazyk rozhrania NetBoxu</em>), <em>Správca</em> (strážcovia; pod správcom úseku ho vedie on, strážca vždy; presun pod správcu), <em>E-maily</em>, <em>Pracovný čas</em>, <em>Prístup platí do</em> (prázdne = bez konca; za koniec sa osoba neprihlási; 30 dní a 1 deň vopred jej príde e-mail) a <em>Pravidlá pre zlé PINy</em>.</p>
+<h2>Relácia osoby</h2>
+<p>Relácia skončí po <em>Nečinnosti</em> minút (predvolene 30; 5 až 240) alebo najviac po <em>Relácii</em> hodinách (predvolene 8; 1 až 24), po konci platnosti prístupu, po zakázaní, alebo keď príde požiadavka z adresy mimo zoznamu povolených IP. Nastavuje sa pri každom prístupe zvlášť. Po odhlásení sa osoba vráti na spoločnú stránku PIN.</p>
+<h2>E-maily oboma smermi</h2>
+<table>
+<tr><th>Smer</th><th>Čo</th><th>Nastavenie</th></tr>
+<tr><td><strong>Osobe</strong></td><td>každá akcia správcu: skupiny, zakázanie / povolenie, reset PINu, odblokovanie, platnosť, jazyky, pravidlá, pracovný čas, správca, alias/popis, zmazanie. Mail ide na jej vlastnú adresu (bez ohľadu na povolené domény) v jej jazyku</td><td><em>Posielať osobe</em> (celá stránka) a <em>Posielať osobe (každá zmena prístupu)</em> pri prístupe. Ak je vypnuté na stránke, <strong>vyhráva to</strong></td></tr>
+<tr><td><strong>Správcom</strong></td><td>čo osoba v NetBoxe pridala, zmenila alebo zmazala (so zmenenými poľami), správcovi, ktorý prístup vytvoril, a strážcom</td><td><em>Posielať správcom</em> (celá stránka) a pri prístupe</td></tr>
+</table>
+<p>Správcovia dostanú zmeny buď ako <strong>zhrnutie</strong> každých N minút (<em>Zhrnutie každých</em>: 5, 15, 30, 60, 120, 240 minút alebo raz za deň; predvolene 60), alebo <strong>pri každej zmene</strong> (jeden e-mail na zmenu): <strong>nikdy oboje naraz</strong>. Predmet pri každej zmene: <em>PinUser0001 vykonal zmenu</em>; telo: čas, objekt a zmenené polia (z → na). E-mail sa odošle až po uložení cez frontu <code>netbox-rq</code>, takže ukladanie ostáva rýchle; zhrnutia spracúva systémová úloha každých 5 minút. Strážca zmeny nastavuje v karte <em>E-maily (pre všetkých)</em>.</p>
+<div class="note">Správca úseku pri práci s prístupom oznamuje strážcom e-mailom (nič sa nedeje potichu). Prístup vytvorený strážcom patrí strážcom, kým ho nepresunú pod správcu.</div>
+
+<h1>Pracovný čas</h1>
+<div class="facts">
+<div><strong>Kto nastavuje:</strong> strážca (všeobecné pravidlá aj pravidlá jednotlivých prístupov).</div>
+<div><strong>Kedy:</strong> keď majú osoby len s PIN-om pracovať len v pracovnom čase.</div>
+<div><strong>Závisí od:</strong> zapnuté <em>Obmedziť pracovný čas prístupov len cez PIN</em> (predvolene vypnuté), knižnica <code>holidays</code> pre sviatky, časová zóna servera (<code>TIME_ZONE</code> v NetBoxe).</div>
+</div>
+<h2>Pravidlá</h2>
+<p>Všeobecné pravidlá sú na stránke <em>Ľudia len s PIN-om</em> (karta <strong>Pracovný čas (pre všetkých)</strong>): <em>Obmedziť pracovný čas</em>, <em>Krajina (sviatky)</em> (predvolene SK), <em>Dni</em> (predvolene Po až Pi), <em>Od</em> (06:00) a <em>Do</em> (16:00). Pri každom prístupe sa dá zvoliť:</p>
+<table>
+<tr><th>Voľba</th><th>Význam</th></tr>
+<tr><td><em>všeobecné pravidlá</em></td><td>platí pravidlo stránky (ak je obmedzenie zapnuté; inak bez obmedzenia)</td></tr>
+<tr><td><em>vlastné pravidlá</em></td><td>vlastná krajina, dni a hodiny (napr. technik z Maďarska s maďarskými sviatkami)</td></tr>
+<tr><td><em>bez obmedzenia</em></td><td>osoba nemá žiadny limit</td></tr>
+</table>
+<p>Krajiny: SK, CZ, HU, AT, PL, DE, UA, HR, SI, RO, BG, RS, GB, IE, FR, ES, IT, NL, BE, CH, SE, NO, DK, FI, PT, GR, LT, LV, EE, US, CA. Štátne sviatky dodáva knižnica <code>holidays</code> (funguje offline, vyžaduje <code>pip install holidays</code>; bez nej stránka hlási <em>The library of public holidays is not installed</em> a kontrolujú sa len dni a hodiny). Sviatky sa riadia zákonom, ktorý knižnica implementuje: napr. na Slovensku v roku 2026 sú voľné 1. 1., 6. 1., Veľký piatok, Veľkonočný pondelok, 1. 5., 5. 7., 29. 8., 1. 11. a 24., 25., 26. 12., kým 8. 5., 1. 9., 15. 9. a 17. 11. sú pracovné dni. Vlastné voľné dni ani dovolenky plugin nemá.</p>
+<h2>Čo sa deje mimo času</h2>
+<ul>
+<li>Osoba sa <strong>môže prihlásiť a pozerať</strong>, ale <strong>nemôže nič ukladať ani upravovať</strong>: žiadne ukladanie, pridávanie, úprava, mazanie ani zápis cez API. Zakázané požiadavky sa presmerujú s hláškou (<em>Mimo vášho pracovného času (…) môžete len čítať</em>), API odpovie 403.</li>
+<li>Pracovný čas je <strong>vždy viditeľný</strong>: na úvodnej stránke a v hornej lište, v jazyku osoby. V sviatok sa pred ním napíše <em>Dnes je štátny sviatok (názov)</em>.</li>
+<li>Keď čas skončí <strong>počas práce</strong>: <strong>30 minút a jedno uloženie</strong>, potom už len čítanie.</li>
+<li>Stav dňa: v čase / po skončení (30 minút) / pred začiatkom / po skončení / voľný deň alebo sviatok.</li>
+</ul>

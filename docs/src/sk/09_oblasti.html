@@ -1,0 +1,101 @@
+<h1>Chránené oblasti</h1>
+<div class="facts">
+<div><strong>Kto:</strong> stránku <em>Chránené oblasti</em> vidí strážca ochrany, správca úseku a (kým nie je strážca) CORE / master. Oblasti zakladá a ciele pridáva len <strong>strážca</strong> (kým nie je, tak CORE / master). Skupiny, polia a členov spravuje strážca alebo správca príslušného úseku.</div>
+<div><strong>Kedy:</strong> keď má určitá časť NetBoxu (aplikácia alebo typ objektu, napr. DCIM › Device, Tenancy › Tenant) vidieť a meniť len ten, kto dostal prístup.</div>
+<div><strong>Závisí od:</strong> zapnutá ochrana (kapitola Ochrana), aspoň jeden strážca, správcovia úsekov s PINom a 2FA, a pre žiadosti pošta (kapitola E-maily).</div>
+</div>
+<h2>Základná myšlienka</h2>
+<p>Oblasť chráni <strong>typ objektu</strong> (<code>dcim.device</code>) alebo celú <strong>aplikáciu</strong> (<code>dcim</code>). V chránenej oblasti <strong>nikto nie je boh</strong>: rolu ani oprávnenia používateľa v NetBoxe plugin vôbec nezohľadňuje, rozhoduje <strong>skupina</strong>, do ktorej ho zaradil strážca alebo správca úseku, aj keď ide o superusera. Dvere (položka menu, karta) vidí každý; kto nemá kľúč, je pri vstupe odmietnutý a dozvie sa, kto prístup spravuje (stránka „Táto oblasť je chránená“). Do oblasti nemožno vložiť citlivé aplikácie (<code>users</code>, <code>auth</code>, <code>core</code> a pod.) inak ako strážca.</p>
+<h2>Stránka Chránené oblasti</h2>
+<ul>
+<li><strong>Karta Ochrana</strong>: stav ZAP/VYP a prepínač (kapitola Ochrana).</li>
+<li><strong>Správcovia ochrany</strong> (strážcovia), <strong>Výnimky</strong>, <strong>Čo používatelia vidia</strong>: kapitola Ochrana.</li>
+<li><strong>Čo je nastavené</strong>: zoznam chránených aplikácií a typov objektov. Pri každom je počet členov, skupín, správcov (<em>zatiaľ bez správcu</em>) a tlačidlá <em>Otvoriť</em> a <em>Zmazať</em> (<em>Odstrániť ochranu tohto typu objektu? Jeho skupiny a prístupy sa zmažú.</em>).</li>
+<li><strong>Pridať aplikáciu alebo typ objektu</strong>: vyber zo zoznamu a <em>Pridať</em>. Pridanie len pripraví štruktúru: <strong>nikto nedostane prístup</strong>, kým nevytvoríš skupinu a nezaradíš do nej používateľov. Kým oblasť nemá správcu, vidia ju len strážcovia.</li>
+<li>Hore je počet <em>žiadostí o prístup čakajúcich na rozhodnutie</em>. Ak je ochrana vlastných oblastí vypnutá, stránka to hlási (<em>Nastavenia → Chránené oblasti</em>); oblasti pluginov s „PIN integráciou“ chránia hneď, ako sa integrácia plugin zapne.</li>
+</ul>
+<h2>Detail oblasti</h2>
+<table>
+<tr><th>Časť</th><th>Čo je to</th></tr>
+<tr><td><strong>Čaká na rozhodnutie</strong></td><td>žiadosti o prístup (používateľ, kedy žiadal, čo žiadal, prečo, čo presne). Tlačidlá <em>Rozhodnúť</em> a <em>Zamietnuť</em></td></tr>
+<tr><td><strong>Skupiny</strong></td><td>pomenované sady práv. <em>Nová skupina</em> → názov → <em>Vytvoriť skupinu</em>; otvor ju a nastav práva, záložky, polia a členov</td></tr>
+<tr><td><strong>Používatelia</strong></td><td>kto je v ktorej skupine, <em>do kedy</em> (alebo <em>bez časového limitu</em>) a tlačidlo <em>Odobrať</em></td></tr>
+<tr><td><strong>Správcovia úsekov</strong></td><td>kto rozhoduje o oblasti; pozri kapitolu Správcovia úsekov</td></tr>
+<tr><td><strong>Nastavenia oblasti</strong></td><td>názov, popis, <em>Najdlhší dočasný prístup (hodiny)</em> (predvolene 24, najviac 720), <em>Aktívny</em>, <em>Čo nie je povolené</em> (podľa nastavení / A dvere / B skryté): platí pre položky menu a karty tejto oblasti. Tlačidlo <em>Zmazať oblasť</em>: objekty sa vrátia pod oprávnenia NetBoxu</td></tr>
+</table>
+<p>Skupina je pre jeden typ objektu. Používateľ je v <strong>jednej skupine na typ</strong>: pridanie do inej ho presunie a odchod z poslednej znamená žiadny prístup. Prístup môže byť dočasný (<em>do</em>) alebo bez limitu; dočasný trvá 1 hodinu až <em>Najdlhší dočasný prístup</em> hodín. Používateľ môže svoj prístup sám ukončiť (<em>Môj prístup → Ukončiť môj prístup</em>); ostatným ho odoberá strážca alebo správca.</p>
+<h2>Skupina: práva</h2>
+<p>Stránka skupiny (<em>Skupina</em>) má tieto časti:</p>
+<table>
+<tr><th>Časť</th><th>Voľby</th></tr>
+<tr><td><strong>Názov skupiny</strong></td><td>text</td></tr>
+<tr><td><strong>Prístup</strong></td><td><em>Nevidí</em> / <em>Len čítať</em> / <em>Čítať a zapisovať</em>. Kto smie zapisovať, smie aj čítať</td></tr>
+<tr><td>Ďalšie práva</td><td><em>Smie mazať</em>; <em>Smie importovať</em> (potrebuje aj zapisovanie, tlačidlo Import); <em>Smie exportovať</em>. Bez nich sa tlačidlá Import / Export nevykreslia a stránky odpovedia „bez prístupu“</td></tr>
+<tr><td>Práva pluginu</td><td>ak plugin definuje vlastné práva (napr. <em>config</em>), ponúknu sa ako ďalšie zaškrtávacie polia</td></tr>
+<tr><td><strong>Zákaz</strong> (<em>vyhráva nad každým povolením</em>)</td><td>právo, ktoré skupina nikdy nemá, aj keď by ho dostala inak</td></tr>
+<tr><td><strong>Záložky stránky</strong></td><td>pri každej systémovej záložke detailu (Interfaces, Config Context, Changelog …) <em>Skryté</em> / <em>Viditeľné</em>. Hlavná stránka je vždy povolená. Záložky pluginu sa riadia oblasťou toho pluginu</td></tr>
+<tr><td><strong>Členovia</strong></td><td><em>Pridať používateľov do skupiny</em>; tlačidlo <em>Odobrať</em></td></tr>
+</table>
+<p>Záložka, ktorá vypisuje <strong>iné objekty</strong> (rozhrania zariadenia), potrebuje právo aj na ich typ; pri zapnutej ochrane musí byť aj ten typ v nejakej oblasti.</p>
+<h2>Skupina: záznamy, ktoré vidí</h2>
+<table>
+<tr><th>Voľba</th><th>Význam</th></tr>
+<tr><td><em>Nenastavené (nevidí žiadny záznam)</em></td><td>východisko: členovia nevidia žiadny riadok</td></tr>
+<tr><td><em>Všetky záznamy</em></td><td>členovia vidia všetky riadky tohto typu</td></tr>
+<tr><td><em>Len podľa podmienok</em></td><td>vidia len riadky, ktoré vyhovujú podmienkam</td></tr>
+</table>
+<ul>
+<li><strong>Povolené</strong>: viac hodnôt jednej podmienky sú alternatívy (<em>agg</em> alebo <em>core</em>); viac podmienok musí platiť <strong>všetky naraz</strong>. Bez podmienky skupina nevidí nič.</li>
+<li><strong>Zakázané</strong>: záznamy, ktoré vyhovujú niektorej z týchto podmienok, sa <strong>nikdy nezobrazia</strong>, nech ich povoľuje čokoľvek.</li>
+<li>Podmienka = <em>pole</em> + <em>operátor</em> + hodnota. Operátory: <em>je</em>, <em>nie je</em>, <em>obsahuje</em>, <em>neobsahuje</em>, <em>začína na</em>, <em>je jedno z</em>, <em>nie je jedno z</em>. Pri poli s výberom alebo väzbou sa hodnoty vyberajú zo zoznamu.</li>
+</ul>
+<h2>Polia</h2>
+<p>Pre skupinu (alebo pre každého v oblasti) a typ objektu je každé pole:</p>
+<table>
+<tr><th>Režim</th><th>Význam</th></tr>
+<tr><td><em>Podľa práv</em> (predvolené)</td><td>kto smie pridávať alebo meniť, vidí a zapisuje každé pole; kto len číta, číta</td></tr>
+<tr><td><em>Skryté</em></td><td>pole sa používateľovi nezobrazí</td></tr>
+<tr><td><em>Len na čítanie</em></td><td>vidí, nemôže meniť</td></tr>
+<tr><td><em>Čítať a zapisovať</em></td><td>vidí aj mení</td></tr>
+</table>
+<ul>
+<li>Stránka <strong>Polia</strong> (<em>Pravidlá pre</em> skupinu alebo používateľa + typ objektu): rozbaľ skupinu a nastav pole po poli, alebo naraz <em>Nastaviť všetky zobrazené polia</em> (pôsobí na polia, ktoré nechalo hľadanie), potom <em>Uložiť pravidlá</em>.</li>
+<li>Voľba <strong>Skryté pred všetkými v oblasti</strong> skryje pole pred každým v oblasti vrátane správcov.</li>
+<li><strong>Vlastné polia prepojené na iné objekty</strong> sa dajú obmedziť na hodnoty podľa podmienky (<em>Hodnoty musia obsahovať</em>, alebo tlačidlom <em>Podmienky</em>: <em>obsahuje</em>, <em>začína na</em>, <em>je jedno z</em>; viac hodnôt ako štítky). Napríklad zariadenie vyberie len také, ktorého názov obsahuje <code>PRINTER</code>. Podmienka sa overí aj pri uložení. Neplatí pre pevné polia.</li>
+<li>Skryté vlastné pole <strong>si ponechá uložené dáta</strong> (uloženie objektu ich nikdy nevymaže).</li>
+</ul>
+<table>
+<tr><th>Kde sa pravidlá uplatnia</th><th>vlastné polia</th><th>polia modelu</th></tr>
+<tr><td>detail objektu</td><td>skryté / filter hodnôt</td><td><strong>nepokryté</strong> (NetBox kreslí pevné polia ručne)</td></tr>
+<tr><td>formuláre úprav</td><td>odstránené / zakázané; výber sa zúži</td><td>odstránené / zakázané</td></tr>
+<tr><td>tabuľky</td><td>stĺpec odstránený</td><td>stĺpec odstránený</td></tr>
+<tr><td>REST API</td><td>vynechané / filter / zápis ignorovaný</td><td>vynechané / len čítanie</td></tr>
+</table>
+<h2>Záložky detailu a karty</h2>
+<p>Stránka <em>Záložky detailu</em> určuje, ktoré záložky detailu objektu (Interfaces, Config Context, Changelog …) smie používateľ otvoriť. Hlavná stránka je vždy povolená. Nový prístup povoľuje len hlavnú stránku. Správca úseku otvorí každú záložku.</p>
+<h2>Žiadosť o prístup</h2>
+<ol>
+<li>Používateľ, ktorému je cesta zatvorená, vidí stránku „Táto oblasť je chránená“ (kto prístup spravuje, čo sa zablokovalo, čo tu môže robiť: <em>Zmeniť heslo</em>, <em>Môj PIN</em>, <em>Moje API kľúče</em>). Zaškrtne <strong>čo potrebuje</strong> (zobraziť / pridať / zmeniť / zmazať), napíše <strong>prečo</strong> a <strong>čo presne</strong> (sekcia, skupina, objekt) a stlačí <em>Požiadať o prístup</em>.</li>
+<li>E-mail s odkazom dostane <strong>správca úseku a strážcovia</strong>; ak oblasť pre typ ešte neexistuje, len strážcovia. Odkaz otvorí stránku <em>Žiadosť o prístup</em> (kto, čo, prečo, kedy).</li>
+<li>Rozhodujúci vyberie <strong>skupinu</strong>, do ktorej používateľa zaradí (alebo <em>Nová skupina</em> s názvom), <strong>práva na udelenie</strong> a <strong>na ako dlho</strong>, a stlačí <em>Schváliť</em> alebo <em>Zamietnuť</em>. Ak pre typ ešte neexistuje oblasť, schválenie ju vytvorí (bez správcov: ich treba určiť ručne) a používateľa pridá.</li>
+<li>Žiadateľ dostane e-mail o rozhodnutí (aj strážcovia a správca). Čakajúcu žiadosť môže <strong>zrušiť</strong> v <em>Môj prístup → Moje žiadosti</em>.</li>
+</ol>
+<ul>
+<li>O vlastnej žiadosti nikto nerozhoduje. Žiadať môže len jedna čakajúca žiadosť na používateľa, oblasť a typ.</li>
+<li>Žiadosti sa dajú vypnúť (<em>Používatelia smú žiadať o prístup</em>): vtedy žiadosť robia len správcovia. Osoby len s PIN-om žiadať nemôžu.</li>
+<li>Používateľ bez PINu je pri vstupe poslaný vytvoriť si ho (bez 2FA) a potom pokračuje.</li>
+</ul>
+<h2>Môj prístup</h2>
+<p>Menu <em>Môj prístup</em>: <strong>Môj prístup k chráneným oblastiam</strong> (oblasť, profil, do kedy, <em>Ukončiť môj prístup</em>), úseky, ktorých si správcom, a <strong>Moje žiadosti</strong> (oblasť, kedy, stav, <em>Zrušiť</em>). Hore je počet žiadostí čakajúcich na tvoje rozhodnutie.</p>
+<h2>Čo sa vynucuje</h2>
+<table>
+<tr><th>Kde</th><th>Ako</th></tr>
+<tr><td>Stránky NetBoxu (zoznamy, detaily, pridať/upraviť/zmazať, hromadné akcie, stránky pluginov)</td><td>middleware odmietne bez práva (<em>zobraziť</em> na čítanie, <em>pridať / zmeniť / zmazať</em> podľa druhu stránky); PIN musí byť odomknutý</td></tr>
+<tr><td>Riadky</td><td>obalené <code>RestrictedQuerySet.restrict</code>: v chránenej oblasti vráti riadky, ktoré povoľuje skupina (bez nej žiadne): zoznamy, detaily, REST API, rozbaľovacie zoznamy</td></tr>
+<tr><td>REST API a GraphQL</td><td>odmietnuté bez práva (403 JSON)</td></tr>
+<tr><td>Menu a karty</td><td><code>has_perm</code> odpovedá podľa prístupov z PINu</td></tr>
+<tr><td>Záznam zmien, žurnál, prílohy</td><td>nikdy neukážu riadky objektov, ktoré používateľ nesmie vidieť</td></tr>
+</table>
+<p><strong>Nepokryté:</strong> filtre v zoznamoch (<code>?cf_nazov=…</code>), exporty, pevné polia detailu a zoznamy miešajúce viac typov. Kto má root / DB prístup na server, obíde akýkoľvek plugin: odpoveďou je audit, nie technický zámok.</p>
+<h2>Oblasť pluginu</h2>
+<p>Plugin si môže zaregistrovať vlastnú oblasť (<code>areas.register(...)</code>) s vlastnými právami a profilmi. Je chránená, keď je zapnutý jeho prepínač „PIN integrácia“, aj bez globálneho <em>Chrániť oblasti a objekty</em>. Pozri kapitolu Použitie z iného pluginu.</p>
