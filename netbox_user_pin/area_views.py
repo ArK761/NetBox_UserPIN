@@ -174,7 +174,9 @@ class AreaListView(AreaViewMixin, View):
             if areas.is_keeper(request.user) else [],
             'allow_rows': areas.allow_rows(),
             'exception_users': [(pk, label) for pk, label in _all_user_choices()
-                                if pk not in {k.pk for k in areas.keepers()}] if areas.is_keeper(request.user) else [],
+                                if pk not in {k.pk for k in areas.keepers()}
+                                and pk not in {e.user_id for e in areas.exceptions()}]
+            if areas.is_keeper(request.user) else [],
             'denied_view': service.get_settings().denied_view, 'allow_requests': service.get_settings().allow_requests,
             'allow_own_tokens': service.get_settings().allow_own_tokens,
             'protect_scope': service.get_settings().protect_scope,
@@ -200,6 +202,9 @@ class AreaListView(AreaViewMixin, View):
                     if timezone.is_naive(end):
                         end = timezone.make_aware(end)
                 user = get_object_or_404(get_user_model(), pk=request.POST.get('user') or 0)
+                if areas.exception_of(user) is not None:
+                    raise ValidationError(_('%(user)s already has an exception: change it in the list.')
+                                          % {'user': user.username})
                 areas.add_exception(user, request.user, end, request.POST.get('note', ''), request=request,
                                     allowed=request.POST.getlist('allow') if request.POST.get('allow_set') else None)
                 messages.success(request, _('The exception is set: %(user)s works with the permissions of NetBox.')

@@ -1807,6 +1807,11 @@ def exceptions():
     return list(PolicyException.objects.select_related('user'))
 
 
+def exception_of(user):
+    """The exception of the user (active or expired), or ``None``."""
+    return PolicyException.objects.filter(user=user).first()
+
+
 def has_exception(user):
     """Is the user on the list of exceptions (works by NetBox alone)?"""
     active_areas()

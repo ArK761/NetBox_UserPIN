@@ -2351,6 +2351,17 @@ class ExceptionAllowedTest(AreaTestCase):
         areas.add_exception(self.su, self.keeper, allowed=['password', 'api'])  # the same through the function
         self.assertEqual(self.su.policy_exception.allowed_set, {'password', 'api'})
 
+    def test_a_user_who_has_an_exception_is_not_offered_again(self):
+        admin_login(self.client, self.keeper)
+        url = reverse('plugins:netbox_user_pin:areas')
+        page = self.client.get(url).content.decode()
+        self.assertNotIn(f'<option value="{self.plain.pk}">', page)  # he is in the list of exceptions already
+        self.assertIn(f'<option value="{self.su.pk}">', page)
+        areas.set_exception_allowed(self.plain, self.keeper, ['password', 'api'])
+        self.client.post(url, {'action': 'exception-add', 'user': self.plain.pk, 'allow_set': '1'})  # forced
+        self.assertEqual(self.plain.policy_exception.__class__.objects.get(user=self.plain).allowed_set,
+                         {'password', 'api'})  # nothing was reset
+
     def test_while_the_protection_is_off_nothing_is_taken_away(self):
         areas.set_default_deny(False, self.keeper)
         self.assertFalse(areas.restricted(self.armed(self.plain)))
