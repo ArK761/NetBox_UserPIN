@@ -306,6 +306,14 @@ class AreaGuardMiddleware:
                     response['Content-Length'] = str(len(response.content))
             except Exception:  # noqa: BLE001 - the page is more important than its shaping
                 logger.exception('Cannot shape the page for the PIN visibility B')
+        elif (areas.restricted(user) and not getattr(response, 'streaming', False)
+              and 'text/html' in response.get('Content-Type', '') and hasattr(response, 'content')):
+            try:
+                response.content = _shape_exception(user, response.content.decode(response.charset)).encode(response.charset)
+                if response.has_header('Content-Length'):
+                    response['Content-Length'] = str(len(response.content))
+            except Exception:  # noqa: BLE001 - the page is more important than its shaping
+                logger.exception('Cannot shape the page for a user with an exception')
         return response
 
     def process_view(self, request, view_func, view_args, view_kwargs):
@@ -320,6 +328,10 @@ class AreaGuardMiddleware:
         if _hides_menu_for(request.user) and request.path_info.startswith(HIDDEN_DOCS) \
                 and not _is_token_request(request):
             return denied_response(request, None, right='view', target=None)
+        if (areas.restricted(request.user) and not _is_token_request(request)
+                and (code := _exception_code(request.path_info))
+                and not areas.exception_allows(request.user, code)):
+            return _exception_denied(request, code)  # an exception does not lift what a keeper did not allow
         if not getattr(request.user, 'is_authenticated', False) and getattr(view_func, '__module__', '').startswith(
                 'netbox_user_pin.'):
             return None  # the pages of this plugin ask for the sign-in themselves (the public link of a PIN-only access)
@@ -513,6 +525,50 @@ def _child_denied(request, user, cls, tab=None):
 # hidden until it is allowed: nothing here lists plugins or pages by name.
 #
 
+# the account pages and the API a keeper can allow one by one to a user with an exception (see areas.EXCEPTION_ALLOWS)
+EXCEPTION_PATHS = (('/user/password', 'password'), ('/user/profile', 'profile'), ('/user/preferences', 'preferences'),
+                   ('/user/bookmarks', 'bookmarks'), ('/user/notifications', 'notifications'),
+                   ('/user/subscriptions', 'subscriptions'), ('/user/api-tokens', 'tokens'),
+                   ('/users/tokens', 'tokens'), ('/api/users/tokens', 'tokens'))
+
+
+def _exception_code(path):
+    """The part of the account / API a path belongs to (``None``: not one that an exception can take away)."""
+    return next((code for prefix, code in EXCEPTION_PATHS if path.startswith(prefix)), None)
+
+
+def _exception_href_allowed(user, href):
+    code = _exception_code(href)
+    return code is None or areas.exception_allows(user, code)
+
+
+def _exception_denied(request, code):
+    if request.path_info.startswith('/api/') or 'application/json' in request.headers.get('Accept', ''):
+        response = JsonResponse({'detail': 'Not allowed for this account by the protection keeper.'}, status=403)
+    else:
+        with translation.override(service.get_settings().language or 'en'):
+            from django.utils.translation import gettext
+            response = render(request, 'netbox_user_pin/exception_denied.html', {
+                'keepers': areas.keepers(), 'part': gettext(dict(areas.EXCEPTION_ALLOWS).get(code, code))}, status=403)
+    response['X-UserPIN'] = 'denied'
+    return response
+
+
+def _without_tokens(menus):
+    """The menu of a user with an exception who may not have API tokens: no 'API Tokens' item (and nothing left empty)."""
+    from netbox.navigation import Menu, MenuGroup
+    result = []
+    for menu in menus:
+        groups = []
+        for group in menu.groups:
+            items = [i for i in group.items if 'users.view_token' not in (getattr(i, 'permissions', None) or ())]
+            if items:
+                groups.append(MenuGroup(label=group.label, items=items))
+        if groups:
+            result.append(Menu(label=menu.label, icon_class=menu.icon_class, groups=groups))
+    return result
+
+
 def _hides_menu_for(user):
     """B is on and the user is no keeper: the menus and the account pages show only what is allowed."""
     if guests.is_guest(user):
@@ -612,6 +668,13 @@ def _shape_html(request, text):
         text = _BELL.sub('', text)
         text = _SEARCH.sub('', text)
     return text
+
+
+def _shape_exception(user, text):
+    """The user menu and the tabs of the account pages of a user with an exception: only what a keeper allowed."""
+    text = _USER_MENU.sub(lambda m: m.group(1) + _ANCHOR.sub(
+        lambda a: a.group(0) if _exception_href_allowed(user, a.group(1)) else '', m.group(2)) + m.group(3), text)
+    return _ACCOUNT_TAB.sub(lambda m: m.group(0) if _exception_href_allowed(user, m.group(1)) else '', text)
 
 
 def _guest_badges(guest, request=None):
@@ -845,7 +908,11 @@ def install():
                 user = getattr(current_request.get(), 'user', None)
             except Exception:  # noqa: BLE001
                 user = None
-            return _filtered_menus(menus) if _hides_menu_for(user) else menus
+            if _hides_menu_for(user):
+                return _filtered_menus(menus)
+            if areas.restricted(user) and not areas.exception_allows(user, 'tokens'):
+                return _without_tokens(menus)
+            return menus
 
         get_menus._userpin = True
         navigation_tags.get_menus = get_menus
@@ -868,6 +935,9 @@ def install():
         def wrap(method):
             def authenticate(self, request):
                 result = method(self, request)
+                if result and isinstance(self, TokenAuthentication) and not areas.exception_allows(result[0], 'api'):
+                    from rest_framework.exceptions import AuthenticationFailed
+                    raise AuthenticationFailed('The API is not allowed for this account by the protection keeper.')
                 if result and areas.active_areas() and not isinstance(self, TokenAuthentication):
                     arm_user(result[0])  # a token (a script) is NetBox's own business; a browser session is not
                 return result

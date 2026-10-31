@@ -1010,6 +1010,8 @@ class PolicyException(models.Model):
     expires = models.DateTimeField(null=True, blank=True)  # None: until it is taken away
     added_by_name = models.CharField(max_length=150, blank=True)
     note = models.CharField(max_length=200, blank=True)
+    # what the user may use of the account pages and the API (a keeper allows it one by one; the password by default)
+    allowed = models.CharField(max_length=200, blank=True, default='password')
 
     class Meta:
         verbose_name = _('protection exception')
@@ -1022,6 +1024,10 @@ class PolicyException(models.Model):
     @property
     def is_active(self):
         return self.expires is None or self.expires > timezone.now()
+
+    @property
+    def allowed_set(self):
+        return frozenset(code for code in (self.allowed or '').split(',') if code)
 
 
 class AreaFieldMode(models.TextChoices):

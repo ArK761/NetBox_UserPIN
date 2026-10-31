@@ -1,0 +1,17 @@
+{% extends 'generic/_base.html' %}
+{% load userpin_tags i18n %}
+{% block title %}{% trans "Not allowed" %}{% endblock %}
+{% block content %}
+{% pin_build %}
+<div class="row justify-content-center">
+  <div class="col-12 col-lg-7 col-xl-6">
+    <div class="card mb-3">
+      <h2 class="card-header"><i class="mdi mdi-shield-lock"></i> {% trans "Not allowed for this account" %}</h2>
+      <div class="card-body">
+        <p>{% blocktrans with part=part %}The protection keeper has not allowed this account to use: <strong>{{ part }}</strong>.{% endblocktrans %}</p>
+        {% if keepers %}<p class="text-secondary mb-0">{% trans "Ask a protection keeper:" %} {% for k in keepers %}{{ k.username }}{% if not forloop.last %}, {% endif %}{% endfor %}</p>{% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

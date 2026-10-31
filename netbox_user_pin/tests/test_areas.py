@@ -2245,6 +2245,115 @@ class ExceptionTest(AreaTestCase):
         self.assertFalse(area_guard._hides_menu_for(stranger))
 
 
+class ExceptionAllowedTest(AreaTestCase):
+    """What a user with an exception may use of the account pages and the API: the password, the rest on permission."""
+
+    def setUp(self):
+        super().setUp()
+        self.keeper = User.objects.create_superuser('keeperx', 'kx@example.com', 'x')
+        service.set_pin(self.keeper, GOOD_PIN)
+        enable_2fa(self.keeper)
+        areas.add_keeper(self.keeper, self.master)
+        self.make_area(targets=('dcim.device',))
+        self.su = User.objects.create_user('su', 'su@example.com', is_superuser=True)
+        areas.clear_cache()
+        self.plain = User.objects.create_user('plainx', 'plainx@example.com', 'x')
+        self.plain.is_superuser = False
+        self.plain.save()
+        areas.add_exception(self.plain, self.keeper)
+
+    def armed(self, user):
+        areas.clear_cache()
+        user = User.objects.get(pk=user.pk)
+        area_guard.arm_user(user)
+        return user
+
+    def test_the_password_is_allowed_by_default_and_the_rest_is_not(self):
+        exception = self.plain.policy_exception
+        self.assertEqual(exception.allowed_set, {'password'})
+        user = self.armed(self.plain)
+        self.assertTrue(areas.restricted(user))
+        self.assertTrue(areas.exception_allows(user, 'password'))
+        for code in ('profile', 'preferences', 'bookmarks', 'notifications', 'subscriptions', 'tokens', 'api'):
+            self.assertFalse(areas.exception_allows(user, code), code)
+
+    def test_the_pages_the_keeper_did_not_allow_are_refused_and_the_password_stays(self):
+        self.login(self.plain, unlock=False)
+        for path in ('/user/api-tokens/', '/user/profile/', '/user/preferences/', '/user/bookmarks/',
+                     '/user/notifications/', '/user/subscriptions/', '/users/tokens/'):
+            response = self.client.get(path)
+            self.assertEqual((path, response.status_code, response.headers.get('X-UserPIN')), (path, 403, 'denied'))
+        self.assertEqual(self.client.get('/user/password/').status_code, 200)
+        self.assertEqual(self.client.get('/api/users/tokens/').status_code, 403)
+
+    def test_a_part_the_keeper_allows_opens_and_taking_it_away_closes_it(self):
+        areas.set_exception_allowed(self.plain, self.keeper, ['password', 'tokens'])
+        self.login(self.plain, unlock=False)
+        self.assertEqual(self.client.get('/user/api-tokens/').status_code, 200)
+        self.assertEqual(self.client.get('/user/profile/').status_code, 403)  # only what was allowed
+        areas.set_exception_allowed(self.plain, self.keeper, ['profile'])
+        self.assertEqual(self.client.get('/user/api-tokens/').status_code, 403)
+        self.assertEqual(self.client.get('/user/profile/').status_code, 200)
+        self.assertEqual(self.client.get('/user/password/').status_code, 403)  # the keeper may take the password away
+
+    def test_the_menu_and_the_tabs_show_only_what_is_allowed(self):
+        self.login(self.plain, unlock=False)
+        page = self.client.get('/user/password/').content.decode()
+        self.assertNotIn('/user/api-tokens/', page)
+        self.assertNotIn('/user/bookmarks/', page)
+        self.assertIn('/user/password/', page)
+        areas.set_exception_allowed(self.plain, self.keeper, ['password', 'tokens', 'bookmarks'])
+        page = self.client.get('/user/password/').content.decode()
+        self.assertIn('/user/api-tokens/', page)
+        self.assertIn('/user/bookmarks/', page)
+
+    def test_a_token_works_only_when_the_api_is_allowed(self):
+        from rest_framework.exceptions import AuthenticationFailed
+        from rest_framework.request import Request
+        from rest_framework.test import APIRequestFactory
+
+        from users.models import Token
+        token = Token(user=self.plain, version=1, token='a' * 40)
+        token.save()
+        from netbox.api.authentication import TokenAuthentication
+
+        def attempt():
+            request = Request(APIRequestFactory().get('/api/status/', HTTP_AUTHORIZATION='Token ' + 'a' * 40))
+            return TokenAuthentication().authenticate(request)
+        with self.assertRaises(AuthenticationFailed):
+            attempt()
+        areas.set_exception_allowed(self.plain, self.keeper, ['password', 'api'])
+        self.assertEqual(attempt()[0].pk, self.plain.pk)
+
+    def test_a_keeper_and_a_user_without_an_exception_are_not_limited(self):
+        self.assertFalse(areas.restricted(self.armed(self.keeper)))
+        self.assertTrue(areas.exception_allows(self.armed(self.keeper), 'api'))
+        stranger = self.armed(User.objects.create_user('nobodyx', 'nx@example.com'))
+        self.assertFalse(areas.restricted(stranger))  # no exception: the protection itself rules him
+        self.assertTrue(areas.exception_allows(stranger, 'tokens'))
+
+    def test_only_a_keeper_sets_it_and_the_page_saves_it(self):
+        from django.core.exceptions import PermissionDenied
+        with self.assertRaises(PermissionDenied):
+            areas.set_exception_allowed(self.plain, self.owner1, ['api'])
+        admin_login(self.client, self.keeper)
+        url = reverse('plugins:netbox_user_pin:areas')
+        page = self.client.get(url).content.decode()
+        self.assertIn('exception-allow', page)
+        self.assertIn('name="allow" value="api"', page)
+        response = self.client.post(url, {'action': 'exception-allow', 'pk': self.plain.pk,
+                                          'allow': ['password', 'profile']})
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(self.plain.policy_exception.__class__.objects.get(user=self.plain).allowed_set,
+                         {'password', 'profile'})
+        areas.add_exception(self.su, self.keeper, allowed=['password', 'api'])  # the same through the function
+        self.assertEqual(self.su.policy_exception.allowed_set, {'password', 'api'})
+
+    def test_while_the_protection_is_off_nothing_is_taken_away(self):
+        areas.set_default_deny(False, self.keeper)
+        self.assertFalse(areas.restricted(self.armed(self.plain)))
+
+
 class ImportExportTest(AreaTestCase):
     """Importing and exporting are rights of their own: adding / reading does not bring them along."""
 

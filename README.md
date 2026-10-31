@@ -52,7 +52,7 @@ Requires NetBox **4.7+** (Python 3.12+).
 |---|---|---|
 | **PIN-only access** (`PinUserNNNN`) | only its groups (always) | no API, no requests; without a group only changes its PIN; not a NetBox user (hidden from every user list) |
 | **Regular user in a group** (protection ON) | only what the groups allow | no PIN prompt, no API key |
-| **Regular user with an exception** | NetBox permissions alone | PIN plugin pages by their role |
+| **Regular user with an exception** | NetBox permissions alone; of the account pages and the API only what a keeper allowed (the password by default; profile, preferences, bookmarks, notifications, subscriptions, API tokens and the API with a token one by one) | PIN plugin pages by their role |
 | **Section manager** ("owner" before 2.2) | NetBox as any user; **full power over his section** | groups, fields, members, requests of his section (an object type or a whole area); creates / runs PIN-only accesses put under him |
 | **Protection keeper** | everything | areas, object types, section managers, exceptions, the ON/OFF switch, all PIN-only accesses; moves an access under a manager |
 

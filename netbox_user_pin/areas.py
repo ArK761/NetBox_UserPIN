@@ -34,6 +34,7 @@ from django.db import DatabaseError, transaction
 from django.db.models import Q
 from django.utils import timezone, translation
 from django.utils.translation import gettext as _
+from django.utils.translation import gettext_noop
 
 from . import roles, service
 from .models import (
@@ -55,7 +56,7 @@ CACHE_SECONDS = 5
 EVENT_TYPE = 'netbox_user_pin_area_request'
 
 _registry = {}
-_cache = {'at': 0.0, 'areas': None, 'deny': False, 'keepers': frozenset(), 'hide': False, 'requests': True, 'tokens': False, 'exempt': frozenset(), 'guest_path': 'pin'}
+_cache = {'at': 0.0, 'areas': None, 'deny': False, 'keepers': frozenset(), 'hide': False, 'requests': True, 'tokens': False, 'exempt': frozenset(), 'allowed': {}, 'guest_path': 'pin'}
 # Never refused by the default deny: technical data NetBox needs to draw its forms. Nothing else - the user may do what
 # a group allows him, and change his password (a view without objects, never refused).
 DEFAULT_DENY_EXEMPT = frozenset({'core.objecttype'})
@@ -160,8 +161,10 @@ def _refresh():
         _cache['tokens'] = bool(_settings.allow_own_tokens)
         _cache['guest_path'] = _settings.guest_path or 'pin'
         _cache['keepers'] = keepers
-        _cache['exempt'] = frozenset(PolicyException.objects.filter(
-            Q(expires__isnull=True) | Q(expires__gt=timezone.now()), user__is_active=True).values_list('user_id', flat=True))
+        _live = list(PolicyException.objects.filter(
+            Q(expires__isnull=True) | Q(expires__gt=timezone.now()), user__is_active=True))
+        _cache['exempt'] = frozenset(e.user_id for e in _live)
+        _cache['allowed'] = {e.user_id: e.allowed_set for e in _live}
         _cache['scope'] = _settings.protect_scope or 'all'
         from .models import PinGuest
         _cache['guests'] = frozenset(PinGuest.objects.values_list('user_id', flat=True))
@@ -244,6 +247,43 @@ def is_exempt(user):
     if _cache.get('scope') == 'pin' and user.pk not in _cache.get('guests', ()) and not _cache['deny']:
         return True  # the protection is switched off: everybody but the PIN-only accesses works by NetBox alone
     return user.pk in _cache['exempt']
+
+
+# What a user with an exception may still use (the account pages and the API): a keeper allows it one by one, the
+# password is allowed by default. Marked for translation here, translated where it is shown.
+EXCEPTION_ALLOWS = (
+    ('password', gettext_noop('Change the password')),
+    ('profile', gettext_noop('Profile')),
+    ('preferences', gettext_noop('Preferences')),
+    ('bookmarks', gettext_noop('Bookmarks')),
+    ('notifications', gettext_noop('Notifications')),
+    ('subscriptions', gettext_noop('Subscriptions')),
+    ('tokens', gettext_noop('API tokens (create and manage their own)')),
+    ('api', gettext_noop('API (REST, GraphQL) with a token')),
+)
+EXCEPTION_DEFAULT = ('password',)
+
+
+def restricted(user):
+    """
+    A user with an exception who is not a keeper: the account pages and the API are open to him only as far as a
+    keeper allowed. A keeper can do everything; while the protection is off there is no exception to speak of.
+    """
+    if not getattr(user, 'is_authenticated', False):
+        return False
+    active_areas()
+    if user.pk not in _cache['allowed'] or not _cache['deny'] or user.pk in _cache.get('guests', ()):
+        return False
+    if is_keeper(user) or (user.is_superuser and not _cache['keepers']):
+        return False
+    return True
+
+
+def exception_allows(user, code):
+    """May the user use this part of the account / the API (everybody but a restricted exception: yes)?"""
+    if not restricted(user):
+        return True
+    return code in _cache['allowed'].get(user.pk, ())
 
 
 def outside(user):
@@ -1780,7 +1820,7 @@ def group_names_of(user):
         Q(expires__isnull=True) | Q(expires__gt=now), user=user, revoked__isnull=True).select_related('profile', 'area'))
 
 
-def add_exception(user, actor, expires=None, note='', request=None):
+def add_exception(user, actor, expires=None, note='', request=None, allowed=None):
     """A keeper takes the protection off a user: he works with the permissions of NetBox until it is taken away."""
     if not is_keeper(actor):
         raise PermissionDenied
@@ -1793,7 +1833,8 @@ def add_exception(user, actor, expires=None, note='', request=None):
         raise ValidationError(_('The end of the exception must be in the future.'))
     exception, created = PolicyException.objects.update_or_create(
         user=user, defaults={'expires': expires, 'note': (note or '').strip()[:200],
-                             'added_by_name': actor.username, 'since': timezone.now()})
+                             'added_by_name': actor.username, 'since': timezone.now(),
+                             'allowed': _clean_allowed(EXCEPTION_DEFAULT if allowed is None else allowed)})
     service.log_event(PinEventAction.SETTINGS_CHANGED, user=user, actor=actor, request=request,
                       detail=f'EXCEPTION {"added" if created else "changed"} for {user.username}: '
                              f'{"until " + expires.isoformat() if expires else "no end"}'
@@ -1806,6 +1847,32 @@ def add_exception(user, actor, expires=None, note='', request=None):
                     'actor': actor.username, 'user': user.username,
                     'end': (_('until %(when)s') % {'when': timezone.localtime(expires).strftime('%Y-%m-%d %H:%M')})
                     if expires else _('no end')}, request=request)
+    clear_cache()
+    return exception
+
+
+def allow_rows(chosen=EXCEPTION_DEFAULT):
+    """[(code, label, checked)] for the check boxes of an exception (the labels in the language that is active)."""
+    return [(code, _(label), code in chosen) for code, label in EXCEPTION_ALLOWS]
+
+
+def _clean_allowed(values):
+    known = [code for code, _label in EXCEPTION_ALLOWS]
+    chosen = {str(v) for v in (values or ())}
+    return ','.join(code for code in known if code in chosen)
+
+
+def set_exception_allowed(user, actor, allowed, request=None):
+    """A keeper allows (or takes away) parts of the account pages and the API for a user with an exception."""
+    if not is_keeper(actor):
+        raise PermissionDenied
+    exception = PolicyException.objects.filter(user=user).first()
+    if exception is None:
+        raise ValidationError(_('The user has no exception.'))
+    exception.allowed = _clean_allowed(allowed)
+    exception.save(update_fields=['allowed'])
+    service.log_event(PinEventAction.SETTINGS_CHANGED, user=user, actor=actor, request=request,
+                      detail=f'EXCEPTION of {user.username} allows: {exception.allowed or "nothing"}')
     clear_cache()
     return exception
 

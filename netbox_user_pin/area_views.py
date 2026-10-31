@@ -169,8 +169,10 @@ class AreaListView(AreaViewMixin, View):
             'waiting': len(waiting_list), 'waiting_list': waiting_list,
             'deny_on': areas.default_deny_active(), 'keepers': areas.keepers(),
             'is_keeper': areas.is_keeper(request.user), 'can_keepers': areas.can_manage_keepers(request.user),
-            'exceptions': [setattr(e, 'groups', areas.group_names_of(e.user)) or e for e in areas.exceptions()]
+            'exceptions': [setattr(e, 'groups', areas.group_names_of(e.user)) or setattr(
+                e, 'allow_rows', areas.allow_rows(e.allowed_set)) or e for e in areas.exceptions()]
             if areas.is_keeper(request.user) else [],
+            'allow_rows': areas.allow_rows(),
             'exception_users': [(pk, label) for pk, label in _all_user_choices()
                                 if pk not in {k.pk for k in areas.keepers()}] if areas.is_keeper(request.user) else [],
             'denied_view': service.get_settings().denied_view, 'allow_requests': service.get_settings().allow_requests,
@@ -198,12 +200,18 @@ class AreaListView(AreaViewMixin, View):
                     if timezone.is_naive(end):
                         end = timezone.make_aware(end)
                 user = get_object_or_404(get_user_model(), pk=request.POST.get('user') or 0)
-                areas.add_exception(user, request.user, end, request.POST.get('note', ''), request=request)
+                areas.add_exception(user, request.user, end, request.POST.get('note', ''), request=request,
+                                    allowed=request.POST.getlist('allow') if request.POST.get('allow_set') else None)
                 messages.success(request, _('The exception is set: %(user)s works with the permissions of NetBox.')
                                  % {'user': user.username})
                 if (groups := areas.group_names_of(user)):
                     messages.warning(request, _('%(user)s is in groups (%(groups)s): they do not apply to him while '
                                                 'the exception lasts.') % {'user': user.username, 'groups': groups})
+                return redirect('plugins:netbox_user_pin:areas')
+            if action == 'exception-allow':
+                areas.set_exception_allowed(get_object_or_404(get_user_model(), pk=request.POST.get('pk') or 0),
+                                            request.user, request.POST.getlist('allow'), request=request)
+                messages.success(request, _('Saved: what the user with the exception may use.'))
                 return redirect('plugins:netbox_user_pin:areas')
             if action == 'exception-remove':
                 from django.contrib.auth import get_user_model
