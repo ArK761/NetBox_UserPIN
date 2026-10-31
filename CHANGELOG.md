@@ -1,6 +1,6 @@
 # Changes / Zmeny
 
-The guide (Slovak, built chapter by chapter from the code): [`docs/NAVOD_User_PIN_SK.pdf`](docs/NAVOD_User_PIN_SK.pdf).
+The guides, written from the code: [`docs/GUIDE_User_PIN_EN.pdf`](docs/GUIDE_User_PIN_EN.pdf) (English), [`docs/NAVOD_User_PIN_SK.pdf`](docs/NAVOD_User_PIN_SK.pdf) (Slovak).
 Sources and the build script: `docs/src/` (`python3 docs/src/build.py`).
 
 The version in the code is **2.0.0** (the GitHub release) and **2.0.1** (branch `feature/exception-allowlist`).

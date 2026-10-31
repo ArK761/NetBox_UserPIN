@@ -1,0 +1,70 @@
+<h1>The encryption key</h1>
+<div class="facts">
+<div><strong>Who:</strong> exclusively the server administrator (the key is only in <code>configuration.py</code>). Nobody in the interface sees it; <em>Settings</em> shows only its name and fingerprint.</div>
+<div><strong>When:</strong> you generate it before the first installation. You replace it on a suspected leak or by the company policy.</div>
+<div><strong>Depends on:</strong> everything the plugin encrypts cannot be read without the key. So the key must be backed up separately from the database.</div>
+</div>
+<h2>What the key protects</h2>
+<p>Under the key are stored (AES-256-GCM encryption, bound to the particular user):</p>
+<ul>
+<li>the PIN hash of every user (the PIN is first hashed with Argon2id and a salt and only the hash is encrypted),</li>
+<li>the 2FA (TOTP) secret of every user,</li>
+<li>the 2FA backup codes,</li>
+<li>the SMTP password from the Mail page.</li>
+</ul>
+<p>The key is also used to compute digests (these are not encrypted): the lookup index of the PIN of the PIN-only people and the verification codes of the domains. A database dump alone therefore contains nothing usable, not even something to brute-force offline.</p>
+<h2>How to generate a key</h2>
+<pre># while the plugin does not run yet – plain Python:
+python3 -c "import base64,os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"
+
+# or any long random text:
+openssl rand -base64 64 | tr -d '\n'
+
+# once the plugin runs:
+cd /opt/netbox/netbox &amp;&amp; python manage.py userpin_generate_key --key-id k1</pre>
+<p><code>userpin_generate_key</code> only prints the key, it stores it nowhere. <code>--key-id</code> is only the name it gets in the configuration (<code>k1</code> by default).</p>
+<h2>Which key the plugin accepts</h2>
+<table>
+<tr><th>Form of the key</th><th>What happens</th></tr>
+<tr><td>a base64 (urlsafe) string that is exactly 32 bytes</td><td>used directly</td></tr>
+<tr><td>any other string with <strong>at least 32 characters</strong></td><td>a 32-byte key is derived from it (HKDF-SHA256)</td></tr>
+<tr><td>a shorter string</td><td>NetBox does not start (an error at start)</td></tr>
+</table>
+<p>A longer key is not stronger: the encryption always uses 256 bits. What matters is that it is <strong>random</strong> (not an invented password). The key name (<code>k1</code>) must not be empty or contain a colon.</p>
+<h2>Writing it into the configuration</h2>
+<pre>PLUGINS_CONFIG = {
+    'netbox_user_pin': {
+        'encryption_keys': {'k1': '&lt;key&gt;'},
+        'active_key_id': 'k1',      # may be left out with a single key
+    },
+}</pre>
+<h2>Backing up the key</h2>
+<div class="warn">
+<ul>
+<li>Store the key <strong>offline</strong> (a password manager, a safe) and <strong>never in the same backup as the database</strong>. Whoever has both can decrypt.</li>
+<li><strong>When the key is lost</strong>, the NetBox data stays intact, but everything the plugin stored under the key is irretrievably gone: PINs, 2FA, backup codes, the SMTP password and the sign-in of the PIN-only people. Everybody has to set them up again.</li>
+<li>Check that the backup matches: in <em>User PIN → Settings</em> there is the card <strong>Encryption key</strong> with <em>Active key</em>, <em>Fingerprint</em> and <em>Configured keys</em>. Compare the fingerprint with the note at the offline backup.</li>
+</ul>
+</div>
+<h2>Replacing the key (rotation)</h2>
+<p>During a rotation every encrypted value is re-encrypted with the new key. The old key stays in the configuration until everything has moved.</p>
+<ol>
+<li><strong>Back up the database</strong> (to be safe).</li>
+<li>Generate a new key and store it aside.</li>
+<li>In <code>configuration.py</code> add the new key <strong>next to the old one</strong> and make it active:
+<pre>'encryption_keys': {'k1': '&lt;old&gt;', 'k2': '&lt;new&gt;'},
+'active_key_id': 'k2',</pre></li>
+<li>Restart NetBox: <code>sudo systemctl restart netbox netbox-rq</code>.</li>
+<li>Re-encrypt: <code>python manage.py userpin_rotate_key</code>. It runs in one transaction: if even one value cannot be decrypted, <strong>nothing changes</strong> and the command prints what failed. On success it writes a key-rotation event to the audit log.</li>
+<li>Verify: <code>python manage.py userpin_check</code>.</li>
+<li><strong>Remove the old key only when <code>userpin_check</code> prints</strong> <em>Everything decrypts with the active key; old keys can be removed.</em></li>
+</ol>
+<p><strong>Why not delete the old key at once:</strong> the index of the PIN-only people moves to the new key only at each person's next sign-in. Until a person signs in, they wait for the old key. The command prints it (<em>PIN-only accesses still on an old key: N</em>) and then <em>Do NOT remove the old key yet</em>.</p>
+<h2>What <code>userpin_check</code> prints</h2>
+<table>
+<tr><th>Line</th><th>Meaning</th></tr>
+<tr><td><code>Active key: k2  fingerprint …</code></td><td>the active key and its fingerprint</td></tr>
+<tr><td><code>OK: N, encrypted with a non-active key: M, failed: F, PIN-only accesses still on an old key: G</code></td><td>N values decrypted; M still use an old key; F cannot be decrypted; G PIN-only people wait for a sign-in</td></tr>
+<tr><td>an error (the command ends with an error)</td><td>at least one value cannot be decrypted: a wrong or missing key. Do not change <code>k1</code> and send the output</td></tr>
+</table>
+<div class="note">The plugin never creates or switches a key by itself. A missing or wrong key ends with an error, not with a silent change.</div>

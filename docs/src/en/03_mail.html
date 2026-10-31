@@ -1,0 +1,119 @@
+<h1>E-mails: how the plugin sends mail</h1>
+<div class="facts">
+<div><strong>Who sets it up:</strong> the master and CORE deputies with the permission to edit settings (the <em>Mail</em> page). The NetBox server (<code>EMAIL</code> in <code>configuration.py</code>) is set up by the server administrator.</div>
+<div><strong>When:</strong> right after the installation. Without mail set up the plugin <strong>sends no e-mails</strong>: recovery of a forgotten PIN, invitations to roles and notifications do not work.</div>
+<div><strong>Depends on:</strong> a sender + an SMTP server, a <strong>verified domain</strong> of the recipient, an address in the recipient's account.</div>
+</div>
+<h2>When an e-mail is really sent</h2>
+<p>An e-mail to a user goes out only when <strong>all four</strong> conditions are met:</p>
+<ol>
+<li>mail is set up (see below),</li>
+<li>the user has an e-mail address in the account,</li>
+<li>the domain of that address is among the <strong>verified</strong> domains (the Domains chapter),</li>
+<li>for security notifications: the switch <em>Security notifications by e-mail</em> is on.</li>
+</ol>
+<p>If any of them is missing the e-mail is <strong>silently not sent</strong> and the action is carried out. The e-mail state of a user is seen on the <em>Users</em> page in the E-mail column: <em>no e-mail</em> (the address is missing), <em>domain</em> (the address is outside the verified domains). Otherwise the address itself is shown. When sending fails (e.g. the server is unreachable) an <em>E-mail failed</em> event with the error is written to the audit log; the action that triggered the e-mail is not spoiled.</p>
+<h2>What the plugin sends from</h2>
+<table>
+<tr><th>Source</th><th>When it is used</th><th>What must be set</th></tr>
+<tr><td><strong>SMTP from this page</strong></td><td>when <strong>both the SMTP server and the sender address</strong> are filled in</td><td>the Mail page → E-mail settings</td></tr>
+<tr><td><strong>NetBox configuration</strong></td><td>when the SMTP server on the Mail page is <strong>not</strong> filled in and NetBox has an <code>EMAIL</code> block in <code>configuration.py</code></td><td><code>EMAIL['SERVER']</code> and <code>EMAIL['FROM_EMAIL']</code> (or the sender address from the Mail page)</td></tr>
+<tr><td>nothing</td><td>neither is set</td><td>the state <em>not configured</em>: the plugin sends no e-mails</td></tr>
+</table>
+<p>Users never enter any mail credentials: one service account is used.</p>
+<h2>What an e-mail looks like</h2>
+<ul>
+<li>Plain text (no HTML). The subject has the prefix <code>[NetBox PIN]</code> (e.g. <code>[NetBox PIN] Your PIN was changed</code>).</li>
+<li>At the end there is the footer <em>NetBox User PIN. This is an automatic message.</em></li>
+<li>The text is in the language from <em>Settings → Language</em> (for PIN-only people in the language set for their access).</li>
+<li>Sender: <em>Sender name</em> + the address (the default name is <em>NetBox PIN</em>).</li>
+</ul>
+
+<h1>The Mail page</h1>
+<div class="facts">
+<div><strong>Who sees it:</strong> CORE (master and deputies). Nobody else has the page. Exception: when there are protection keepers and active CORE deputies, a superuser who is not a CORE deputy does not see it.</div>
+<div><strong>Who can change it:</strong> the master and a CORE deputy with the permission <em>Can edit settings</em> (switched on by the master on the CORE (deputies) page). Others see the page marked <em>Read-only view</em>.</div>
+<div><strong>Confirmation:</strong> saving needs the PIN (and 2FA when <em>Require 2FA also for settings</em> is on). The connection test and the test e-mail need no confirmation.</div>
+<div><strong>Four eyes:</strong> when approval is on and the option "… for settings and mail settings" (on by default) is on, saving the mail settings and adding a domain create a request for a second person.</div>
+</div>
+<h2>E-mail settings (fields)</h2>
+<table>
+<tr><th>Field</th><th>Default</th><th>Meaning</th></tr>
+<tr><td>Sender name</td><td>NetBox PIN</td><td>shown as the sender's name</td></tr>
+<tr><td>Sender e-mail address</td><td>empty</td><td>e.g. <code>netbox@company.com</code>. Required when an SMTP server is filled in</td></tr>
+<tr><td>SMTP server</td><td>empty</td><td>e.g. <code>mail.company.com</code>. Empty = the NetBox configuration is used</td></tr>
+<tr><td>SMTP port</td><td>25</td><td>1 to 65535</td></tr>
+<tr><td>SMTP timeout (s)</td><td>10</td><td>1 to 120</td></tr>
+<tr><td>Encryption</td><td>Off</td><td><em>Off (usually port 25)</em>, <em>STARTTLS (usually port 587)</em>, <em>SSL/TLS (usually port 465)</em></td></tr>
+<tr><td>Automatic TLS</td><td>on</td><td>with encryption off, STARTTLS is used when the server offers it</td></tr>
+<tr><td>SMTP authentication</td><td>off</td><td>when on, an SMTP user and a password are needed</td></tr>
+<tr><td>SMTP user</td><td>empty</td><td>the service account the mail is sent from</td></tr>
+<tr><td>SMTP password</td><td>empty</td><td>stored <strong>encrypted with the key</strong> and never shown; an empty field on editing = keep the current one. Required with authentication on if none is stored yet</td></tr>
+</table>
+<p>On saving, the plugin checks: an SMTP server without a sender address is an error (<em>A sender address is needed together with the SMTP server</em>), authentication without a user or a password is an error.</p>
+<h2>Notifications and forgotten PIN</h2>
+<table>
+<tr><th>Field</th><th>Default</th><th>Meaning</th></tr>
+<tr><td>Security notifications by e-mail</td><td>on</td><td>PIN set / changed / reset, lockout, upcoming expiry, 2FA changes, backup codes viewed. Switching it off does not affect the other mails (codes, invitations, roles, areas)</td></tr>
+<tr><td>Self-service recovery of a forgotten PIN</td><td>on</td><td>an e-mail code <strong>and</strong> a 2FA code together</td></tr>
+<tr><td>Recovery code validity (minutes)</td><td>15</td><td>5 to 60; applies also to the domain verification code and to the code for showing backup codes</td></tr>
+</table>
+<h2>Status and the connection test</h2>
+<p>The <strong>Status</strong> card shows <em>Used</em>: <em>SMTP from this page</em>, <em>NetBox configuration</em> or <em>not configured</em>, and accordingly the server, the account (or <em>no authentication</em>) and the sender. The <strong>Test connection</strong> button connects to the SMTP server from the page (and logs in) and writes the result. It works only for the SMTP from the Mail page, not for the NetBox configuration.</p>
+<h2>The test e-mail</h2>
+<p>Choose a recipient and press <strong>Send test e-mail</strong>. Only users who <strong>may use a PIN and have an e-mail in a verified domain</strong> can be chosen; the picker shows the account, the name and the address. If nobody qualifies, the page says so. Result: <em>Test e-mail sent to …</em> or an error pointing to the audit log.</p>
+
+<h1>Allowed e-mail domains</h1>
+<div class="facts">
+<div><strong>Who:</strong> whoever may change the mail settings (see above).</div>
+<div><strong>When:</strong> once for each domain that is to receive e-mails. Add a new one also when a company with another domain joins.</div>
+<div><strong>Depends on:</strong> mail must be set up and somebody with an address in that domain must be able to read the code.</div>
+</div>
+<p>Mail goes <strong>only to addresses in verified domains</strong>. Until a domain is verified, e-mails to it are not sent (the list says <em>not verified – no e-mails yet</em>; with no domains it says <em>No domain – no e-mails are sent</em>).</p>
+<ul>
+<li>A domain is written e.g. <code>@company.com</code> (the at sign may also be left out; the plugin strips it and converts to lower case). It must contain a dot and no spaces.</li>
+<li><strong>The match is exact:</strong> <code>company.com</code> lets <code>jan@company.com</code> through, but <strong>not</strong> sub-domains (<code>jan@mail.company.com</code>) or look-alikes (<code>company.com.evil.com</code>).</li>
+</ul>
+<h2>Adding and verifying a domain</h2>
+<ol>
+<li>In the card <em>Allowed e-mail domains</em> write the domain and press <strong>Add</strong>. The dialog <em>Verify domain</em> opens at once. (With four-eyes approval on, the addition must be approved first.)</li>
+<li><strong>1. Address in this domain:</strong> write one address that ends with this domain and press <strong>Send code</strong>. An e-mail with an <strong>8-digit code</strong> is sent.</li>
+<li><strong>2. Code from the e-mail:</strong> enter the code and press <strong>Verify</strong>.</li>
+</ol>
+<p>The code is valid for <strong>Recovery code validity</strong> minutes (15 by default) and can be entered at most <strong>5 times</strong> (then a new one must be sent). If you already have a code, the dialog has the link <em>Already have a code? Enter it directly</em>. On success the plugin stores who verified the domain and through which address. Errors: <em>The address must end with @domain</em>, <em>No mail server is configured</em>, <em>The code is wrong or expired</em>.</p>
+<ul>
+<li><strong>Verify again</strong> is available at any time (e.g. for a new address); it does not cancel the domain.</li>
+<li><strong>Removing</strong> (the button at the domain, with a confirmation) cancels the domain at once: e-mails to it stop. Removing does not need four-eyes approval.</li>
+<li>Adding, verifying and removing are written to the audit log.</li>
+</ul>
+
+<h1>Which e-mails the plugin sends (the PIN core)</h1>
+<p>These are the mails about the PIN and 2FA itself. The e-mails about roles, approvals, areas and PIN-only accesses are described in their own chapters.</p>
+<table>
+<tr><th>Subject (in English; translated into the set language)</th><th>Who gets it and when</th><th>Does the "Security notifications" switch turn it off?</th></tr>
+<tr><td>Your PIN was set / was changed / was reset / was recovered</td><td>the user, after setting, changing, a reset by an administrator, recovery of a forgotten PIN</td><td>yes</td></tr>
+<tr><td>Your PIN was suspended / Your PIN is active again</td><td>the user, when an administrator suspends or restores the PIN</td><td>yes</td></tr>
+<tr><td>Your PIN is locked</td><td>the user, after exceeding the number of wrong attempts</td><td>yes</td></tr>
+<tr><td>Your PIN expires soon</td><td>the user, <strong>once</strong> when entering the warning period (14 days before the expiry by default)</td><td>yes</td></tr>
+<tr><td>Two-factor authentication enabled / disabled / reset</td><td>the user, on a 2FA change</td><td>yes</td></tr>
+<tr><td>Your backup codes were viewed</td><td>the user, after viewing the backup codes</td><td>yes</td></tr>
+<tr><td>Reset of your PIN / two-factor authentication started</td><td>the user, when an administrator starts a reset (the user must confirm it in NetBox)</td><td>yes</td></tr>
+<tr><td>Verification code</td><td>an 8-digit code to show the backup codes without the phone (validity by the setting, at most 5 attempts, a new code after 60 s at the earliest)</td><td>no</td></tr>
+<tr><td>PIN recovery code</td><td>an 8-digit code to recover a forgotten PIN</td><td>no</td></tr>
+<tr><td>Domain verification</td><td>the code to verify a domain (to the entered address)</td><td>no</td></tr>
+<tr><td>Test e-mail</td><td>the chosen recipient from the Mail page</td><td>no</td></tr>
+</table>
+<div class="note">The switch <em>Security notifications by e-mail</em> affects only the first seven rows. Codes, invitations and the mails about roles, approvals, areas and PIN-only accesses always go when the conditions at the beginning of this part are met (mail, address, verified domain).</div>
+
+<h1>E-mails: when they do not arrive</h1>
+<table>
+<tr><th>Symptom</th><th>What to check</th></tr>
+<tr><td>Nobody gets anything</td><td>The Mail page → card <em>Status</em>: is <em>Used</em> something other than <em>not configured</em>? Then <strong>Test connection</strong> and a <strong>test e-mail</strong>.</td></tr>
+<tr><td>The connection test reports an error</td><td>server, port, encryption (port 25 with no encryption, 587 STARTTLS, 465 SSL/TLS), credentials; the SMTP server must be reachable from the NetBox server.</td></tr>
+<tr><td>The test passes, somebody gets no mail</td><td>In the <em>Users</em> list see the E-mail column: <em>no e-mail</em> or <em>domain</em> means the address is missing or its domain is not verified.</td></tr>
+<tr><td>I added a domain but no mail arrives</td><td>The domain must be <strong>verified</strong>: the list must say <em>verified</em>, not <em>not verified</em>.</td></tr>
+<tr><td>The code does not arrive when adding a domain</td><td>Mail is not set up (<em>No mail server is configured</em>) or the address is wrong. The audit log has <em>E-mail failed</em> with the error.</td></tr>
+<tr><td>Security notifications do not arrive, the others do</td><td>The switch <em>Security notifications by e-mail</em> is off.</td></tr>
+<tr><td>The summaries of changes of PIN-only people do not arrive</td><td><code>netbox-rq</code> is not running (the queue sends them).</td></tr>
+</table>
+<p>All sent and failed e-mails are in the <em>Audit log</em> (the events <em>E-mail sent</em> and <em>E-mail failed</em>, without the content of the e-mail).</p>

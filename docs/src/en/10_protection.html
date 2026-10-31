@@ -1,0 +1,84 @@
+<h1>Global protection (ON / OFF) and keepers</h1>
+<div class="facts">
+<div><strong>Who:</strong> only <strong>protection keepers</strong>. While there is none, the first one is appointed by CORE / the master.</div>
+<div><strong>When:</strong> when everything that no group allows is to be denied; it is switched off in an emergency or for maintenance.</div>
+<div><strong>Depends on:</strong> at least one keeper with a PIN and 2FA. Without a keeper the protection cannot be switched on.</div>
+</div>
+<p>The <strong>Protection</strong> card is at the top of the <em>Protected areas</em> page.</p>
+<h2>ON and OFF</h2>
+<table>
+<tr><th>State</th><th>What applies</th></tr>
+<tr><td><strong>ON</strong></td><td>everything that no group allows is denied to <strong>everybody except keepers and exceptions</strong>. PIN-only people see only their groups. It reaches every path: lists, details, REST API, GraphQL, search, widgets, menus and buttons. A superuser who is not a keeper sees none of Users, Groups, Permissions, Jobs, Background tasks… The own profile, bookmarks, notifications and preferences stay open, but only the user's own</td></tr>
+<tr><td><strong>OFF</strong></td><td>everybody works by the NetBox permissions alone. PIN-only people can only change their PIN and are told that the function is switched off by the administrator</td></tr>
+</table>
+<p>The buttons <em>Switch the protection ON</em> / <em>Switch the protection OFF</em> are seen and pressed only by a keeper. The change is written to the audit log and an e-mail goes to the other keepers.</p>
+<h2>Protection keepers</h2>
+<ul>
+<li>The card <strong>Protection keepers</strong>: the list, <em>Remove</em> and <em>Appoint another keeper</em>. While there is none, <em>Appoint the first keeper (switches the protection on)</em> stands there: <strong>appointing the first keeper switches the protection on</strong>.</li>
+<li>A keeper must have a <strong>PIN and 2FA</strong>, the account must be active and must not be a PIN-only person. After the appointment the e-mail <em>You are a protection keeper</em> arrives.</li>
+<li>A keeper is <strong>exempt from the denial</strong> (NetBox permissions apply to them), cannot turn off 2FA and <strong>cannot leave alone</strong>: another keeper has to take over.</li>
+<li><strong>The last keeper cannot be removed.</strong> If the account of the last keeper is deleted, the protection goes OFF and cannot be switched on until a keeper exists.</li>
+<li><strong>A keeper can do everything</strong>: areas, object types, section managers, exceptions, the ON/OFF switch and all PIN-only accesses. The limits for exceptions and managers do not apply to them.</li>
+</ul>
+<h2>What the users see</h2>
+<p>The card <strong>What the users see</strong> (saved with <em>Save</em>):</p>
+<table>
+<tr><th>Option</th><th>Default</th><th>Meaning</th></tr>
+<tr><td><strong>What is not allowed</strong></td><td>A – door</td><td><strong>A – door:</strong> the user sees everything and the PIN blocks what is not allowed with a notice (and a request). <strong>B – hidden:</strong> a user who is in no group sees nothing (only the change of the password and PIN); in a group they see only what the group allows; no API in the browser. Every area may choose its own (Settings of the area)</td></tr>
+<tr><td><strong>Users may ask for access</strong></td><td>yes</td><td>off: only the administrators make requests (there is no page or button)</td></tr>
+<tr><td><strong>Users may create their own API key</strong></td><td>no</td><td>a key works with the NetBox permissions and the PIN does not judge it: a superuser with a key reads everything through a script. Allow it only for narrow permissions. A user then sees only their <strong>own</strong> keys</td></tr>
+</table>
+<div class="note">There is also a hidden option <em>Whom the protection applies to</em>: by default <strong>only people with a PIN</strong> (PIN-only people and users in a group or section managers; everybody else works by NetBox permissions and does not see the plugin). It cannot be changed in the interface.</div>
+<h2>Emergency on the server</h2>
+<pre>python manage.py userpin_keeper                 # shows the keepers
+python manage.py userpin_keeper --add &lt;name&gt;    # appoints a keeper
+python manage.py userpin_default_deny --on      # switches the protection on (needs a keeper)
+python manage.py userpin_default_deny --off     # switches the protection off</pre>
+<p>Every change by a command is written to the audit log and <strong>all keepers and superusers learn of it by e-mail</strong> (nothing happens quietly).</p>
+
+<h1>Exceptions</h1>
+<div class="facts">
+<div><strong>Who:</strong> only a keeper sets, changes and removes. A regular user (not a keeper, not a PIN-only person) can have an exception.</div>
+<div><strong>When:</strong> when one user is to work by NetBox permissions without the denial (e.g. a network administrator whom the protection limits).</div>
+<div><strong>Depends on:</strong> the protection switched on (while it is off nothing is taken away).</div>
+</div>
+<p>A user with an exception is not bound by the protection: they work with the permissions NetBox gives them. Their groups, accesses and roles stay as they are and apply again when the exception is taken away or ends. A superuser with an exception sees everything without the PIN. The <strong>Exceptions</strong> card is on the <em>Protected areas</em> page.</p>
+<h2>Adding an exception</h2>
+<p>The form: <em>User</em> (keepers and those who already have an exception are not offered), <em>Until (optional)</em> (the end; must be in the future), <em>Why (optional)</em> (up to 200 characters) and the button <em>May use</em> with the items (see below), then <em>Set the exception</em>. The other keepers get the e-mail <em>Protection exception: name</em> and it is written to the audit log. If the user is in groups the page warns that they do not apply while the exception lasts. Adding the same user again is refused (changes are made in the list).</p>
+<h2>What a user with an exception may use</h2>
+<p>The exception concerns the protection, not the account pages and the API. Those the user may use only as the keeper allowed:</p>
+<table>
+<tr><th>Item</th><th>Default</th><th>What happens when not allowed</th></tr>
+<tr><td>Change the password</td><td><span class="ok">allowed</span></td><td>the Password tab and the link in the menu disappear, the address returns 403</td></tr>
+<tr><td>Profile</td><td><span class="no">not allowed</span></td><td>the tab and the address <code>/user/profile/</code></td></tr>
+<tr><td>Preferences</td><td><span class="no">not allowed</span></td><td><code>/user/preferences/</code></td></tr>
+<tr><td>Bookmarks</td><td><span class="no">not allowed</span></td><td><code>/user/bookmarks/</code></td></tr>
+<tr><td>Notifications</td><td><span class="no">not allowed</span></td><td><code>/user/notifications/</code> and the bell is hidden</td></tr>
+<tr><td>Subscriptions</td><td><span class="no">not allowed</span></td><td><code>/user/subscriptions/</code></td></tr>
+<tr><td>API tokens (create and manage their own)</td><td><span class="no">not allowed</span></td><td><code>/user/api-tokens/</code>, <code>/users/tokens/</code>, <code>/api/users/tokens/</code>; the item <em>Admin → API Tokens</em> disappears too</td></tr>
+<tr><td>API (REST, GraphQL) with a token</td><td><span class="no">not allowed</span></td><td>a token of such a user is refused (an authentication error). The browser itself (UI) works through the session and is not affected</td></tr>
+</table>
+<ul>
+<li>Under the name of every user there is an arrow <strong>▾ May use</strong> that unfolds the check boxes with a <em>Save</em> button, and small tags: <span class="ok">green ✓</span> allowed, <span class="no">red ✗</span> not allowed.</li>
+<li>What is not allowed disappears from the menu and the tabs and the direct address returns 403 (<em>Not allowed for this account</em>, with the names of the keepers).</li>
+<li>NetBox has no link to the password in the user menu (only a tab of the profile). While the password is allowed, the plugin adds one to the menu.</li>
+<li><strong>A keeper can always do everything.</strong> While the protection is off nothing is taken away. A superuser who is not a keeper is not limited either while there is no keeper.</li>
+</ul>
+<div class="note"><strong>Why it matters.</strong> NetBox gives every signed-in user the right to their own API tokens (<code>DEFAULT_PERMISSIONS</code>), so a user without any rights sees <em>Admin → API Tokens</em> in the menu. A token carries only the permissions of its owner, but the plugin does not judge requests with a token: a user with rights could read beyond their areas through a token. The list of allowances solves it without touching the NetBox configuration.</div>
+
+<h1>Section managers</h1>
+<div class="facts">
+<div><strong>Who appoints and removes:</strong> a keeper (while there is none, CORE / the master). A section manager does not appoint or remove managers.</div>
+<div><strong>When:</strong> when somebody other than a keeper is to decide about a part of an area: groups, fields, members, requests.</div>
+<div><strong>Depends on:</strong> the manager must have a PIN and 2FA and be a regular NetBox account (not a superuser, not a keeper, not a PIN-only person).</div>
+</div>
+<ul>
+<li>A <strong>section</strong> = the object types of the area; <strong>nothing ticked = the whole area</strong>. At a manager there is the button <em>Save the section</em>; you appoint a new one with <em>Appoint the section managers</em> (the form <em>Section</em> + a choice of users).</li>
+<li>A manager has <strong>full power over their section</strong>: groups, fields, members and requests. The keepers stand above them. A department role is not needed.</li>
+<li>Requests for their types go to <strong>them and the keepers</strong>; every decision is e-mailed to the requester, the keepers and the manager.</li>
+<li>PIN-only accesses made by a keeper belong to the keepers; a manager sees only those <strong>under them</strong> and creates them only into the groups of their section (the keepers get an e-mail). A keeper can move an access under a manager.</li>
+<li>A manager of a whole area keeps their rights over the area (targets, profiles); creating an area, adding and removing targets and managers belong to the keepers. <strong>The last manager of an area</strong> can be removed only by a keeper (CORE / the master while there is no keeper cannot remove them, except a manager who has meanwhile become a superuser or a keeper).</li>
+<li>Appointing a manager automatically <strong>allows them to use a PIN</strong> (unless the PIN administrator explicitly denied it: then the appointment fails).</li>
+<li>When appointing, the page shows what the manager lacks (<em>Has a PIN</em>, <em>Has 2FA</em>, <em>Is not a superuser or a protection keeper</em>, <em>Is a NetBox account</em>).</li>
+<li>Emergency on the server: <code>python manage.py userpin_area_owners &lt;area-key&gt; --set name1 name2</code> (written to the audit log; it refuses people who could not be managers unless you give <code>--force</code>).</li>
+</ul>

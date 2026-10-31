@@ -1,0 +1,83 @@
+<h1>My PIN</h1>
+<div class="facts">
+<div><strong>Who:</strong> every user who may use a PIN. Every signed-in user sees the page <em>My PIN</em>.</div>
+<div><strong>When:</strong> at first use, when the validity expires (after 180 days by default), after a reset.</div>
+<div><strong>Depends on:</strong> the permission to use a PIN (below); 2FA and an e-mail in a verified domain for recovery of a forgotten PIN.</div>
+</div>
+<h2>Who may use a PIN</h2>
+<p>It is decided by the setting <em>Who may use a PIN</em> (Settings → Access &amp; PIN policy) and by the flag of each user (the <em>Users</em> page):</p>
+<table>
+<tr><th>Flag of the user</th><th>Mode "only explicitly allowed" (default)</th><th>Mode "all except denied"</th></tr>
+<tr><td><strong>Allowed</strong></td><td>may</td><td>may</td></tr>
+<tr><td><strong>Denied</strong></td><td>may not</td><td>may not</td></tr>
+<tr><td><strong>Default</strong> (new accounts)</td><td>may not</td><td>may</td></tr>
+</table>
+<ul>
+<li>A <strong>superuser</strong> always may.</li>
+<li>Whoever holds a <strong>role</strong> in the PIN administration (CORE, head, delegate) or awaits the acceptance of an invitation always may: they need the PIN to accept and to work.</li>
+<li>Whoever may not sees on the page <em>My PIN</em>: <em>Permitted to use a PIN: No – ask an administrator</em>.</li>
+</ul>
+<h2>The My PIN page</h2>
+<table>
+<tr><th>Item</th><th>What it shows</th></tr>
+<tr><td>Permitted to use a PIN</td><td>Yes / No – ask an administrator</td></tr>
+<tr><td>PIN</td><td>Active / Not set / Change required</td></tr>
+<tr><td>Last changed; Valid until</td><td>a date; the days left (<em>rotation every N days</em>) or <em>expired</em></td></tr>
+<tr><td>Last successful use</td><td>date and time</td></tr>
+<tr><td>Lockout</td><td>until when the account is locked (after exceeding wrong attempts)</td></tr>
+<tr><td>Unlocked now</td><td>the scope of the unlock (or <em>everything</em>)</td></tr>
+<tr><td>Required length</td><td>N digits</td></tr>
+</table>
+<p>Buttons: <strong>Lock now</strong> (locks everything in this session at once), <strong>Test rotation</strong> (forces a change of your own PIN so you can try the procedure), <strong>Forgot PIN</strong>, <strong>Change PIN</strong> or <strong>Set PIN</strong>. Below is <em>Recent activity</em> (time, event, scope).</p>
+<p>Notices on the page: <em>Your PIN expires in N days</em> (with a one-click change), <em>Two-factor authentication is not set up</em>, <em>Your PIN is suspended</em>, <em>an administrator started a reset</em>, <em>an invitation to a role</em>.</p>
+<h2>Setting and changing the PIN</h2>
+<ul>
+<li><strong>Digits</strong> only, exactly the length in the settings (<em>PIN length</em>, 6 by default, range 4 to 12). An old PIN of another length stays valid until changed.</li>
+<li><strong>Weak PINs</strong> are rejected (when <em>Block weak PINs</em> is on, the default): repeated digits and patterns (<code>111111</code>, <code>121212</code>, <code>123123</code>), runs up or down (<code>123456</code>, <code>654321</code>) and the own list <em>Additional blocked PINs</em> (one per line or comma separated).</li>
+<li>Nobody, not even an administrator, can read the PIN: an administrator can only reset it.</li>
+<li>A PIN change or reset <strong>invalidates every existing unlock</strong> of the user (in all sessions).</li>
+</ul>
+<h2>Unlocking</h2>
+<p>A protected page asks for the PIN (<em>Enter your PIN</em>). After the correct PIN it is unlocked for <em>Unlock duration</em> minutes (15 by default; 1 to 1440). With <em>Extend unlock on activity</em> on (the default) every view of a protected page restarts the timer, so the unlock expires after inactivity. <em>Unlock scope</em>: <strong>one unlock for everything</strong> (default) or <strong>a separate one per scope</strong> (plugin / area). <em>Require 2FA on every unlock</em> (off by default) also requires a 2FA code; a user without 2FA is then not unlocked.</p>
+<p>The unlock does not apply when the PIN is suspended, has expired, or the user may no longer use a PIN. The <em>Test unlock</em> page in the menu is protected by its own scope <em>test</em> and serves to try it out.</p>
+<h2>Wrong attempts and lockout</h2>
+<p>After <em>Max failed attempts</em> (5 by default; 1 to 50) the account is locked for <em>Lockout duration</em> minutes (30 by default; up to 7 days). Wrong PINs and wrong 2FA codes are counted <strong>separately</strong>: a correct PIN does not reset wrong 2FA codes and vice versa. Counting happens under a row lock, so parallel guessing cannot bypass the lockout. A locked user sees <em>Too many failed attempts. Try again after …</em>. An administrator (<em>Clear lockout</em>) or the passing of time unlocks.</p>
+<h2>Validity and rotation</h2>
+<p>A PIN is valid for <em>PIN max age</em> days (180 by default; 1 to 3650). <em>Warn before expiry</em> (14 days by default) sends an e-mail <strong>once</strong> and shows a notice. After the expiry, or when an administrator forces a change, the PIN must be changed before the next use (<em>Change required</em>). Periodic changes are a company policy; NIST SP 800-63B-4 does not recommend them: set it by your rules.</p>
+<h2>Forgotten PIN (self-service)</h2>
+<ol>
+<li><em>My PIN → Forgot PIN</em> (or the link <em>Forgot your PIN?</em> on the unlock page) → <strong>Send code</strong>. It is sent only to an address in a verified domain. An 8-digit code is sent; valid for <em>Recovery code validity</em> minutes, at most 5 attempts, a new code after 60 s at the earliest.</li>
+<li>Enter the e-mail code <strong>and</strong> a 2FA code (or a backup code) and the new PIN. On success the e-mail <em>Your PIN was recovered</em> arrives.</li>
+</ol>
+<p>Recovery is not offered (the page lists the reasons) if: it is switched off, the user may not use a PIN, NetBox cannot send e-mails, the account has no e-mail, the e-mail is not in a verified domain, or 2FA is not set up. Then an administrator resets the PIN. Recovery <strong>never bypasses 2FA</strong>.</p>
+
+<h1>Two-factor authentication (2FA)</h1>
+<div class="facts">
+<div><strong>Who:</strong> every user sets it up themselves (<em>My PIN → Set up 2FA</em>).</div>
+<div><strong>When:</strong> as soon as possible: without 2FA administrative actions cannot be confirmed, a forgotten PIN cannot be recovered, and a role (head, delegate, CORE deputy) cannot be accepted.</div>
+<div><strong>Depends on:</strong> an authenticator app on the phone with TOTP (Microsoft / Google Authenticator etc.), the package <code>segno</code> (QR code).</div>
+</div>
+<ol>
+<li><em>Set up 2FA</em> → <strong>1. Scan with your authenticator app</strong> the QR code (or enter the key manually: <em>Can't scan? Enter this key manually</em>).</li>
+<li><strong>2. Enter the 6-digit code</strong> from the app. The backup codes are shown at once (<em>Save these codes now</em>, buttons <em>Copy</em> and <em>I have saved them</em>).</li>
+</ol>
+<ul>
+<li>A TOTP code is accepted <strong>only once</strong> (replay protection).</li>
+<li><strong>Disabling 2FA</strong> (<em>My PIN → Disable 2FA</em>) needs the PIN and a 2FA code. Without 2FA administrative actions cannot be confirmed and a PIN cannot be recovered by yourself. The e-mail <em>Two-factor authentication disabled</em> arrives.</li>
+</ul>
+<h2>Backup codes</h2>
+<p>One-time codes instead of the app (e.g. after losing the phone). <em>My PIN → Show backup codes</em> needs the PIN and either a <strong>2FA code</strong> or (without the phone) a <strong>verification code from an e-mail</strong> (<em>No phone at hand? Get a verification code by e-mail</em>). The codes are shown only in the browser (used ones are marked <em>used</em>); <strong>Generate new codes</strong> invalidates all the old ones. The codes themselves are never e-mailed. After every viewing the user gets an e-mail and it is written to the audit log.</p>
+<h2>Lost phone</h2>
+<ol>
+<li>Use a backup code.</li>
+<li>If you have none either: another administrator starts <strong>Reset 2FA</strong> (the user confirms it with the PIN and sets up the new phone).</li>
+<li>If nobody can do it (e.g. the master without the phone and codes): the server administrator runs <code>python manage.py userpin_reset_2fa &lt;user&gt;</code>. The 2FA is removed at once and it is written to the audit log. The command with the exact paths is shown by <em>My PIN</em> and <em>Users → Emergency: server command</em>.</li>
+</ol>
+<h2>Confirming administrative actions</h2>
+<p>An administrative action is confirmed in a dialog directly on the page (<em>Confirm your identity</em>): <em>Your PIN</em> and a <em>2FA code</em> (6 digits from the app, or a backup code). The confirmation is valid for <em>Administrative window</em> minutes (5 by default; 1 to 60) and the action continues without leaving the page. Actions are of two levels:</p>
+<table>
+<tr><th>Level</th><th>What it needs</th><th>Examples</th></tr>
+<tr><td><strong>PIN only</strong> (default)</td><td>the PIN; with <em>Require 2FA also for settings</em> on, 2FA as well</td><td>saving Settings and Mail, allow/deny a PIN, clear a lockout, force a change, moves between departments</td></tr>
+<tr><td><strong>PIN + 2FA</strong></td><td>always 2FA as well</td><td>resets, suspension, roles, dissolving a department</td></tr>
+</table>
+<p>If you switch off <em>Require PIN + 2FA for administrative actions</em>, the PIN alone is enough. The administration of protected areas is confirmed differently: the PIN is unlocked once and 2FA is asked only every <em>2FA asked again after</em> hours (8 by default; 1 to 168), not at every change.</p>

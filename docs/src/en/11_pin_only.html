@@ -1,0 +1,95 @@
+<h1>People with a PIN only (PIN-only)</h1>
+<div class="facts">
+<div><strong>Who creates and manages them:</strong> a protection keeper (all) and a section manager (only those under them and into the groups of their section). The menu <em>People with a PIN only</em> is seen by a keeper and a manager.</div>
+<div><strong>When:</strong> for people who have no NetBox account and are to see or change only a part (e.g. a technician on tenants).</div>
+<div><strong>Depends on:</strong> mail set up (the personal link comes by e-mail; without it you see it on the screen), a group in a protected area, the protection switched on (while it is off the person can only change the PIN), a running <code>netbox-rq</code> (summaries of changes).</div>
+</div>
+<p>Behind a person stands a technical user <code>PinUser0001</code>, <code>PinUser0002</code> … (a number is never reused or changed; the <em>alias</em> and description are free texts and nothing is renamed in NetBox). The technical account has <strong>no usable password</strong>: it can sign in only through the PIN page. Nobody sees it in user lists, drop-downs or the API. The NetBox change log shows the technical user.</p>
+<h2>A new access (the form)</h2>
+<table>
+<tr><th>Field</th><th>Required</th><th>Meaning</th></tr>
+<tr><td>Name</td><td>yes</td><td>the person's name (up to 150 characters)</td></tr>
+<tr><td>E-mail</td><td>yes</td><td>a valid address. It <strong>must not</strong> belong to another access or a NetBox account: if an account already has it, the page explains that the person should sign in with their own account (add it to the group as a regular user)</td></tr>
+<tr><td>Group</td><td>keeper no; manager yes</td><td>a group of a protected area. Without a group (keeper only) the person can only change their PIN. A manager chooses only from the groups of their section</td></tr>
+<tr><td>Access ends (optional)</td><td>no</td><td>a date and time in the future; afterwards the person cannot sign in. Empty = no end</td></tr>
+<tr><td>Idle (minutes)</td><td>–</td><td>30 by default (5 to 240)</td></tr>
+<tr><td>Session (hours)</td><td>–</td><td>8 by default (1 to 24)</td></tr>
+<tr><td>Allowed IP addresses (optional)</td><td>no</td><td>addresses or networks (e.g. <code>10.0.0.0/24</code>), separated by a comma, semicolon or newline; an invalid entry is refused</td></tr>
+<tr><td>Alias, Description (optional)</td><td>no</td><td>alias up to 100, description up to 150 characters</td></tr>
+<tr><td>PIN language; NetBox language</td><td>no</td><td>default / Slovenčina / English; the language of the PIN pages and e-mails, and the language of the NetBox interface for this person</td></tr>
+<tr><td>Working time</td><td>no</td><td>the general rules / own rules / no limit (see the Working time chapter)</td></tr>
+<tr><td>Send to the person (every change of the access)</td><td>–</td><td>see below</td></tr>
+</table>
+<h2>The person's first sign-in</h2>
+<ol>
+<li>The person gets a <strong>personal link</strong> by e-mail (valid <strong>7 days</strong>; <em>Send the link again</em> issues a new one and the old one stops). The link opens the page <em>Hello name</em>.</li>
+<li>They choose <strong>their own PIN</strong>: <strong>8 to 64 characters</strong> (not only digits), at least 4 different characters, <strong>unique</strong> among all accesses (<em>Choose another PIN</em> if somebody already has it). Nobody can read it, not even the administrator.</li>
+<li>The button <em>Set the PIN and sign in</em>. If the invitation expired: <em>Ask the administrator for a new one.</em></li>
+</ol>
+<p>If mail is not set up, the link is <strong>shown to the administrator on the screen</strong> (once, <em>Give this personal link yourself</em>).</p>
+<h2>Regular sign-in: one shared address</h2>
+<ul>
+<li>Everybody uses <strong>one shared page</strong> (<code>/pin/</code> by default) and enters <strong>only the PIN</strong>: the PIN tells who the person is. The address is chosen by a keeper on the page (<em>Address for signing in with a PIN</em>: part A and optionally B, e.g. <code>/tenants/</code> or <code>/aqer/x2/</code>; case-insensitive). The person saves it as a bookmark; it <strong>does not change</strong> until a keeper changes it (after a change they must save the new one).</li>
+<li>The personal link from the e-mail works too (the person is known there).</li>
+<li>If they forgot the PIN: <em>I forgot my PIN – send me a link to set a new one</em> (the address; the link is valid <strong>1 hour, once</strong>, at most one per minute; it does not work for a disabled or ended access).</li>
+</ul>
+<h2>What the person sees and cannot do</h2>
+<ul>
+<li>The welcome page: <em>You are signed in as name</em>, the PIN validity (days and hours), the <strong>working time</strong> (<em>Your working time</em>), after the end <em>It is over: one more save, then you only read</em>, the inactivity after which the session ends, and the list of accesses (<em>group X, you may…, valid until …</em>) with the button <em>Continue</em>. Without a group: <em>No access has been given to you yet. You can only change your PIN.</em> With the protection off: <em>The function is switched off by the administrator for now. You can only change your PIN.</em></li>
+<li>The user menu: <em>My access</em>, <em>Change my PIN</em>, <em>Sign out</em>. They have no password, 2FA, API or token; they are never a keeper, a manager or an exception. The account pages and the pages of the plugin are closed to them. They cannot make access requests.</li>
+<li>The drop-downs of forms work for them (brief API lists); the rest of the API is closed. They save their own table columns.</li>
+<li><strong>Changing the PIN</strong> (<em>Change my PIN</em>): the current PIN, the new PIN, the new PIN again. After the expiry or a forced change it is asked before continuing.</li>
+</ul>
+<h2>Wrong PINs</h2>
+<p>The rules are <em>Wrong PINs per step</em> (5 by default; 1 to 50) and <em>Waits after each step (seconds)</em> (<code>10,20,30</code> by default; 1 to 10 waits of 1 to 3600 s). They are set for everybody (<em>Rules for wrong PINs (defaults)</em>) and may also be own for one person; empty = the defaults.</p>
+<table>
+<tr><th>Where</th><th>What happens</th></tr>
+<tr><td><strong>The personal link</strong></td><td>the person is known: after every 5 wrong PINs a wait (10, 20, 30 s); after the last step the access is <strong>blocked</strong> (the person and the keepers get an e-mail). Only an administrator unblocks (<em>Unblock</em>), or the person sets a new PIN through an e-mail with a link</td></tr>
+<tr><td><strong>The shared page</strong></td><td>a wrong PIN cannot be put down to a person: the <strong>computer</strong> (its address) waits by the same steps, the last wait repeats, <strong>nobody is blocked</strong>, and the keepers get an e-mail after every full round (15 wrong PINs) <em>Wrong PINs from …</em></td></tr>
+</table>
+<p>A blocked person sees <em>Signing in is not possible</em> and the button <em>Ask the administrator to unblock my account</em> (at most once an hour; an e-mail to the administrator who disabled the access, or to the keepers).</p>
+<h2>Actions at a person</h2>
+<table>
+<tr><th>Action</th><th>What it does</th></tr>
+<tr><td>Unblock</td><td>the old PIN works again, counting from zero</td></tr>
+<tr><td>Send a reset e-mail</td><td>a link for a new PIN (valid 1 hour, once); the new PIN also unblocks</td></tr>
+<tr><td>Force a PIN change</td><td>at the next sign-in a new PIN is asked</td></tr>
+<tr><td>Send the link again</td><td>a new personal link (the old one stops)</td></tr>
+<tr><td>Reset the PIN</td><td>the PIN is cleared and a <strong>new personal link</strong> is sent through which the person chooses a new PIN (without mail the link is shown on the screen)</td></tr>
+<tr><td>Disable / Enable</td><td>disabling ends all sessions and blocks the sign-in (the person sees "disabled by X since …"); enabling gives the access back</td></tr>
+<tr><td>Delete</td><td>removes the access and the technical user</td></tr>
+</table>
+<p>At every person there is the unfoldable <strong>Activity and rules</strong>: <em>Sign-ins and PIN events</em>, <em>Changes in NetBox</em>, the forms <em>Alias and description</em> (and <em>Language of the PIN pages and e-mails</em>, <em>Language of the NetBox interface</em>), <em>Manager</em> (the keepers; under a section manager they run it, a keeper always can; a move under a manager), <em>E-mails</em>, <em>Working time</em>, <em>Account valid until</em> (empty = no end; after the end the person cannot sign in; they get an e-mail 30 days and 1 day before) and <em>Rules for wrong PINs</em>.</p>
+<h2>The person's session</h2>
+<p>The session ends after <em>Idle</em> minutes (30 by default; 5 to 240) or after at most <em>Session</em> hours (8 by default; 1 to 24), at the end of the access validity, after disabling, or when a request arrives from an address outside the allowed IP list. It is set for every access separately. After signing out the person returns to the shared PIN page.</p>
+<h2>E-mails both ways</h2>
+<table>
+<tr><th>Direction</th><th>What</th><th>Setting</th></tr>
+<tr><td><strong>To the person</strong></td><td>every action of an administrator: groups, disable / enable, PIN reset, unblock, validity, languages, rules, working time, manager, alias/description, deletion. The mail goes to their own address (whatever the allowed domains are) in their language</td><td><em>Send to the person</em> (the whole page) and <em>Send to the person (every change of the access)</em> at an access. If it is off on the page, <strong>that wins</strong></td></tr>
+<tr><td><strong>To the administrators</strong></td><td>what the person added, changed or deleted in NetBox (with the changed fields), to the administrator who created the access and to the keepers</td><td><em>Send to the administrators</em> (the whole page) and per access</td></tr>
+</table>
+<p>The administrators get the changes either as a <strong>summary</strong> every N minutes (<em>Summary every</em>: 5, 15, 30, 60, 120, 240 minutes or once a day; 60 by default), or <strong>at every change</strong> (one e-mail per change): <strong>never both at once</strong>. The subject at every change: <em>PinUser0001 made a change</em>; the body: time, object and the changed fields (from → to). The e-mail is sent after the save through the <code>netbox-rq</code> queue, so saving stays fast; the summaries are processed by the system job every 5 minutes. A keeper sets it in the card <em>E-mails (for everybody)</em>.</p>
+<div class="note">When a section manager works with an access, the keepers are told by e-mail (nothing happens quietly). An access made by a keeper belongs to the keepers until it is moved under a manager.</div>
+
+<h1>Working time</h1>
+<div class="facts">
+<div><strong>Who sets it:</strong> a keeper (the general rules and the rules of the individual accesses).</div>
+<div><strong>When:</strong> when PIN-only people are to work only in working hours.</div>
+<div><strong>Depends on:</strong> <em>Limit the working time of the PIN-only accesses</em> switched on (off by default), the <code>holidays</code> library for the holidays, the time zone of the server (<code>TIME_ZONE</code> in NetBox).</div>
+</div>
+<h2>The rules</h2>
+<p>The general rules are on the <em>People with a PIN only</em> page (the card <strong>Working time (for everybody)</strong>): <em>Limit the working time</em>, <em>Country (holidays)</em> (SK by default), <em>Days</em> (Mon–Fri by default), <em>From</em> (06:00) and <em>To</em> (16:00). At every access you can choose:</p>
+<table>
+<tr><th>Option</th><th>Meaning</th></tr>
+<tr><td><em>the general rules</em></td><td>the rule of the page applies (if the limit is on; otherwise no limit)</td></tr>
+<tr><td><em>own rules</em></td><td>an own country, days and hours (e.g. a Hungarian technician with the Hungarian holidays)</td></tr>
+<tr><td><em>no limit</em></td><td>the person has no limit at all</td></tr>
+</table>
+<p>Countries: SK, CZ, HU, AT, PL, DE, UA, HR, SI, RO, BG, RS, GB, IE, FR, ES, IT, NL, BE, CH, SE, NO, DK, FI, PT, GR, LT, LV, EE, US, CA. The public holidays come from the <code>holidays</code> library (works offline, needs <code>pip install holidays</code>; without it the page reports <em>The library of public holidays is not installed</em> and only days and hours are checked). The holidays follow the law the library implements: for example in Slovakia in 2026 the days off are 1 Jan, 6 Jan, Good Friday, Easter Monday, 1 May, 5 Jul, 29 Aug, 1 Nov and 24, 25, 26 Dec, while 8 May, 1 Sep, 15 Sep and 17 Nov are working days. The plugin has no vacations or custom company days.</p>
+<h2>What happens outside the time</h2>
+<ul>
+<li>The person <strong>can sign in and read</strong>, but <strong>cannot save or change anything</strong>: no saving, adding, editing, deleting or writing through the API. Forbidden requests are redirected with a message (<em>Outside your working time (…) you can only read</em>), the API answers 403.</li>
+<li>The working time is <strong>always visible</strong>: on the welcome page and in the top bar, in the person's language. On a holiday <em>Today is a public holiday (name)</em> is written before it.</li>
+<li>When the time ends <strong>while they work</strong>: <strong>30 minutes and one save</strong>, then only reading.</li>
+<li>The state of a day: in time / just ended (30 minutes) / before the start / after the end / a day off or a holiday.</li>
+</ul>

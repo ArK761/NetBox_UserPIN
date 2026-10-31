@@ -1,0 +1,148 @@
+<h1>Server commands</h1>
+<div class="facts">
+<div><strong>Who:</strong> the server administrator (root).</div>
+<div><strong>When:</strong> at installation, key replacement, in an emergency (a lost phone, a locked protection, non-working administrators).</div>
+<div><strong>Depends on:</strong> the NetBox virtual environment activated. Emergency commands are written to the audit log.</div>
+</div>
+<p>They are run like this (replace <code>&lt;command&gt;</code>):</p>
+<pre>sudo bash -c 'source /opt/netbox/venv/bin/activate &amp;&amp; cd /opt/netbox/netbox &amp;&amp; python manage.py &lt;command&gt;'</pre>
+<table>
+<tr><th>Command</th><th>What it does</th></tr>
+<tr><td><code>userpin_generate_key [--key-id k1]</code></td><td>generates a random encryption key (prints it, stores nothing)</td></tr>
+<tr><td><code>userpin_rotate_key</code></td><td>re-encrypts everything under the active key (PIN hashes, 2FA, backup codes, SMTP password); in one transaction, on an error nothing changes</td></tr>
+<tr><td><code>userpin_check</code></td><td>verifies that everything stored under the keys can be decrypted and shows how many values and PIN-only people wait for an old key</td></tr>
+<tr><td><code>userpin_keeper [--add name]</code></td><td>shows the keepers or appoints one (audit, e-mail to all keepers and superusers)</td></tr>
+<tr><td><code>userpin_default_deny [--on | --off]</code></td><td>shows or switches the global protection (audit, e-mail; switching on needs a keeper)</td></tr>
+<tr><td><code>userpin_area_owners &lt;area&gt; [--set names…] [--force]</code></td><td>shows or replaces the managers of an area (audit); without <code>--force</code> it refuses people who could not be managers</td></tr>
+<tr><td><code>userpin_reset_2fa &lt;user&gt;</code></td><td>removes the 2FA in an emergency (e.g. the master without the phone and backup codes; audit)</td></tr>
+<tr><td><code>userpin_access_test &lt;user&gt; [--url …] [--all] [--writes]</code></td><td>shows what a user gets from the pages, the REST API (browser) and the lists (a test of the protection). <code>--url</code> adds one more address, <code>--all</code> tries every NetBox page, <code>--writes</code> also an add, a change and a delete</td></tr>
+</table>
+
+<h1>Check: pin_check.sh</h1>
+<div class="facts">
+<div><strong>Who:</strong> the administrator; the script can also be run from a computer other than the server.</div>
+<div><strong>When:</strong> after the installation, after updating the plugin and NetBox.</div>
+<div><strong>Depends on:</strong> <code>curl</code>; with <code>--server</code> root on the NetBox server.</div>
+</div>
+<p>The script <code>tools/pin_check.sh</code> (in the repository) checks everything that can be checked from outside and with <code>--server</code> also on the server. It never stores or prints a PIN or a token (the PIN is asked silently). The result is the number of <strong>OK</strong> / <strong>FAIL</strong> / <strong>WARN</strong>.</p>
+<pre>bash pin_check.sh http://172.30.1.25                                  # anonymous checks only
+bash pin_check.sh http://172.30.1.25 --pin /pin/                      # + signs in a PIN-only person
+NB_TOKEN=xxxx bash pin_check.sh http://172.30.1.25                    # + checks with an API token
+sudo bash pin_check.sh http://127.0.0.1 --pin /pin/ --server          # + migrations, services, keys, keepers</pre>
+<p>Options: <code>--pin &lt;path&gt;</code> (the address of the PIN-only page, <code>/pin/</code> by default), <code>--wrong</code> (tries <strong>one</strong> wrong PIN; it counts as a wrong attempt), <code>--write</code> (tries to add a tenant as the PIN-only person and deletes it), <code>--server</code> (needs root). Variables: <code>NB_TOKEN</code>, <code>NB_VENV</code>, <code>NB_DIR</code>, <code>LIST</code>.</p>
+<p>The checks have sections: 0 reachable; 1 nobody signed in; 2 with an API token; 3 a PIN-only person; 4 what the person must never reach; 5 a page the person may open; 6 adding as the PIN-only person; 7 sign out; 8 on the server (migrations, services, keys, keepers). Known harmless warnings: <code>/static/docs/</code> is served by nginx (closed with <code>location /static/docs/ { return 404; }</code>) and <code>LOGIN_REQUIRED</code> is not <code>True</code> (set it in <code>configuration.py</code>; NetBox 5.0 removes it).</p>
+
+<h1>Security model</h1>
+<pre>PIN ──Argon2id + salt──► hash ──AES-256-GCM (key from the configuration, bound to the user id)──► database</pre>
+<ul>
+<li>A database dump alone contains nothing usable, not even something to brute-force offline.</li>
+<li>The ciphertext is bound to its user: a hash copied into another user's row does not decrypt.</li>
+<li>Wrong attempts are counted under a row lock, so parallel guessing cannot bypass the lockout.</li>
+<li>A PIN change or reset invalidates every unlock. TOTP secrets are encrypted the same way; a TOTP code is accepted only once.</li>
+<li>Backup codes (100 bits) and e-mailed codes are stored only as digests, single use, short-lived.</li>
+<li>Recovery never bypasses 2FA. The PIN is only an authentication factor ("it is really you at this computer"); it is not used as an encryption key for other data.</li>
+<li><strong>Requests with an API token are not judged by the plugin's PIN</strong> (a token carries NetBox permissions): that is why own tokens are off by default and are allowed one by one for exceptions.</li>
+<li>Access to the server is ruled by the firewall; the plugin does not enforce a separate port or hostname for the PIN-only sign-in, if needed it is solved in nginx and the firewall.</li>
+<li>Anybody with root or database access on the server can bypass any plugin: the answer is the audit.</li>
+</ul>
+
+<h1>Using it from another plugin</h1>
+<div class="facts">
+<div><strong>Who:</strong> the developer of a NetBox plugin.</div>
+<div><strong>When:</strong> when another plugin is to protect sensitive pages with a PIN.</div>
+<div><strong>Depends on:</strong> <code>netbox-user-pin</code> as a dependency of the plugin; the API version (<code>service.API_VERSION</code> = 2, <code>areas.API_VERSION</code> = 1; the API only grows).</div>
+</div>
+<pre>from netbox_user_pin.mixins import PinRequiredMixin, StepUpRequiredMixin, pin_required, step_up_required
+
+class ProjectView(PinRequiredMixin, generic.ObjectView):
+    pin_scope = 'projects'          # used when the scope mode is "separate per scope"
+
+class ProjectDeleteView(StepUpRequiredMixin, generic.ObjectDeleteView):
+    ...                             # a sensitive action: a fresh PIN + 2FA
+
+@pin_required(scope='projects')
+def download(request, pk): ...</pre>
+<p>The user is redirected to <em>set PIN</em>, <em>change PIN</em> (expired) or <em>enter PIN</em> and then back. HTMX requests get an <code>HX-Redirect</code> header.</p>
+<p>The service API <code>netbox_user_pin.service</code>: <code>has_pin(user)</code>, <code>is_unlocked(request, scope)</code>, <code>unlock(request, pin, scope)</code>, <code>verify_pin(user, pin)</code>, <code>lock(request)</code>, <code>has_step_up(request)</code>, <code>has_2fa(user)</code>, <code>is_allowed(user)</code>. Signals (<code>netbox_user_pin.signals</code>, <code>sender=UserPin</code>): <code>pin_set</code>, <code>pin_changed</code>, <code>pin_reset</code>, <code>pin_unlocked</code>, <code>pin_failed</code>, <code>pin_locked_out</code>, <code>pin_locked</code>.</p>
+<h2>An area of a plugin</h2>
+<pre>from netbox_user_pin import areas
+
+# in ready(): the area is active while the plugin's own "PIN integration" switch is on
+areas.register('netbox_libreoxi', 'LibreOXI', targets=['netbox_libreoxi'],
+               rights={'config': 'View device configurations'},
+               profiles=[('Logs only', ['view']), ('Configurations', ['view', 'config'])],
+               enabled=lambda: LibreOXISettings.objects.first().pin_integration)
+
+# in a view, for the finer rights
+if (response := areas.require(request, 'netbox_libreoxi', 'config')) is not None:
+    return response            # the "no access - request it" page
+areas.can(request.user, 'netbox_libreoxi', 'config')   # True / False</pre>
+
+<h1>Troubleshooting</h1>
+<table>
+<tr><th>Message / symptom</th><th>Cause and solution</th></tr>
+<tr><td><code>ModuleNotFoundError: No module named 'argon2'</code></td><td>With <code>--no-deps</code> the dependencies were not installed: <code>pip install "argon2-cffi&gt;=23.1" "cryptography&gt;=42" "segno&gt;=1.5" "holidays&gt;=0.50"</code>.</td></tr>
+<tr><td><code>CommandError: No installed app with label 'netbox_user_pin'</code></td><td>The plugin is not in the <code>PLUGINS</code> list in <code>configuration.py</code>. Add <code>'netbox_user_pin'</code> and repeat <code>migrate</code>.</td></tr>
+<tr><td>NetBox does not start after a configuration change</td><td>A key error at start (see the Installation chapter), or an error in <code>configuration.py</code> (a comma, an apostrophe). See <code>journalctl -u netbox -n 80</code>.</td></tr>
+<tr><td>pip: <em>holidays requires python-dateutil&lt;3 but you have 3.0.0</em></td><td>A harmless warning: <code>holidays</code> works with dateutil 3 (verify by listing the holidays). Do not install <code>python-dateutil&lt;3</code>, you could break NetBox.</td></tr>
+<tr><td><code>userpin_check</code> reports an error</td><td>A wrong or missing key. Do not change <code>k1</code> until the plugin is confirmed to work.</td></tr>
+<tr><td>E-mails do not arrive</td><td>See the chapter E-mails: when they do not arrive.</td></tr>
+<tr><td>A role cannot be added: "has no e-mail in a verified domain"</td><td>The invitee has no address in a verified domain or mail is not set up. Verify the domain on the Mail page.</td></tr>
+<tr><td>A user without rights sees Admin → API Tokens</td><td>NetBox standard (<code>DEFAULT_PERMISSIONS</code>). For an exception the plugin hides it unless "API tokens" is allowed.</td></tr>
+<tr><td>403 on an account page for an exception</td><td>That part is not allowed: the keeper ticks it with the exception.</td></tr>
+<tr><td>A group gives a user nothing</td><td>He has an exception: the group does not apply while the exception lasts.</td></tr>
+<tr><td>A PIN-only person can only read</td><td>It is outside the working time (or a holiday), or the protection is off.</td></tr>
+<tr><td>A PIN-only person sees nothing</td><td>No group, or the protection is off.</td></tr>
+<tr><td>The summaries of changes of the people do not arrive</td><td><code>netbox-rq</code> is not running or <em>Send to the administrators</em> is off.</td></tr>
+<tr><td>The upgrade put a plugin back to an older version</td><td>The pinned tag/commit is missing in <code>local_requirements.txt</code>, or the line has no <code>@…</code> (then <code>main</code> is taken).</td></tr>
+</table>
+
+<h1>Changes</h1>
+<p>The version in the code is <strong>2.0.0</strong> (the GitHub release) and <strong>2.0.1</strong> (branch <code>feature/exception-allowlist</code>). The original base was 0.38.4 (commit 7bed7de); the interim numbers 2.0.1 to 2.2.2 in the commit history were working labels, everything is part of the 2.0.0 line and is split by topic below.</p>
+<h2>2.0.1: permissions of exceptions</h2>
+<ul>
+<li>An exception is no longer "all or nothing": the keeper ticks what the user may use (the password allowed by default; profile, preferences, bookmarks, notifications, subscriptions, API tokens and the API with a token to be allowed).</li>
+<li>What is not allowed is hidden from the menu and the tabs and refused by the address (403); a token without the allowed API is refused. A keeper is never limited.</li>
+<li>A "Change the password" link in the user menu; the bell is hidden when notifications are not allowed.</li>
+<li>An arrow ▾ under the name of the user with check boxes and green/red tags; an existing user is not offered again and adding one again resets nothing.</li>
+<li>New field <code>PolicyException.allowed</code> (migration <code>0042</code>); Slovak translation.</li>
+</ul>
+<h2>Keys and security</h2>
+<ul>
+<li>Key rotation covers 2FA, backup codes, the SMTP password and the index of the PIN-only people too; <code>userpin_check</code> verifies all encrypted values.</li>
+<li>Removing the PIN of a user without 2FA; <code>userpin_area_owners</code> checks eligibility.</li>
+<li>The master manages PINs while there is no CORE deputy, even with existing keepers.</li>
+</ul>
+<h2>The new model of protection</h2>
+<ul>
+<li>The PIN rules only the PIN-only people and the users in a group or section managers; everybody else works by NetBox permissions (menu and API keys included).</li>
+<li>PIN-only people are no NetBox users (hidden from lists), have no requests and without a group can only change the PIN.</li>
+<li>Protection ON rules everybody but keepers and exceptions; OFF leaves NetBox alone and pauses the PIN-only people. The ON/OFF switch is in the interface (keepers only) and shows the real state. Exception vs. group: the group waits under the exception.</li>
+<li>Protection keepers: the last-keeper rule, emergency commands (<code>userpin_keeper</code>, <code>userpin_default_deny</code>).</li>
+</ul>
+<h2>Section managers and requests</h2>
+<ul>
+<li>A section manager with full power over his section (the keepers above); PIN-only people under a manager; requests to the manager and the keepers with e-mails about the decisions.</li>
+<li>Appointed only by a keeper; relaxed eligibility (PIN + 2FA, no department role).</li>
+</ul>
+<h2>PIN-only people</h2>
+<ul>
+<li>E-mails both ways: the person about the changes of an administrator; the administrators a summary every N minutes or at every change (not both), subject <em>PinUserNNNN made a change</em>, body: time, object, changed fields (from → to); sent after the save through <code>netbox-rq</code>.</li>
+<li>The drop-downs of forms work; saving own table columns.</li>
+<li>Conditions on relation fields: contains / starts with / is one of, several values, the Conditions button.</li>
+</ul>
+<h2>Working time</h2>
+<ul>
+<li>General and own rules, a country with its public holidays (the <code>holidays</code> library), working days and hours; the working time always shown.</li>
+<li>Read-only outside the time; 30 minutes and one save after the end; the country in the language of the person, days as Mon–Fri.</li>
+</ul>
+<h2>Tools</h2>
+<ul>
+<li><code>tools/pin_check.sh</code>: a check from outside and on the server; the dependency <code>holidays</code> in <code>pyproject.toml</code>; Slovak translations; a prepared <code>local_requirements.txt</code> for upgrading NetBox within 4.7.x.</li>
+</ul>
+<h2>What the plugin does not do yet</h2>
+<ul>
+<li>Vacations and custom company days in the working time.</li>
+<li>The API for regular users in a group is still governed by the group rights (not fully closed).</li>
+<li>A separate port/hostname for the PIN-only sign-in (solved in nginx and the firewall).</li>
+</ul>

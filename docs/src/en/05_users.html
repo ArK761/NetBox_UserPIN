@@ -1,0 +1,49 @@
+<h1>Users (the PIN page)</h1>
+<div class="facts">
+<div><strong>Who sees it:</strong> CORE (master and deputies) everybody; heads and delegates only their department. An ordinary user does not have the page.</div>
+<div><strong>When:</strong> in PIN administration: allowing, resets, suspension, clearing lockouts.</div>
+<div><strong>Depends on:</strong> the administrator's role (the Roles chapter); a PIN or PIN + 2FA confirmation before the first action.</div>
+</div>
+<p>Menu <strong>User PIN → Users</strong>, heading <em>User PINs</em>.</p>
+<h2>Filters</h2>
+<ul>
+<li><strong>Search</strong> (name, e-mail).</li>
+<li><strong>Status:</strong> All users / PIN active / No PIN yet / No 2FA / E-mail issue (missing / domain) / Locked out / Suspended / Not permitted.</li>
+<li><strong>Department:</strong> all / without a department / a given one. <strong>Role:</strong> all / master / head / delegate / invited / without a role.</li>
+<li><strong>View:</strong> <em>List</em> or <em>By departments</em> (a tree: head → delegates → members; department colours: green = a head and at least 2 delegates, yellow = delegates missing, red blinking = no head).</li>
+</ul>
+<h2>Columns</h2>
+<table>
+<tr><th>Column</th><th>Values</th></tr>
+<tr><td>User</td><td>the account (+ the name when <em>Show first and last name</em> is on); tags <em>you</em>, <em>master</em>, <em>head</em>, <em>delegate</em>, <em>invited</em>, <em>inactive</em></td></tr>
+<tr><td>Permitted</td><td><em>allowed</em> / <em>denied</em> / default (decided by the mode in Settings); <em>Yes</em> / <em>No</em> = whether the user may use a PIN now</td></tr>
+<tr><td>PIN</td><td><em>Active</em>, <em>Not set</em>, <em>must change</em>, <em>suspended</em>, <em>PIN reset pending</em>, <em>2FA reset pending</em></td></tr>
+<tr><td>2FA</td><td>On / Off</td></tr>
+<tr><td>E-mail</td><td>the address, or <em>no e-mail</em> / <em>domain</em> (outside the verified domains): without it e-mails do not arrive</td></tr>
+<tr><td>Valid until</td><td>a date or <em>expired</em> (and the rotation every N days)</td></tr>
+<tr><td>Last used; Lockout</td><td>time; until when it is locked</td></tr>
+</table>
+<h2>Actions for a user</h2>
+<table>
+<tr><th>Action</th><th>Confirmation</th><th>What it does</th></tr>
+<tr><td><strong>Allow</strong> / <strong>Deny</strong> / <strong>Default</strong></td><td>PIN</td><td>sets the flag of the user (see the table in the My PIN chapter). With four-eyes approval on for the category "allowing PIN use" it creates a request</td></tr>
+<tr><td><strong>Reset PIN</strong></td><td>PIN + 2FA</td><td>starts a reset; the user confirms it in their own session with a <strong>2FA code</strong> and sets a new PIN. Valid for <em>Administrator reset valid</em> hours (24 by default). The old PIN works until the user confirms</td></tr>
+<tr><td><strong>Reset 2FA</strong></td><td>PIN + 2FA</td><td>starts a reset; the user confirms it with the <strong>PIN</strong> and sets up 2FA on a new phone</td></tr>
+<tr><td><strong>Cancel reset</strong></td><td>PIN + 2FA</td><td>cancels a pending reset</td></tr>
+<tr><td><strong>Suspend</strong> / <strong>Lift suspension</strong></td><td>PIN + 2FA</td><td>blocks the PIN at once (suspected leak, absence), alone, without a second person; the user gets an e-mail</td></tr>
+<tr><td><strong>Clear lockout</strong></td><td>PIN</td><td>clears the lockout after wrong attempts</td></tr>
+<tr><td><strong>Force change</strong></td><td>PIN</td><td>the user must change the PIN at the next use</td></tr>
+<tr><td><strong>Remove PIN</strong></td><td>PIN + 2FA</td><td>only for a user <strong>without 2FA</strong> who cannot confirm a reset: the PIN is removed and the user sets a new one at the next prompt. With 2FA a reset must be started</td></tr>
+</table>
+<div class="note">A reset never reveals the new PIN to the administrator. The administrator starts the reset, the user finishes it.</div>
+<h2>Who may manage whom</h2>
+<table>
+<tr><th>Administrator</th><th>Whom they may manage</th></tr>
+<tr><td>Master (superuser)</td><td>everybody except themselves</td></tr>
+<tr><td>CORE deputy</td><td>everybody except the master, other CORE deputies and themselves</td></tr>
+<tr><td>Department head</td><td>the members of their department except themselves and other heads</td></tr>
+<tr><td>Department delegate</td><td>the members of their department who have <strong>no role</strong></td></tr>
+</table>
+<p>Nobody manages themselves (you change your own PIN in <em>My PIN</em>). On a forbidden action the page answers: <em>Delegates cannot manage the master, other delegates or themselves.</em></p>
+<h2>Emergency 2FA reset</h2>
+<p>In the <em>Actions</em> menu at a user there is <em>Emergency: server command (2FA)</em>: a ready-made <code>userpin_reset_2fa</code> command to run as root. Use it only when the normal way (a reset confirmed by the user with the PIN) is not possible. The 2FA is removed at once and the event is written to the audit log.</p>

@@ -1,0 +1,118 @@
+<h1>What the plugin needs and what it adds to NetBox</h1>
+<div class="facts">
+<div><strong>Who:</strong> the server administrator (command line and <code>configuration.py</code> access).</div>
+<div><strong>When:</strong> before the first installation; at every plugin or NetBox update.</div>
+<div><strong>Depends on:</strong> NetBox 4.7.0 or newer, Python 3.12+, a running <code>netbox-rq</code> worker, internet access (GitHub, PyPI) during installation.</div>
+</div>
+<h2>Requirements</h2>
+<table>
+<tr><th>What</th><th>Details</th></tr>
+<tr><td>NetBox</td><td>version <strong>4.7.0 or newer</strong> (the plugin has <code>min_version = 4.7.0</code> and no upper limit). With an older NetBox the plugin does not load.</td></tr>
+<tr><td>Python</td><td>3.12 or newer (<code>requires-python &gt;= 3.12</code>).</td></tr>
+<tr><td><code>netbox-rq</code> worker</td><td>The plugin registers a system job <strong>User PIN role housekeeping</strong> that runs <strong>every 5 minutes</strong>. It expires invitations and moves, sends reminders, returns rights after a temporary hand-over, announces the end of PIN-only accesses and sends the summaries of changes. The e-mails about the changes of a PIN-only person also go through the <code>default</code> queue. When the worker does not run, these things are not done.</td></tr>
+<tr><td>Database</td><td>the tables of the plugin are created by <code>migrate</code> (migrations 0001 to 0042).</td></tr>
+</table>
+<h2>Dependencies (Python packages)</h2>
+<table>
+<tr><th>Package</th><th>What it is for</th><th>When missing</th></tr>
+<tr><td><code>argon2-cffi &gt;= 23.1</code></td><td>PIN hashing (Argon2id)</td><td>NetBox does not start: <code>ModuleNotFoundError: No module named 'argon2'</code></td></tr>
+<tr><td><code>cryptography &gt;= 42</code></td><td>AES-256-GCM encryption and key derivation (HKDF)</td><td>NetBox does not start</td></tr>
+<tr><td><code>segno &gt;= 1.5</code></td><td>the QR code of the 2FA setup</td><td>the pages of the plugin do not load (import error of <code>segno</code>)</td></tr>
+<tr><td><code>holidays &gt;= 0.50</code></td><td>public holidays for the working time of the PIN-only people</td><td>the plugin runs, only days and hours are checked (no holidays)</td></tr>
+</table>
+<div class="warn"><strong>Mind it:</strong> installing with <code>--no-deps</code> does not install the dependencies. On a server where the plugin has never been, install them separately (see the Installation chapter).</div>
+<h2>What the plugin adds to NetBox</h2>
+<ul>
+<li><strong>The menu "User PIN"</strong> with the items: <em>My PIN</em>, <em>My roles</em>, <em>My access</em>, <em>Test unlock</em>, <em>People with a PIN only</em>, <em>Users</em>, <em>Departments</em>, <em>Protected areas</em>, <em>Approvals (four eyes)</em>, <em>Audit log</em>, <em>Settings</em>, <em>Mail</em>, <em>CORE (deputies)</em>. Which item a user sees depends on the role (see the Roles chapter).</li>
+<li><strong>The address of the plugin</strong>: <code>/plugins/user-pin/</code>.</li>
+<li><strong>Two middleware classes</strong> that are added automatically: <code>PluginLanguageMiddleware</code> (language of the plugin pages) and <code>AreaGuardMiddleware</code> (the guard of the protected areas and of the global protection). They are not written into <code>configuration.py</code>.</li>
+<li><strong>Three event types</strong> in the NetBox notifications (the bell): <em>PIN four-eyes approval requested</em>, <em>PIN area access requested</em>, <em>PIN role / department change</em>.</li>
+<li><strong>NetBox permissions</strong> named <code>User PIN: …</code> (deputies, settings editors, departments). The plugin creates and manages them itself: do not edit them by hand.</li>
+</ul>
+
+<h1>Installation</h1>
+<div class="facts">
+<div><strong>Who:</strong> the server administrator (<code>root</code> or <code>sudo</code>).</div>
+<div><strong>When:</strong> once, on every NetBox server separately (test, production).</div>
+<div><strong>Depends on:</strong> the chapter What the plugin needs; a generated key (next chapter).</div>
+</div>
+<h2>1. Packages</h2>
+<pre>source /opt/netbox/venv/bin/activate
+pip install "argon2-cffi&gt;=23.1" "cryptography&gt;=42" "segno&gt;=1.5" "holidays&gt;=0.50"
+pip install --upgrade --force-reinstall --no-deps "git+https://github.com/ArK761/NetBox_UserPIN.git@2.0.0"</pre>
+<p>Instead of <code>@2.0.0</code> you can use any tag or commit. After the installation pip may print a warning about <code>python-dateutil</code> (see Troubleshooting): it is harmless.</p>
+<h2>2. The encryption key</h2>
+<p>Generate it and store it aside <strong>before</strong> you switch the plugin on. The procedure is in the chapter <em>Encryption key</em>.</p>
+<h2>3. Configuration</h2>
+<p>In <code>/opt/netbox/netbox/netbox/configuration.py</code> add <code>'netbox_user_pin'</code> to <code>PLUGINS</code> and a block to <code>PLUGINS_CONFIG</code>:</p>
+<pre>PLUGINS = [
+    # ... your other plugins ...
+    'netbox_user_pin',
+]
+
+PLUGINS_CONFIG = {
+    # ... the settings of the other plugins ...
+    'netbox_user_pin': {
+        'encryption_keys': {'k1': '&lt;your key&gt;'},
+        'active_key_id': 'k1',
+    },
+}</pre>
+<div class="warn"><strong>Mind the two blocks.</strong> If you already have other plugins in <code>PLUGINS</code> and <code>PLUGINS_CONFIG</code>, the line and the block are <strong>added</strong>, not replaced. Check the commas and apostrophes as well: an error in the file stops the whole NetBox.</div>
+<h2>4. Migrations and restart</h2>
+<pre>cd /opt/netbox/netbox
+python manage.py migrate netbox_user_pin
+sudo systemctl restart netbox netbox-rq</pre>
+<p><code>migrate netbox_user_pin</code> creates the tables of the plugin. If it reports <em>No installed app with label 'netbox_user_pin'</em>, the plugin is not in the <code>PLUGINS</code> list.</p>
+<h2>5. Check that everything runs</h2>
+<pre>python manage.py showmigrations netbox_user_pin | tail -3      # every line has [X]
+python manage.py userpin_check                                  # after a fresh install: OK: 0 ... failed: 0
+systemctl is-active netbox netbox-rq                            # active, active</pre>
+<p><strong>User PIN</strong> appears in the NetBox menu. In <em>Settings</em> there is the card <em>Encryption key</em> with the active key and its fingerprint.</p>
+<h2>6. First steps in the interface</h2>
+<ol>
+<li>Sign in as superuser → <strong>User PIN → My PIN</strong> → <em>Set PIN</em> and <em>Set up 2FA</em> (administrative actions need 2FA).</li>
+<li>On the <strong>Mail</strong> page set up sending and verify at least one domain (see the E-mails chapter).</li>
+<li>On the <strong>Users</strong> page allow those who are to use a PIN.</li>
+</ol>
+<h2>What happens when the configuration is wrong</h2>
+<p>At start the plugin checks the keys and <strong>NetBox does not start</strong> if there is a problem (a key is never generated or switched silently). So always watch <code>journalctl -u netbox -n 50</code> after editing <code>configuration.py</code>.</p>
+<table>
+<tr><th>Start-up error</th><th>Cause</th></tr>
+<tr><td><code>encryption_keys must be a non-empty dict</code></td><td><code>encryption_keys</code> is missing or empty</td></tr>
+<tr><td><code>invalid key id '…'</code></td><td>the key id is empty or contains a colon (<code>:</code>)</td></tr>
+<tr><td><code>must be a base64 32 byte key or a secret of at least 32 characters</code></td><td>the key is shorter than 32 characters and is not a valid base64 key</td></tr>
+<tr><td><code>several encryption keys are configured; set 'active_key_id'</code></td><td>there are several keys and <code>active_key_id</code> is missing</td></tr>
+<tr><td><code>active_key_id '…' is not in encryption_keys</code></td><td>the active id is not among the keys</td></tr>
+</table>
+<h2>Optional settings in the configuration</h2>
+<table>
+<tr><th>Setting</th><th>Default</th><th>Meaning</th></tr>
+<tr><td><code>encryption_keys</code></td><td>– (required)</td><td>a dictionary <code>{key_id: key}</code></td></tr>
+<tr><td><code>active_key_id</code></td><td>the only key</td><td>the key for new encryptions; required when there are several keys</td></tr>
+<tr><td><code>argon2_time_cost</code></td><td>3</td><td>Argon2id iterations</td></tr>
+<tr><td><code>argon2_memory_cost</code></td><td>65536</td><td>Argon2id memory in KiB (64 MiB)</td></tr>
+<tr><td><code>argon2_parallelism</code></td><td>4</td><td>Argon2id lanes</td></tr>
+<tr><td><code>cli_venv</code></td><td>/opt/netbox/venv</td><td>the path the plugin shows in the emergency 2FA reset command</td></tr>
+<tr><td><code>cli_netbox_dir</code></td><td>/opt/netbox/netbox</td><td>the same for the NetBox directory</td></tr>
+</table>
+<p>Everything else is set in the interface (<strong>User PIN → Settings</strong> and <strong>Mail</strong>).</p>
+
+<h1>Updating the plugin and NetBox</h1>
+<div class="facts">
+<div><strong>Who:</strong> the server administrator.</div>
+<div><strong>When:</strong> at a new version of the plugin or NetBox.</div>
+<div><strong>Depends on:</strong> a database backup (before a migration), the pinned version in <code>local_requirements.txt</code>.</div>
+</div>
+<h2>Updating just the plugin (one line)</h2>
+<pre>sudo bash -c 'source /opt/netbox/venv/bin/activate &amp;&amp; pip install --upgrade holidays &amp;&amp; pip install --upgrade --force-reinstall --no-deps "git+https://github.com/ArK761/NetBox_UserPIN.git@&lt;tag-or-commit&gt;" &amp;&amp; cd /opt/netbox/netbox &amp;&amp; python manage.py migrate netbox_user_pin &amp;&amp; systemctl restart netbox netbox-rq'</pre>
+<div class="warn"><strong>Production:</strong> back up the database before the migration, for example <code>sudo -u postgres pg_dump netbox | gzip &gt; /root/netbox-$(date +%F-%H%M).sql.gz</code>. Do not touch the keys in <code>configuration.py</code> meanwhile.</div>
+<h2>Upgrading NetBox itself</h2>
+<p><code>upgrade.sh</code> creates the virtual environment <strong>anew</strong> and installs only what is in <code>requirements.txt</code> and <code>local_requirements.txt</code>. A plugin that is not listed there disappears after the upgrade. Lines in <code>/opt/netbox/local_requirements.txt</code>:</p>
+<pre>netbox-librenms-plugin
+netbox-qrcode
+git+https://github.com/ArK761/NetBox_UserPIN.git@2.0.0</pre>
+<ul>
+<li>A package from PyPI needs only its name. A plugin from GitHub needs the whole link.</li>
+<li>A line without <code>@…</code> installs the <strong>latest commit of the <code>main</code> branch</strong> (not the latest release; pip does not know GitHub Releases, only branches, tags and commits). If the code of a plugin is on another branch, keep the pinned commit.</li>
+<li>After the upgrade check the plugin versions (the badge <em>User PIN vX · commit</em>) and run <code>userpin_check</code>.</li>
+</ul>

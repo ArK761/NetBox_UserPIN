@@ -1,0 +1,62 @@
+<h1>Roles: CORE and departments</h1>
+<div class="facts">
+<div><strong>Who:</strong> the master (superuser) appoints CORE deputies. CORE creates departments and appoints heads. Heads invite delegates. A delegate manages the members without a role.</div>
+<div><strong>When:</strong> when PINs are managed not by one person but by several; after the installation the master alone is enough.</div>
+<div><strong>Depends on:</strong> a PIN and 2FA of every role holder, an e-mail in a verified domain (the invitation), mail set up, a running <code>netbox-rq</code> (reminders, expiry of invitations).</div>
+</div>
+<pre>CORE        master (superusers) + CORE deputies        manages everybody
+Department  head + delegates (min. 2) + members          the PINs of the members of the department</pre>
+<h2>Who sees and does what</h2>
+<table>
+<tr><th>Menu</th><th>Master</th><th>CORE deputy</th><th>Head</th><th>Delegate</th><th>User</th></tr>
+<tr><td>My PIN, My roles</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td></tr>
+<tr><td>Users</td><td>all</td><td>all</td><td>own department</td><td>own department</td><td>–</td></tr>
+<tr><td>Departments</td><td>all</td><td>all</td><td>own: invite delegates, hand over, ask for a move</td><td>own: read, with a second delegate invite and hand over</td><td>–</td></tr>
+<tr><td>Audit log, Approvals</td><td>all</td><td>all</td><td>own department</td><td>own department</td><td>–</td></tr>
+<tr><td>Settings, Mail</td><td>edit</td><td>read (edit with the permission)</td><td>–</td><td>–</td><td>–</td></tr>
+<tr><td>CORE (deputies)</td><td>✓</td><td>–</td><td>–</td><td>–</td><td>–</td></tr>
+</table>
+<p>Who may manage whom (the actions on the Users page) is in the Users chapter.</p>
+<h2>An invitation to a role</h2>
+<p>Every role (CORE deputy, head, delegate, temporary head, replacement) is an <strong>invitation</strong>:</p>
+<ol>
+<li>The inviter chooses a user and the <strong>validity of the invitation: 12, 24, 36 or 48 hours</strong> (the page rejects any other value).</li>
+<li>The invitee gets an e-mail explaining the role and the responsibility, with a link and a code, and a notice in the bell.</li>
+<li>The invitee opens the invitation. If they have no PIN or 2FA yet, the page first sends them to <strong>set them up</strong> (<em>First set up</em> PIN and 2FA) and then they return.</li>
+<li>The invitee <strong>accepts</strong> the invitation with the code from the e-mail, their PIN and a 2FA code (the code may be entered at most 5 times), or <strong>declines</strong> it. Only by accepting does the role start.</li>
+</ol>
+<p><strong>Who can be invited:</strong> an active user who is not a superuser (the master needs no role), has no denied PIN, <strong>has an e-mail in a verified domain and mail is set up</strong> (otherwise the invitation would not arrive; the page refuses and says why), has no same role or open invitation. A CORE deputy cannot hold a department role; a person in another department must be moved first. <strong>A delegate can be invited only when the department has a head</strong>: first the head, then the delegates. If an invitation expires it can be sent again (<em>Send again</em>) or cancelled.</p>
+<h2>Minimum and the end of a role</h2>
+<ul>
+<li><strong>Minimum:</strong> with four-eyes approval on at least <strong>2 CORE deputies</strong>; every department <strong>a head and at least 2 delegates</strong>.</li>
+<li><strong>Resignation:</strong> the role holder gives the role up in <em>My roles</em>. Below the minimum the role stays in force (<em>resigning</em>) until a replacement accepts. The superiors are told by e-mail (the head for a delegate, CORE for a head, the master for a CORE deputy).</li>
+<li><strong>Removal / replacement</strong> (the button <em>Remove / replace</em>): below the minimum only together with a replacement, the old person stays until the replacement accepts. A <strong>regular head</strong> ends at once (CORE manages the department meanwhile, until a new head accepts the invitation).</li>
+<li>A department without an active head reports <em>The department has no active head – CORE manages it until a head accepts the invitation.</em></li>
+</ul>
+<h2>CORE deputies (the page CORE (deputies), the master only)</h2>
+<ul>
+<li><strong>Invite a deputy</strong> (with the option <em>Can edit settings</em>).</li>
+<li>At a deputy: <strong>Allow settings</strong> / <strong>Make read-only</strong> (switches whether they may change Settings and Mail), <strong>Remove / replace</strong>, <strong>Send again</strong>, <strong>Cancel</strong>. Below is <em>History</em>.</li>
+<li>The page shows the number of active deputies and whether four-eyes approval is on (it needs at least 2).</li>
+<li>A deputy sees all users and departments (after a PIN + 2FA confirmation), creates departments and appoints heads. They do not manage the master or other deputies.</li>
+</ul>
+<h2>Departments</h2>
+<p>The <strong>Departments</strong> page: a table (department, head, delegates, members; <em>no head – managed by CORE</em>), moves waiting for a decision, the number of active users without a department (only CORE manages them) and the form <strong>New department</strong> (the name must be unique). The department detail:</p>
+<table>
+<tr><th>Part</th><th>What it does and who</th></tr>
+<tr><td><strong>Head and delegates</strong></td><td>a table (person, role, status; <em>temporary head</em> with "instead of …"); <em>Appoint the head</em> / <em>Replace the head</em> (CORE); <em>Invite a delegate</em> (head, CORE; a delegate needs a second delegate, the head or CORE to confirm)</td></tr>
+<tr><td><strong>Temporary hand-over of the head</strong></td><td>an invitation of a member of the department to be a <strong>temporary head until a date</strong> (holiday, illness). The member must <strong>accept</strong> it. The head and CORE with no limit on length; <strong>two delegates together at most 30 days</strong> when the head is not available. Only one at a time. The whole department gets an e-mail and a reminder a day before. After the date the rights return by themselves (the system job every 5 minutes). Earlier: <em>End hand-over</em></td></tr>
+<tr><td><strong>Members</strong></td><td>a table of members (PIN, 2FA, e-mail, role); the link <em>Manage PINs of the members</em></td></tr>
+<tr><td><strong>Moves</strong></td><td>see below</td></tr>
+<tr><td><strong>Dissolve</strong></td><td>CORE (PIN + 2FA). All roles end, the members get an e-mail; their own PIN is not affected</td></tr>
+<tr><td><strong>History</strong></td><td>the changes of roles in the department</td></tr>
+</table>
+<h2>Moves between departments</h2>
+<ul>
+<li><strong>CORE moves directly.</strong> A head <strong>asks</strong> for a move (<em>Ask for the move</em>); the head of the other department decides (CORE for people without a department; if the other department has no head, CORE decides).</li>
+<li>A request is valid for <em>Approval request valid</em> minutes (24 hours by default); the decider <strong>approves</strong> or <strong>rejects</strong> it, the requester can <strong>cancel</strong> it. The decider gets an e-mail and a notice. Only one move can wait per person.</li>
+<li>The moved person, both heads and both departments are told by e-mail. A delegate needed for the minimum cannot be moved before a replacement arrives.</li>
+<li>A member can also be assigned from the form <em>Get somebody into this department</em>.</li>
+</ul>
+<h2>My roles</h2>
+<p>Everybody sees which department they belong to, their roles (what it means and the responsibility), a waiting invitation, the notice of a temporary hand-over and the state of a resignation, and may <strong>give a role up</strong>. The role is synchronised into NetBox permissions named <code>User PIN: …</code>: do not edit them by hand.</p>

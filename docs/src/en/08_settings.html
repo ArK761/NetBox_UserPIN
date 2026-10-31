@@ -1,0 +1,71 @@
+<h1>Settings</h1>
+<div class="facts">
+<div><strong>Who sees them:</strong> CORE (master and deputies). Nobody else. (When there are keepers and active CORE deputies, a superuser who is not a CORE deputy does not see them.)</div>
+<div><strong>Who can change:</strong> the master and a CORE deputy with the permission <em>Can edit settings</em>. Others see the page marked <em>Read-only view</em>.</div>
+<div><strong>Confirmation:</strong> saving needs the PIN (and 2FA with <em>Require 2FA also for settings</em> on). With four-eyes approval and the category "settings" it creates a request.</div>
+<div><strong>When:</strong> after the installation and when the company policy changes.</div>
+</div>
+<p>Menu <strong>User PIN → Settings</strong> (<em>PIN settings</em>). The page has the cards: General, Access &amp; PIN policy, Rotation, Unlock, Protection, Four-eyes approval, Protected areas and at the bottom <em>Encryption key</em> (the active key, the fingerprint, the configured keys). <strong>Mail</strong> (SMTP, domains, notifications, recovery of a forgotten PIN) is on its own page <em>Mail</em>; <strong>Deny everything not allowed</strong> and the other protection options are on the page <em>Protected areas</em>; the rules of the PIN-only people are on the page <em>People with a PIN only</em>.</p>
+<h2>General</h2>
+<table>
+<tr><th>Option</th><th>Default</th><th>Meaning</th></tr>
+<tr><td>Language</td><td>English</td><td>language of the plugin pages and e-mails: <em>English</em> or <em>Slovenčina</em></td></tr>
+<tr><td>Show first and last name</td><td>yes</td><td>the name next to the account (Users, CORE, Departments, e-mail recipients)</td></tr>
+</table>
+<h2>Access &amp; PIN policy</h2>
+<table>
+<tr><th>Option</th><th>Default</th><th>Meaning</th></tr>
+<tr><td>Who may use a PIN</td><td>only explicitly allowed</td><td><em>Only explicitly allowed users</em> or <em>All users, except denied</em>. The per-user flag is on the Users page. Superusers always may</td></tr>
+<tr><td>PIN length</td><td>6</td><td>number of digits, 4 to 12. Old PINs of another length stay valid until changed</td></tr>
+<tr><td>Block weak PINs</td><td>yes</td><td>rejects repeated digits (111111), sequences (123456) and patterns (121212)</td></tr>
+<tr><td>Additional blocked PINs</td><td>empty</td><td>an own list; one per line or comma separated</td></tr>
+</table>
+<h2>Rotation</h2>
+<table>
+<tr><th>Option</th><th>Default</th><th>Meaning</th></tr>
+<tr><td>PIN max age (days)</td><td>180</td><td>1 to 3650; after it the PIN must be changed</td></tr>
+<tr><td>Warn before expiry (days)</td><td>14</td><td>0 to 365; sends an e-mail once and shows a notice</td></tr>
+</table>
+<h2>Unlock</h2>
+<table>
+<tr><th>Option</th><th>Default</th><th>Meaning</th></tr>
+<tr><td>Unlock duration (minutes)</td><td>15</td><td>1 to 1440</td></tr>
+<tr><td>Extend unlock on activity</td><td>yes</td><td>every view of a protected page restarts the timer (it expires after inactivity)</td></tr>
+<tr><td>Unlock scope</td><td>one unlock for everything</td><td>or a separate unlock per scope (plugin / area)</td></tr>
+<tr><td>Require 2FA on every unlock</td><td>no</td><td>the PIN and a 2FA code</td></tr>
+</table>
+<h2>Protection</h2>
+<table>
+<tr><th>Option</th><th>Default</th><th>Meaning</th></tr>
+<tr><td>Max failed attempts</td><td>5</td><td>1 to 50; PIN and 2FA are counted separately</td></tr>
+<tr><td>Lockout duration (minutes)</td><td>30</td><td>1 to 10080 (7 days)</td></tr>
+<tr><td>Require PIN + 2FA for administrative actions</td><td>yes</td><td>allow/deny, reset, force change, settings and delegates need a fresh confirmation; when off the PIN is enough</td></tr>
+<tr><td>Require 2FA also for settings</td><td>no</td><td>off: Settings, Mail and everyday actions need only the PIN. Resets, suspension and roles always need PIN + 2FA</td></tr>
+<tr><td>Administrative window (minutes)</td><td>5</td><td>1 to 60; how long a confirmation is valid</td></tr>
+<tr><td>2FA asked again after (hours)</td><td>8</td><td>1 to 168; in the administration of protected areas</td></tr>
+<tr><td>Administrator reset valid (hours)</td><td>24</td><td>1 to 336; how long the user has to confirm a reset</td></tr>
+</table>
+<h2>Four-eyes approval</h2>
+<table>
+<tr><th>Option</th><th>Default</th><th>Meaning</th></tr>
+<tr><td>Four-eyes approval</td><td>no</td><td>switching on needs 2 active CORE deputies; it cannot be switched off while a department exists</td></tr>
+<tr><td>… for roles</td><td>yes</td><td>see the Approval chapter</td></tr>
+<tr><td>… for settings and mail settings</td><td>yes</td><td>including adding a domain</td></tr>
+<tr><td>… for allowing / denying PIN use</td><td>no</td><td></td></tr>
+<tr><td>Approval request valid (minutes)</td><td>1440</td><td>5 to 10080; applies also to move requests</td></tr>
+<tr><td>Allow break-glass for the master</td><td>no</td><td>a superuser may execute a request alone with a reason</td></tr>
+</table>
+<p>Saving reports an error if you switch four-eyes on without two active CORE deputies (<em>At least two active CORE deputies with PIN and 2FA are needed</em>) or off with a department existing.</p>
+<h2>Protected areas</h2>
+<table>
+<tr><th>Option</th><th>Default</th><th>Meaning</th></tr>
+<tr><td>Protect areas and objects</td><td>no</td><td>the areas defined on the Protected areas page take effect. Plugins with their own "PIN integration" are protected when their own switch is on, even if this option is off. <strong>It cannot be switched off while areas with managers are active</strong></td></tr>
+</table>
+<h2>What is on other pages</h2>
+<table>
+<tr><th>Option</th><th>Where</th></tr>
+<tr><td>Security notifications by e-mail; Self-service recovery; Recovery code validity</td><td>Mail</td></tr>
+<tr><td>Deny everything not allowed; What is not allowed (A / B); Users may ask for access; Users may create their own API key</td><td>Protected areas (the Protection card)</td></tr>
+<tr><td>Address of the PIN-only sign-in; wrong PINs; e-mails; working time</td><td>People with a PIN only</td></tr>
+</table>
+<p>There is also a hidden option <em>Whom the protection applies to</em> (by default <strong>only people with a PIN</strong>: the PIN-only people and the users in a group or section managers; everybody else works by NetBox permissions and does not see the plugin). It cannot be changed in the interface.</p>

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Builds the User PIN guides (Slovak and English) from the HTML fragments next to this file.
 
-    python3 build.py            -> writes ../NAVOD_User_PIN_SK.pdf from the chapters in sk/ (needs node + playwright)
+    python3 build.py            -> writes ../NAVOD_User_PIN_SK.pdf (from sk/) and ../GUIDE_User_PIN_EN.pdf (from en/); needs node + playwright
 """
 import html
 import pathlib
@@ -14,6 +14,11 @@ VERSION = '2.0.1'
 DATE = '2026-10-31'
 
 DOCS = {
+    'en': dict(src='en', out='../GUIDE_User_PIN_EN.pdf', lang='en',
+               title='User PIN – guide', subtitle='A complete guide for NetBox 4.7+, checked against the code',
+               toc='Contents', meta='Version %s · %s' % (VERSION, DATE),
+               parts='Installation · key · e-mails · PIN and 2FA · users · roles · approval · settings · areas · protection and exceptions · PIN-only people · working time · commands · troubleshooting · changes',
+               foot='User PIN %s · guide' % VERSION),
     'sk': dict(src='sk', out='../NAVOD_User_PIN_SK.pdf', lang='sk',
                title='User PIN – návod', subtitle='Kompletný návod pre NetBox 4.7+, overený v kóde',
                toc='Obsah', meta='Verzia %s · %s' % (VERSION, DATE),

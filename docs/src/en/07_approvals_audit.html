@@ -1,0 +1,52 @@
+<h1>Four-eyes approval</h1>
+<div class="facts">
+<div><strong>Who switches it on:</strong> whoever can change Settings (the master, a CORE deputy with the permission).</div>
+<div><strong>When:</strong> when a sensitive change is to be confirmed by a second person.</div>
+<div><strong>Depends on:</strong> at least <strong>two active CORE deputies</strong> with a PIN and 2FA; without them it cannot be switched on.</div>
+</div>
+<h2>Switching on and categories</h2>
+<p>Settings → <em>Four-eyes approval</em> (off by default). After switching on you choose what it applies to:</p>
+<table>
+<tr><th>Category</th><th>Default</th><th>Which actions create a request</th></tr>
+<tr><td>… for roles (CORE, department heads and delegates)</td><td>yes</td><td>inviting to a role, ending or replacing a role, changing the deputy's permission to edit settings, dissolving a department</td></tr>
+<tr><td>… for settings and mail settings</td><td>yes</td><td>saving Settings, saving Mail, adding an allowed domain</td></tr>
+<tr><td>… for allowing / denying PIN use</td><td>no</td><td>Allow / Deny / Default at a user</td></tr>
+</table>
+<ul>
+<li><strong>Switching on</strong> needs at least 2 active CORE deputies. The deputies are told (the e-mail <em>Four-eyes approval switched on</em>).</li>
+<li><strong>Switching off</strong> is <strong>not possible</strong> while a department exists. Switching off needs two people and <strong>ends the CORE delegation</strong>: the deputies are told by e-mail and from then on manage only their own PIN.</li>
+</ul>
+<h2>The course of a request</h2>
+<ol>
+<li>The requester makes the change: a request <em>Four-eyes request #N</em> with a reason appears. The requester confirms it with PIN + 2FA (<em>Confirm your request</em>).</li>
+<li>Another eligible person gets a notice in the bell and an e-mail. The eligible are: the master and CORE deputies; for a department request also its head and delegates.</li>
+<li>They open <em>Approvals</em> (or the link) and <strong>Confirm</strong> or <strong>Reject</strong> with their own PIN + 2FA. A person cannot vote twice.</li>
+<li>The request page refreshes itself and both see the confirmations (who, time, IP). Right after the second confirmation the change is executed.</li>
+</ol>
+<ul>
+<li>A request is valid for <em>Approval request valid</em> minutes (1440 = 24 h by default; 5 to 10080) and then expires.</li>
+<li>The requester can <strong>cancel</strong> it. A rejection is announced by e-mail.</li>
+<li><strong>Break-glass</strong> (off by default, <em>Allow break-glass for the master</em>): in an emergency a superuser may execute a request <strong>alone</strong> with a reason (<em>Execute alone</em>). All administrators and delegates get an e-mail and it is marked in the audit log.</li>
+</ul>
+<p>The page <strong>Approvals (four eyes)</strong>: <em>Waiting</em> (change, requested by, confirmed, valid until; <em>Confirm</em> / <em>Open</em>) and <em>History</em> (change, requested by, confirmed by, status, finished). If approval is off, the page says so.</p>
+
+<h1>Audit log</h1>
+<div class="facts">
+<div><strong>Who sees it:</strong> CORE (master and deputies) everything; heads and delegates only the events of the people of their department and their own.</div>
+<div><strong>When:</strong> when investigating who did what and when.</div>
+<div><strong>Depends on:</strong> nothing: it is always written.</div>
+</div>
+<p>Menu <strong>User PIN → Audit log</strong> (<em>PIN audit log</em>). Records are only appended (they cannot be changed) and <strong>never contain a PIN, hash or code</strong>. The page shows 50 records per page and has the filters <em>User</em> (text: the account or whoever did the action) and <em>Event</em> (a choice of types). Columns: <em>Time</em>, <em>User</em>, <em>Event</em>, <em>By</em>, <em>Scope</em>, <em>Detail</em>.</p>
+<h2>What is recorded</h2>
+<table>
+<tr><th>Area</th><th>Events</th></tr>
+<tr><td>PIN</td><td>set, changed, reset, verified, wrong, locked out, rejected (locked), lockout cleared, forced change, suspended, restored, locked, not allowed</td></tr>
+<tr><td>2FA</td><td>enabled, disabled, reset, wrong code, backup code used, new backup codes, backup codes viewed</td></tr>
+<tr><td>Confirmation and recovery</td><td>step-up (success and failure), recovery code sent/correct/wrong, verification code e-mailed, reset started / completed / cancelled</td></tr>
+<tr><td>E-mail</td><td>e-mail sent / failed, domain added / verified / verification failed / removed</td></tr>
+<tr><td>Roles and departments</td><td>invitation, acceptance, declining, expiry, resigning, ended, on leave, returned, deputy added/removed/changed, department created/deleted, member added/removed, move (request, approval, rejection)</td></tr>
+<tr><td>Approval</td><td>request, confirmation, rejection, cancellation, execution, break-glass</td></tr>
+<tr><td>Settings and keys</td><td>settings changed (also exceptions and protection), key rotation, errors</td></tr>
+<tr><td>Areas</td><td>area created/changed/deleted, manager added/removed, request, grant, denial, revocation, cancellation, refused access, keeper added/removed, protection enabled/disabled</td></tr>
+<tr><td>PIN-only people</td><td>creation, invitation, sign-in, wrong PIN, new PIN, reset, revocation, deletion, blocking and unblocking, rules, unblock request, expiry and its warning, manager, working time</td></tr>
+</table>

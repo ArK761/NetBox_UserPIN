@@ -1,6 +1,6 @@
 # NetBox User PIN
 
-**Návod (rozpracovaný, overený v kóde):** [Slovenčina (PDF)](docs/NAVOD_User_PIN_SK.pdf) · [Changes / Zmeny](CHANGELOG.md)
+**Guides (checked against the code) / Návody (overené v kóde):** [English (PDF)](docs/GUIDE_User_PIN_EN.pdf) · [Slovenčina (PDF)](docs/NAVOD_User_PIN_SK.pdf) · [Changes / Zmeny](CHANGELOG.md)
 
 A reusable NetBox plugin that gives every user a **personal PIN**. Other plugins use it to protect
 sensitive pages ("enter your PIN to continue"), so the PIN logic exists only once.

@@ -1,0 +1,101 @@
+<h1>Protected areas</h1>
+<div class="facts">
+<div><strong>Who:</strong> the page <em>Protected areas</em> is seen by a protection keeper, a section manager and (while there is no keeper) CORE / the master. Areas are created and targets added only by a <strong>keeper</strong> (while there is none, CORE / the master). Groups, fields and members are managed by a keeper or the manager of the section.</div>
+<div><strong>When:</strong> when a part of NetBox (an app or an object type, e.g. DCIM › Device, Tenancy › Tenant) is to be seen and changed only by those who have been given access.</div>
+<div><strong>Depends on:</strong> the protection switched on (the Protection chapter), at least one keeper, section managers with a PIN and 2FA, and for requests mail (the E-mails chapter).</div>
+</div>
+<h2>The basic idea</h2>
+<p>An area protects an <strong>object type</strong> (<code>dcim.device</code>) or a whole <strong>app</strong> (<code>dcim</code>). In a protected area <strong>nobody is a god</strong>: the plugin does not take the role or the NetBox permissions of the user into account at all, the <strong>group</strong> into which a keeper or a section manager put the user decides, even for a superuser. The door (a menu entry, a tab) stays visible for everybody; whoever has no key is refused on entering and learns who manages the access (the page "This area is protected"). Sensitive apps (<code>users</code>, <code>auth</code>, <code>core</code> etc.) can be put into an area only by a keeper.</p>
+<h2>The Protected areas page</h2>
+<ul>
+<li><strong>The Protection card</strong>: the ON/OFF state and the switch (the Protection chapter).</li>
+<li><strong>Protection keepers</strong>, <strong>Exceptions</strong>, <strong>What the users see</strong>: the Protection chapter.</li>
+<li><strong>What is set up</strong>: the list of protected apps and object types. Each has the number of members, groups, managers (<em>no owner yet</em>) and the buttons <em>Open</em> and <em>Delete</em> (<em>Remove the protection of this object type? Its groups and accesses are deleted.</em>).</li>
+<li><strong>Add an app or an object type</strong>: choose from the list and <em>Add</em>. Adding only prepares the structure: <strong>nobody gets access</strong> until you create a group and put users into it. Until an area has a manager only the keepers see it.</li>
+<li>At the top is the number of <em>access requests waiting for your decision</em>. If the protection of your own areas is off the page says so (<em>Settings → Protected areas</em>); areas of plugins with a "PIN integration" protect as soon as the plugin's integration is switched on.</li>
+</ul>
+<h2>The area detail</h2>
+<table>
+<tr><th>Part</th><th>What it is</th></tr>
+<tr><td><strong>Waiting for a decision</strong></td><td>access requests (user, when asked, what asked for, why, what exactly). Buttons <em>Decide</em> and <em>Deny</em></td></tr>
+<tr><td><strong>Groups</strong></td><td>named sets of rights. <em>New group</em> → name → <em>Create the group</em>; open it and set the rights, tabs, fields and members</td></tr>
+<tr><td><strong>Users</strong></td><td>who is in which group, <em>until</em> when (or <em>no time limit</em>) and the button <em>Remove</em></td></tr>
+<tr><td><strong>Section managers</strong></td><td>who decides about the area; see the chapter Section managers</td></tr>
+<tr><td><strong>Settings of the area</strong></td><td>name, description, <em>Longest temporary access (hours)</em> (24 by default, at most 720), <em>Active</em>, <em>What is not allowed</em> (as the settings say / A door / B hidden): applies to the menu items and tabs of this area. The button <em>Delete the area</em>: the objects return under the NetBox permissions</td></tr>
+</table>
+<p>A group is for one object type. A user is in <strong>one group per type</strong>: adding him to another moves him and leaving the last one means no access. An access can be temporary (<em>until</em>) or unlimited; a temporary one lasts from 1 hour up to <em>Longest temporary access</em> hours. A user may end their own access (<em>My access → End my access</em>); others' are removed by a keeper or a manager.</p>
+<h2>A group: rights</h2>
+<p>The group page (<em>Group</em>) has these parts:</p>
+<table>
+<tr><th>Part</th><th>Options</th></tr>
+<tr><td><strong>Name of the group</strong></td><td>text</td></tr>
+<tr><td><strong>Access</strong></td><td><em>Sees nothing</em> / <em>Read only</em> / <em>Read and write</em>. Whoever may write may read as well</td></tr>
+<tr><td>Further rights</td><td><em>May delete</em>; <em>May import (needs adding as well)</em>; <em>May export</em>. Without them the Import / Export buttons are not drawn and the pages answer "no access"</td></tr>
+<tr><td>Rights of a plugin</td><td>if a plugin defines own rights (e.g. <em>config</em>) they are offered as further check boxes</td></tr>
+<tr><td><strong>Deny</strong> (<em>wins over any allowance</em>)</td><td>a right the group never has, even if it would get it otherwise</td></tr>
+<tr><td><strong>Tabs of the page</strong></td><td>for each system tab of the detail (Interfaces, Config Context, Changelog …) <em>Hidden</em> / <em>Visible</em>. The main page is always allowed. Tabs of plugins follow the area of that plugin</td></tr>
+<tr><td><strong>Members</strong></td><td><em>Add users to the group</em>; the button <em>Remove</em></td></tr>
+</table>
+<p>A tab that lists <strong>other objects</strong> (a device's interfaces) needs the right on their type as well; with the protection on, that type must also be in some area.</p>
+<h2>A group: the records it sees</h2>
+<table>
+<tr><th>Option</th><th>Meaning</th></tr>
+<tr><td><em>Not set (sees no record)</em></td><td>the starting point: the members see no row</td></tr>
+<tr><td><em>All records</em></td><td>the members see all rows of this type</td></tr>
+<tr><td><em>Only by conditions</em></td><td>they see only the rows that match the conditions</td></tr>
+</table>
+<ul>
+<li><strong>Allowed</strong>: several values of one condition are alternatives (<em>agg</em> or <em>core</em>); several conditions must <strong>all hold at once</strong>. With no condition the group sees nothing.</li>
+<li><strong>Denied</strong>: records that match any of these conditions are <strong>never shown</strong>, whatever else allows them.</li>
+<li>A condition = a <em>field</em> + an <em>operator</em> + a value. Operators: <em>is</em>, <em>is not</em>, <em>contains</em>, <em>does not contain</em>, <em>starts with</em>, <em>is one of</em>, <em>is not one of</em>. For a field with choices or a relation the values are chosen from a list.</li>
+</ul>
+<h2>Fields</h2>
+<p>For a group (or for everybody in the area) and an object type every field is:</p>
+<table>
+<tr><th>Mode</th><th>Meaning</th></tr>
+<tr><td><em>By rights</em> (default)</td><td>whoever may add or change sees and writes every field; a read-only user reads</td></tr>
+<tr><td><em>Hidden</em></td><td>the field is not shown to the user</td></tr>
+<tr><td><em>Read only</em></td><td>visible, cannot be changed</td></tr>
+<tr><td><em>Read and write</em></td><td>visible and changeable</td></tr>
+</table>
+<ul>
+<li>The <strong>Fields</strong> page (<em>Rules for</em> a group or user + an object type): unfold the group and set field by field, or all at once with <em>Set all shown fields</em> (applies to the fields left by the search), then <em>Save rules</em>.</li>
+<li>The option <strong>Hidden from everybody in the area</strong> hides the field from everybody in the area, managers included.</li>
+<li><strong>Custom fields linked to other objects</strong> can be limited to the values matching a condition (<em>Values must include</em>, or the <em>Conditions</em> button: <em>contains</em>, <em>starts with</em>, <em>is one of</em>; several values as chips). For example the user picks only devices whose name contains <code>PRINTER</code>. The condition is also checked on saving. It does not apply to fixed fields.</li>
+<li>A hidden custom field <strong>keeps its stored data</strong> (saving an object never wipes it).</li>
+</ul>
+<table>
+<tr><th>Where the rules apply</th><th>custom fields</th><th>model fields</th></tr>
+<tr><td>object detail</td><td>hidden / value filter</td><td><strong>not covered</strong> (NetBox draws the fixed fields by hand)</td></tr>
+<tr><td>edit forms</td><td>removed / disabled; the choice is narrowed</td><td>removed / disabled</td></tr>
+<tr><td>tables</td><td>column removed</td><td>column removed</td></tr>
+<tr><td>REST API</td><td>omitted / filter / writes ignored</td><td>omitted / read only</td></tr>
+</table>
+<h2>Tabs of the detail</h2>
+<p>The page <em>Tabs of the detail page</em> decides which tabs of an object's detail (Interfaces, Config Context, Changelog …) the user may open. The main page is always allowed. A new access allows only the main page. A section manager opens every tab.</p>
+<h2>An access request</h2>
+<ol>
+<li>A user whose way is closed sees the page "This area is protected" (who manages the access, what was blocked, what you can do here: <em>Change the password</em>, <em>My PIN</em>, <em>My API keys</em>). They tick <strong>what they need</strong> (view / add / change / delete), write <strong>why</strong> and <strong>what exactly</strong> (section, group, object) and press <em>Request access</em>.</li>
+<li>An e-mail with a link goes to the <strong>section manager and the keepers</strong>; if no area exists for the type yet, only to the keepers. The link opens the page <em>Access request</em> (who, what, why, when).</li>
+<li>The decider chooses the <strong>group</strong> to put the user into (or <em>A new group</em> with a name), the <strong>rights to grant</strong> and <strong>for how long</strong>, and presses <em>Approve</em> or <em>Deny</em>. If no area exists for the type yet, the approval creates it (without managers: they must be appointed by hand) and adds the user.</li>
+<li>The requester gets an e-mail about the decision (so do the keepers and the manager). A waiting request can be <strong>cancelled</strong> in <em>My access → My requests</em>.</li>
+</ol>
+<ul>
+<li>Nobody decides about their own request. Only one request can wait per user, area and type.</li>
+<li>Requests can be switched off (<em>Users may ask for access</em>): then only the administrators make them. PIN-only people cannot ask.</li>
+<li>A user without a PIN is sent to create one on entering (no 2FA needed) and then continues.</li>
+</ul>
+<h2>My access</h2>
+<p>Menu <em>My access</em>: <strong>My access to protected areas</strong> (area, profile, until, <em>End my access</em>), the sections you manage and <strong>My requests</strong> (area, when, status, <em>Cancel</em>). At the top is the number of requests waiting for your decision.</p>
+<h2>What is enforced</h2>
+<table>
+<tr><th>Where</th><th>How</th></tr>
+<tr><td>NetBox pages (lists, details, add/edit/delete, bulk actions, plugin pages)</td><td>middleware refuses without the right (<em>view</em> for reading, <em>add / change / delete</em> by the kind of page); the PIN has to be unlocked</td></tr>
+<tr><td>Rows</td><td>wrapped <code>RestrictedQuerySet.restrict</code>: in a protected area it returns the rows the group allows (none without one): lists, details, REST API, drop-downs</td></tr>
+<tr><td>REST API and GraphQL</td><td>refused without the right (403 JSON)</td></tr>
+<tr><td>Menu and tabs</td><td><code>has_perm</code> is answered by the accesses from the PIN</td></tr>
+<tr><td>Change log, journal, attachments</td><td>never show rows of objects a user may not view</td></tr>
+</table>
+<p><strong>Not covered:</strong> filters in lists (<code>?cf_name=…</code>), exports, the fixed fields of the detail and lists mixing several types. Anybody with root / database access on the server can bypass any plugin: the answer is the audit, not a technical lock.</p>
+<h2>An area of a plugin</h2>
+<p>A plugin can register its own area (<code>areas.register(...)</code>) with its own rights and profiles. It is protected when its "PIN integration" switch is on, even without the global <em>Protect areas and objects</em>. See the chapter Using it from another plugin.</p>
