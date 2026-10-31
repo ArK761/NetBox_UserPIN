@@ -1,0 +1,70 @@
+<h1>Šifrovací kľúč</h1>
+<div class="facts">
+<div><strong>Kto:</strong> výhradne správca servera (kľúč je len v <code>configuration.py</code>). Nikto v rozhraní ho nevidí; v <em>Nastaveniach</em> je len jeho meno a odtlačok.</div>
+<div><strong>Kedy:</strong> vygeneruješ ho pred prvou inštaláciou. Vymieňaš ho pri podozrení z úniku alebo podľa firemnej politiky.</div>
+<div><strong>Závisí od:</strong> všetko, čo plugin šifruje, sa bez kľúča nedá prečítať. Kľúč preto musí byť zálohovaný oddelene od databázy.</div>
+</div>
+<h2>Čo kľúč chráni</h2>
+<p>Pod kľúčom je uložené (šifrovanie AES-256-GCM, viazané na konkrétneho používateľa):</p>
+<ul>
+<li>hash PINu každého používateľa (PIN sa najprv hashuje Argon2id so soľou a až hash sa šifruje),</li>
+<li>tajomstvo 2FA (TOTP) každého používateľa,</li>
+<li>záložné kódy 2FA,</li>
+<li>SMTP heslo zo stránky Mail.</li>
+</ul>
+<p>Kľúčom sa navyše počítajú odtlačky (nešifrujú sa): vyhľadávací index PINu pre osoby len s PIN-om a overovacie kódy domén. Výpis databázy samotný teda neobsahuje nič použiteľné, ani čo by sa dalo lámať offline.</p>
+<h2>Ako kľúč vygenerovať</h2>
+<pre># kým plugin ešte nebeží – obyčajný Python:
+python3 -c "import base64,os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"
+
+# alebo ľubovoľne dlhý náhodný text:
+openssl rand -base64 64 | tr -d '\n'
+
+# keď plugin už beží:
+cd /opt/netbox/netbox &amp;&amp; python manage.py userpin_generate_key --key-id k1</pre>
+<p>Príkaz <code>userpin_generate_key</code> kľúč len vypíše, nikam ho neukladá. <code>--key-id</code> je iba názov, ktorý dostane v konfigurácii (predvolene <code>k1</code>).</p>
+<h2>Aký kľúč plugin prijme</h2>
+<table>
+<tr><th>Tvar kľúča</th><th>Čo sa stane</th></tr>
+<tr><td>base64 (urlsafe) reťazec, ktorý je presne 32 bajtov</td><td>použije sa priamo</td></tr>
+<tr><td>akýkoľvek iný reťazec s <strong>aspoň 32 znakmi</strong></td><td>32-bajtový kľúč sa z neho odvodí (HKDF-SHA256)</td></tr>
+<tr><td>kratší reťazec</td><td>NetBox sa nespustí (chyba pri štarte)</td></tr>
+</table>
+<p>Dlhší kľúč nie je silnejší: šifrovanie vždy používa 256 bitov. Rozhoduje, aby bol <strong>náhodný</strong> (nie vymyslené heslo). Názov kľúča (<code>k1</code>) nesmie byť prázdny ani obsahovať dvojbodku.</p>
+<h2>Zápis do konfigurácie</h2>
+<pre>PLUGINS_CONFIG = {
+    'netbox_user_pin': {
+        'encryption_keys': {'k1': '&lt;kľúč&gt;'},
+        'active_key_id': 'k1',      # pri jedinom kľúči sa dá vynechať
+    },
+}</pre>
+<h2>Zálohovanie kľúča</h2>
+<div class="warn">
+<ul>
+<li>Ulož kľúč <strong>offline</strong> (správca hesiel, trezor) a <strong>nikdy do tej istej zálohy ako databázu</strong>. Kto má oboje, môže dešifrovať.</li>
+<li><strong>Keď sa kľúč stratí</strong>, dáta NetBoxu ostanú nedotknuté, ale všetko, čo plugin pod kľúčom uložil, je nenávratne preč: PINy, 2FA, záložné kódy, SMTP heslo a prihlasovanie osôb len s PIN-om. Všetci si ich musia nastaviť znova.</li>
+<li>Skontroluj, že záloha sedí: v <em>User PIN → Nastavenia</em> je karta <strong>Šifrovací kľúč</strong> s položkami <em>Aktívny kľúč</em>, <em>Odtlačok</em> a <em>Nastavené kľúče</em>. Odtlačok porovnaj s poznámkou pri offline zálohe.</li>
+</ul>
+</div>
+<h2>Výmena kľúča (rotácia)</h2>
+<p>Pri rotácii sa všetky šifrované hodnoty prešifrujú novým kľúčom. Starý kľúč ostáva v konfigurácii, kým sa všetko nepresunie.</p>
+<ol>
+<li><strong>Záloha databázy</strong> (pre istotu).</li>
+<li>Vygeneruj nový kľúč a ulož ho bokom.</li>
+<li>V <code>configuration.py</code> pridaj nový kľúč <strong>vedľa starého</strong> a nastav ho ako aktívny:
+<pre>'encryption_keys': {'k1': '&lt;starý&gt;', 'k2': '&lt;nový&gt;'},
+'active_key_id': 'k2',</pre></li>
+<li>Reštartuj NetBox: <code>sudo systemctl restart netbox netbox-rq</code>.</li>
+<li>Prešifruj: <code>python manage.py userpin_rotate_key</code>. Beží v jednej transakcii: ak čo i len jedna hodnota sa nedá dešifrovať, <strong>nič sa nezmení</strong> a príkaz vypíše, čo zlyhalo. Po úspechu zapíše do auditu udalosť o rotácii.</li>
+<li>Over: <code>python manage.py userpin_check</code>.</li>
+<li><strong>Starý kľúč odstráň až keď <code>userpin_check</code> napíše</strong> <em>Everything decrypts with the active key; old keys can be removed.</em></li>
+</ol>
+<p><strong>Prečo starý kľúč nemazať hneď:</strong> index osôb len s PIN-om sa presunie na nový kľúč až pri ďalšom prihlásení každej osoby. Kým sa niektorá neprihlási, čaká na starý kľúč. Príkaz to vypíše (<em>PIN-only accesses still on an old key: N</em>) a potom ešte <em>Do NOT remove the old key yet</em>.</p>
+<h2>Čo vypisuje <code>userpin_check</code></h2>
+<table>
+<tr><th>Riadok</th><th>Význam</th></tr>
+<tr><td><code>Active key: k2  fingerprint …</code></td><td>aktívny kľúč a jeho odtlačok</td></tr>
+<tr><td><code>OK: N, encrypted with a non-active key: M, failed: F, PIN-only accesses still on an old key: G</code></td><td>N hodnôt sa dešifrovalo; M ešte používa starý kľúč; F sa nedá dešifrovať; G osôb len s PIN-om čaká na prihlásenie</td></tr>
+<tr><td>chyba (príkaz skončí chybou)</td><td>aspoň jedna hodnota sa nedá dešifrovať: zlý alebo chýbajúci kľúč. Nemeň <code>k1</code> a pošli výpis</td></tr>
+</table>
+<div class="note">Plugin kľúč nikdy nevytvorí ani neprepne sám. Chýbajúci alebo zlý kľúč skončí chybou, nie tichou zmenou.</div>

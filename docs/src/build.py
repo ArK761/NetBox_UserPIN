@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Builds the User PIN guides (Slovak and English) from the HTML fragments next to this file.
 
-    python3 build.py            -> writes ../NAVOD_User_PIN_SK.pdf and ../GUIDE_User_PIN_EN.pdf (needs node + playwright)
+    python3 build.py            -> writes ../NAVOD_User_PIN_SK.pdf from the chapters in sk/ (needs node + playwright)
 """
 import html
 import pathlib
@@ -14,14 +14,11 @@ VERSION = '2.0.1'
 DATE = '2026-10-31'
 
 DOCS = {
-    'sk': dict(src='navod_sk.html', out='../NAVOD_User_PIN_SK.pdf', lang='sk',
-               title='User PIN – kompletný návod', subtitle='Plugin pre NetBox 4.7+', toc='Obsah',
-               meta='Verzia %s · %s' % (VERSION, DATE),
+    'sk': dict(src='sk', out='../NAVOD_User_PIN_SK.pdf', lang='sk',
+               title='User PIN – návod', subtitle='Plugin pre NetBox 4.7+ · rozpracovaný návod, overený v kóde',
+               toc='Obsah', meta='Verzia %s · %s' % (VERSION, DATE),
+               parts='Hotové kapitoly: inštalácia, šifrovací kľúč, e-maily',
                foot='User PIN %s · návod' % VERSION),
-    'en': dict(src='guide_en.html', out='../GUIDE_User_PIN_EN.pdf', lang='en',
-               title='User PIN – complete guide', subtitle='A plugin for NetBox 4.7+', toc='Contents',
-               meta='Version %s · %s' % (VERSION, DATE),
-               foot='User PIN %s · guide' % VERSION),
 }
 
 CSS = """
@@ -43,6 +40,8 @@ tr { break-inside: avoid; }
 tr:nth-child(even) td { background: #f5f8f9; }
 .note, .warn { border-left: 4px solid #2a7fb8; background: #eaf3fa; padding: 5pt 8pt; margin: 6pt 0; border-radius: 3px; break-inside: avoid; }
 .warn { border-left-color: #c77d0a; background: #fdf3df; }
+.facts { border: 1px solid #12423a; background: #f2f8f6; padding: 5pt 9pt; margin: 6pt 0 10pt; border-radius: 4px; break-inside: avoid; }
+.facts div { margin: 2pt 0; }
 .ok { color: #fff; background: #1f8f4e; padding: 0 5px; border-radius: 8px; font-size: 8pt; }
 .no { color: #fff; background: #c0392b; padding: 0 5px; border-radius: 8px; font-size: 8pt; }
 .cover { height: 235mm; display: flex; flex-direction: column; justify-content: center; break-after: page; }
@@ -62,7 +61,7 @@ tr:nth-child(even) td { background: #f5f8f9; }
 
 def build(key):
     cfg = DOCS[key]
-    body = (HERE / cfg['src']).read_text(encoding='utf-8')
+    body = '\n'.join(p.read_text(encoding='utf-8') for p in sorted((HERE / cfg['src']).glob('*.html')))
     n1 = n2 = 0
     toc = []
 
@@ -85,7 +84,7 @@ def build(key):
 <title>{html.escape(cfg['title'])}</title><style>{CSS}</style></head><body>
 <div class="cover"><div class="k">NetBox plugin</div><h1>{html.escape(cfg['title'])}</h1>
 <div class="s">{html.escape(cfg['subtitle'])}</div>
-<div class="m">{html.escape(cfg['meta'])}<br>github.com/ArK761/NetBox_UserPIN</div></div>
+<div class="m">{html.escape(cfg['meta'])}<br>{html.escape(cfg['parts'])}<br>github.com/ArK761/NetBox_UserPIN</div></div>
 <div class="toc"><h1>{cfg['toc']}</h1><ol>{items}</ol></div>
 {body}
 </body></html>"""

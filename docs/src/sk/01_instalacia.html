@@ -1,0 +1,118 @@
+<h1>Čo plugin potrebuje a čo pridá do NetBoxu</h1>
+<div class="facts">
+<div><strong>Kto:</strong> správca servera (prístup k príkazovému riadku a k <code>configuration.py</code>).</div>
+<div><strong>Kedy:</strong> pred prvou inštaláciou; pri každej aktualizácii pluginu alebo NetBoxu.</div>
+<div><strong>Závisí od:</strong> NetBox 4.7.0 alebo novší, Python 3.12+, bežiaci worker <code>netbox-rq</code>, prístup na internet (GitHub, PyPI) pri inštalácii.</div>
+</div>
+<h2>Požiadavky</h2>
+<table>
+<tr><th>Čo</th><th>Podrobnosti</th></tr>
+<tr><td>NetBox</td><td>verzia <strong>4.7.0 a novšia</strong> (plugin má <code>min_version = 4.7.0</code> a hornú hranicu nemá). Ak starší NetBox, plugin sa nenačíta.</td></tr>
+<tr><td>Python</td><td>3.12 alebo novší (<code>requires-python &gt;= 3.12</code>).</td></tr>
+<tr><td>Worker <code>netbox-rq</code></td><td>Plugin si registruje systémovú úlohu <strong>User PIN role housekeeping</strong>, ktorá beží <strong>každých 5 minút</strong>. Spracúva vypršané pozvánky a presuny, posiela pripomienky, vracia práva po dočasnom odovzdaní, oznamuje koniec platnosti prístupov len cez PIN a posiela zhrnutia zmien. E-maily o zmenách osoby len s PIN-om idú tiež cez frontu <code>default</code>. Keď worker nebeží, tieto veci sa nevykonajú.</td></tr>
+<tr><td>Databáza</td><td>tabuľky pluginu vytvorí <code>migrate</code> (migrácie 0001 až 0042).</td></tr>
+</table>
+<h2>Závislosti (Python balíky)</h2>
+<table>
+<tr><th>Balík</th><th>Na čo slúži</th><th>Keď chýba</th></tr>
+<tr><td><code>argon2-cffi &gt;= 23.1</code></td><td>hashovanie PINu (Argon2id)</td><td>NetBox sa nespustí: <code>ModuleNotFoundError: No module named 'argon2'</code></td></tr>
+<tr><td><code>cryptography &gt;= 42</code></td><td>šifrovanie AES-256-GCM a odvodenie kľúča (HKDF)</td><td>NetBox sa nespustí</td></tr>
+<tr><td><code>segno &gt;= 1.5</code></td><td>QR kód pri nastavení 2FA</td><td>stránky pluginu sa nenačítajú (chyba pri importe <code>segno</code>)</td></tr>
+<tr><td><code>holidays &gt;= 0.50</code></td><td>štátne sviatky pre pracovný čas osôb len s PIN-om</td><td>plugin beží, kontrolujú sa len dni a hodiny (bez sviatkov)</td></tr>
+</table>
+<div class="warn"><strong>Pozor:</strong> inštalácia s voľbou <code>--no-deps</code> závislosti neinštaluje. Na serveri, kde plugin ešte nebol, ich nainštaluj osobitne (pozri kapitolu Inštalácia).</div>
+<h2>Čo plugin pridá do NetBoxu</h2>
+<ul>
+<li><strong>Menu „User PIN“</strong> s položkami: <em>Môj PIN</em>, <em>Moje roly</em>, <em>Môj prístup</em>, <em>Test odomknutia</em>, <em>Ľudia len s PIN-om</em>, <em>Používatelia</em>, <em>Oddelenia</em>, <em>Chránené oblasti</em>, <em>Schvaľovania (štyri oči)</em>, <em>Audit log</em>, <em>Nastavenia</em>, <em>Mail</em>, <em>CORE (zástupcovia)</em>. Ktorú položku vidí ktorý používateľ, závisí od jeho roly (opisuje to kapitola o rolách).</li>
+<li><strong>Adresa pluginu</strong>: <code>/plugins/user-pin/</code>.</li>
+<li><strong>Dva middleware</strong>, ktoré sa zaradia automaticky: <code>PluginLanguageMiddleware</code> (jazyk stránok pluginu) a <code>AreaGuardMiddleware</code> (strážca chránených oblastí a globálnej ochrany). Do <code>configuration.py</code> sa nezapisujú.</li>
+<li><strong>Tri typy udalostí</strong> v notifikáciách NetBoxu (zvonček): <em>PIN four-eyes approval requested</em>, <em>PIN area access requested</em>, <em>PIN role / department change</em>.</li>
+<li><strong>Oprávnenia NetBoxu</strong> s názvami <code>User PIN: …</code> (zástupcovia, editori nastavení, oddelenia). Plugin ich vytvára a spravuje sám: neupravuj ich ručne.</li>
+</ul>
+
+<h1>Inštalácia</h1>
+<div class="facts">
+<div><strong>Kto:</strong> správca servera (<code>root</code> alebo <code>sudo</code>).</div>
+<div><strong>Kedy:</strong> raz, na každom serveri NetBoxu zvlášť (test, produkcia).</div>
+<div><strong>Závisí od:</strong> kapitola Čo plugin potrebuje; vygenerovaný kľúč (nasledujúca kapitola).</div>
+</div>
+<h2>1. Balíky</h2>
+<pre>source /opt/netbox/venv/bin/activate
+pip install "argon2-cffi&gt;=23.1" "cryptography&gt;=42" "segno&gt;=1.5" "holidays&gt;=0.50"
+pip install --upgrade --force-reinstall --no-deps "git+https://github.com/ArK761/NetBox_UserPIN.git@2.0.0"</pre>
+<p>Namiesto <code>@2.0.0</code> môžeš použiť ľubovoľný tag alebo commit. Pip môže po inštalácii napísať upozornenie o <code>python-dateutil</code> (pozri Riešenie problémov): je neškodné.</p>
+<h2>2. Šifrovací kľúč</h2>
+<p>Vygeneruj ho a ulož si ho bokom, <strong>skôr než</strong> plugin zapneš. Postup je v kapitole <em>Šifrovací kľúč</em>.</p>
+<h2>3. Konfigurácia</h2>
+<p>V <code>/opt/netbox/netbox/netbox/configuration.py</code> pridaj <code>'netbox_user_pin'</code> do <code>PLUGINS</code> a blok do <code>PLUGINS_CONFIG</code>:</p>
+<pre>PLUGINS = [
+    # ... tvoje ostatné pluginy ...
+    'netbox_user_pin',
+]
+
+PLUGINS_CONFIG = {
+    # ... nastavenia ostatných pluginov ...
+    'netbox_user_pin': {
+        'encryption_keys': {'k1': '&lt;tvoj kľúč&gt;'},
+        'active_key_id': 'k1',
+    },
+}</pre>
+<div class="warn"><strong>Pozor na dva bloky.</strong> Ak už v <code>PLUGINS</code> a <code>PLUGINS_CONFIG</code> iné pluginy máš, riadok a blok sa <strong>pridajú</strong>, neprepisujú sa. Skontroluj aj čiarky a apostrofy: chyba v súbore zastaví celý NetBox.</div>
+<h2>4. Migrácie a reštart</h2>
+<pre>cd /opt/netbox/netbox
+python manage.py migrate netbox_user_pin
+sudo systemctl restart netbox netbox-rq</pre>
+<p>Príkaz <code>migrate netbox_user_pin</code> vytvorí tabuľky pluginu. Ak hlási <em>No installed app with label 'netbox_user_pin'</em>, plugin nie je v zozname <code>PLUGINS</code>.</p>
+<h2>5. Kontrola, že všetko beží</h2>
+<pre>python manage.py showmigrations netbox_user_pin | tail -3      # všetky riadky majú [X]
+python manage.py userpin_check                                  # po čerstvej inštalácii: OK: 0 ... failed: 0
+systemctl is-active netbox netbox-rq                            # active, active</pre>
+<p>V NetBoxe sa v menu objaví <strong>User PIN</strong>. V <em>Nastavenia</em> je karta <em>Šifrovací kľúč</em> s aktívnym kľúčom a jeho odtlačkom.</p>
+<h2>6. Prvé kroky v rozhraní</h2>
+<ol>
+<li>Prihlás sa ako superuser → <strong>User PIN → Môj PIN</strong> → <em>Nastaviť PIN</em> a <em>Nastaviť 2FA</em> (administratívne akcie vyžadujú 2FA).</li>
+<li>Na stránke <strong>Mail</strong> nastav odosielanie a over aspoň jednu doménu (pozri kapitolu E-maily).</li>
+<li>Na stránke <strong>Používatelia</strong> povoľ používanie PINu tým, ktorí ho majú mať.</li>
+</ol>
+<h2>Čo sa stane, keď je konfigurácia zlá</h2>
+<p>Plugin pri štarte overí kľúče a <strong>NetBox sa nespustí</strong>, ak je s nimi problém (nikdy sa kľúč nevygeneruje ani neprepne potichu). Preto vždy po úprave <code>configuration.py</code> sleduj <code>journalctl -u netbox -n 50</code>.</p>
+<table>
+<tr><th>Chyba pri štarte</th><th>Príčina</th></tr>
+<tr><td><code>encryption_keys must be a non-empty dict</code></td><td>chýba <code>encryption_keys</code> alebo je prázdne</td></tr>
+<tr><td><code>invalid key id '…'</code></td><td>id kľúča je prázdne alebo obsahuje dvojbodku (<code>:</code>)</td></tr>
+<tr><td><code>must be a base64 32 byte key or a secret of at least 32 characters</code></td><td>kľúč je kratší než 32 znakov a nie je platný base64 kľúč</td></tr>
+<tr><td><code>several encryption keys are configured; set 'active_key_id'</code></td><td>kľúčov je viac a chýba <code>active_key_id</code></td></tr>
+<tr><td><code>active_key_id '…' is not in encryption_keys</code></td><td>aktívne id nie je medzi kľúčmi</td></tr>
+</table>
+<h2>Nepovinné nastavenia v konfigurácii</h2>
+<table>
+<tr><th>Nastavenie</th><th>Predvolené</th><th>Význam</th></tr>
+<tr><td><code>encryption_keys</code></td><td>– (povinné)</td><td>slovník <code>{id_kľúča: kľúč}</code></td></tr>
+<tr><td><code>active_key_id</code></td><td>jediný kľúč</td><td>kľúč na nové šifrovanie; povinné, keď je kľúčov viac</td></tr>
+<tr><td><code>argon2_time_cost</code></td><td>3</td><td>počet iterácií Argon2id</td></tr>
+<tr><td><code>argon2_memory_cost</code></td><td>65536</td><td>pamäť Argon2id v KiB (64 MiB)</td></tr>
+<tr><td><code>argon2_parallelism</code></td><td>4</td><td>počet vlákien Argon2id</td></tr>
+<tr><td><code>cli_venv</code></td><td>/opt/netbox/venv</td><td>cesta, ktorú plugin ukáže v núdzovom príkaze na resetovanie 2FA</td></tr>
+<tr><td><code>cli_netbox_dir</code></td><td>/opt/netbox/netbox</td><td>to isté pre adresár NetBoxu</td></tr>
+</table>
+<p>Všetko ostatné sa nastavuje v rozhraní (<strong>User PIN → Nastavenia</strong> a <strong>Mail</strong>).</p>
+
+<h1>Aktualizácia pluginu a NetBoxu</h1>
+<div class="facts">
+<div><strong>Kto:</strong> správca servera.</div>
+<div><strong>Kedy:</strong> pri novej verzii pluginu alebo NetBoxu.</div>
+<div><strong>Závisí od:</strong> zálohu databázy (pred migráciou), pripnutú verziu v <code>local_requirements.txt</code>.</div>
+</div>
+<h2>Aktualizácia len pluginu (jeden riadok)</h2>
+<pre>sudo bash -c 'source /opt/netbox/venv/bin/activate &amp;&amp; pip install --upgrade holidays &amp;&amp; pip install --upgrade --force-reinstall --no-deps "git+https://github.com/ArK761/NetBox_UserPIN.git@&lt;tag-alebo-commit&gt;" &amp;&amp; cd /opt/netbox/netbox &amp;&amp; python manage.py migrate netbox_user_pin &amp;&amp; systemctl restart netbox netbox-rq'</pre>
+<div class="warn"><strong>Produkcia:</strong> pred migráciou urob zálohu databázy, napríklad <code>sudo -u postgres pg_dump netbox | gzip &gt; /root/netbox-$(date +%F-%H%M).sql.gz</code>. Kľúče v <code>configuration.py</code> pritom nemeň.</div>
+<h2>Upgrade samotného NetBoxu</h2>
+<p><code>upgrade.sh</code> vytvorí virtuálne prostredie <strong>znova</strong> a nainštaluje len to, čo je v <code>requirements.txt</code> a <code>local_requirements.txt</code>. Plugin, ktorý tam nie je, po upgrade zmizne. Riadky v <code>/opt/netbox/local_requirements.txt</code>:</p>
+<pre>netbox-librenms-plugin
+netbox-qrcode
+git+https://github.com/ArK761/NetBox_UserPIN.git@2.0.0</pre>
+<ul>
+<li>Balík z PyPI stačí zapísať samotným menom. Plugin z GitHubu potrebuje celý odkaz.</li>
+<li>Riadok bez <code>@…</code> nainštaluje <strong>posledný commit vetvy <code>main</code></strong> (nie posledný release; pip GitHub Releases nepozná, pozná len vetvy, tagy a commity). Ak je kód plugin na inej vetve, ponechaj pripnutý commit.</li>
+<li>Po upgrade skontroluj verzie pluginov (odznak <em>User PIN vX · commit</em>) a spusti <code>userpin_check</code>.</li>
+</ul>

@@ -1,8 +1,7 @@
 # Changes / Zmeny
 
-The full guides: [`docs/GUIDE_User_PIN_EN.pdf`](docs/GUIDE_User_PIN_EN.pdf) (English) ·
-[`docs/NAVOD_User_PIN_SK.pdf`](docs/NAVOD_User_PIN_SK.pdf) (Slovenčina).
-Sources of the guides and the build script: `docs/src/` (`python3 docs/src/build.py`).
+The guide (Slovak, built chapter by chapter from the code): [`docs/NAVOD_User_PIN_SK.pdf`](docs/NAVOD_User_PIN_SK.pdf).
+Sources and the build script: `docs/src/` (`python3 docs/src/build.py`).
 
 The version in the code is **2.0.0** (the GitHub release) and **2.0.1** (branch `feature/exception-allowlist`).
 The base was 0.38.4 (commit 7bed7de); the interim numbers 2.0.1 … 2.2.2 in the commit history of 27–30 October 2026

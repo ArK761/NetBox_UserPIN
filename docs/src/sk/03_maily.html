@@ -1,0 +1,119 @@
+<h1>E-maily: ako plugin posiela poštu</h1>
+<div class="facts">
+<div><strong>Kto nastavuje:</strong> master a zástupcovia CORE s oprávnením upravovať nastavenia (stránka <em>Mail</em>). Server NetBoxu (<code>EMAIL</code> v <code>configuration.py</code>) nastavuje správca servera.</div>
+<div><strong>Kedy:</strong> hneď po inštalácii. Bez nastavenej pošty plugin <strong>neposiela žiadne e-maily</strong>: nefunguje obnova zabudnutého PINu, pozvánky do rolí ani upozornenia.</div>
+<div><strong>Závisí od:</strong> odosielateľ + SMTP server, <strong>overená doména</strong> príjemcu, adresa v účte príjemcu.</div>
+</div>
+<h2>Kedy sa e-mail naozaj odošle</h2>
+<p>E-mail používateľovi odíde len keď sú splnené <strong>všetky štyri</strong> podmienky:</p>
+<ol>
+<li>pošta je nastavená (pozri nižšie),</li>
+<li>používateľ má v účte e-mailovú adresu,</li>
+<li>doména tejto adresy je v zozname <strong>overených</strong> domén (kapitola Domény),</li>
+<li>pre bezpečnostné upozornenia: vypínač <em>Bezpečnostné upozornenia e-mailom</em> je zapnutý.</li>
+</ol>
+<p>Ak niečo z toho chýba, e-mail sa <strong>potichu neodošle</strong> a akcia sa vykoná. Stav e-mailu používateľa vidno na stránke <em>Používatelia</em> v stĺpci E-mail: <em>bez e-mailu</em> (chýba adresa), <em>doména</em> (adresa mimo overených domén). Inak sa ukáže samotná adresa. Pri zlyhaní odoslania (napr. server nedostupný) sa zapíše do auditu udalosť <em>E-mail failed</em> s chybou; akcia, ktorá e-mail spustila, sa tým nepokazí.</p>
+<h2>Z čoho plugin posiela</h2>
+<table>
+<tr><th>Zdroj</th><th>Kedy sa použije</th><th>Čo musí byť nastavené</th></tr>
+<tr><td><strong>SMTP z tejto stránky</strong></td><td>keď je vyplnený <strong>SMTP server aj adresa odosielateľa</strong></td><td>stránka Mail → Nastavenie e-mailu</td></tr>
+<tr><td><strong>Konfigurácia NetBoxu</strong></td><td>keď SMTP server na stránke Mail <strong>nie je</strong> vyplnený a NetBox má v <code>configuration.py</code> blok <code>EMAIL</code></td><td><code>EMAIL['SERVER']</code> a <code>EMAIL['FROM_EMAIL']</code> (alebo adresa odosielateľa zo stránky Mail)</td></tr>
+<tr><td>nič</td><td>ani jedno nie je nastavené</td><td>stav <em>nenastavené</em>: plugin e-maily neposiela</td></tr>
+</table>
+<p>Používatelia nikdy nezadávajú žiadne prihlasovacie údaje k pošte: používa sa jeden servisný účet.</p>
+<h2>Ako e-mail vyzerá</h2>
+<ul>
+<li>Čistý text (bez HTML). Predmet má predponu <code>[NetBox PIN]</code> (napr. <code>[NetBox PIN] Your PIN was changed</code>).</li>
+<li>Na konci je pätička <em>NetBox User PIN. This is an automatic message.</em></li>
+<li>Text je v jazyku z <em>Nastavení → Jazyk</em> (pre osoby len s PIN-om v jazyku, ktorý má nastavený ich prístup).</li>
+<li>Odosielateľ: <em>Meno odosielateľa</em> + adresa (predvolené meno <em>NetBox PIN</em>).</li>
+</ul>
+
+<h1>Stránka Mail</h1>
+<div class="facts">
+<div><strong>Kto ju vidí:</strong> CORE (master a zástupcovia). Ostatní stránku nemajú. Výnimka: ak existujú strážcovia ochrany aj aktívni zástupcovia CORE, superuser, ktorý nie je zástupca CORE, ju nevidí.</div>
+<div><strong>Kto môže meniť:</strong> master a zástupca CORE s oprávnením <em>Môže upravovať nastavenia</em> (zapína ho CORE na stránke CORE (zástupcovia)). Ostatní vidia stránku s nápisom <em>Iba na čítanie</em>.</div>
+<div><strong>Potvrdenie:</strong> uloženie vyžaduje PIN (a 2FA, ak je zapnuté <em>Vyžadovať 2FA aj pre nastavenia</em>). Test pripojenia a testovací e-mail potvrdenie nevyžadujú.</div>
+<div><strong>Štyri oči:</strong> ak je zapnuté schvaľovanie a voľba „… pre nastavenia a mailové nastavenia“ (predvolene zapnutá), uloženie nastavení pošty aj pridanie domény vytvoria žiadosť na schválenie druhou osobou.</div>
+</div>
+<h2>Nastavenie e-mailu (polia)</h2>
+<table>
+<tr><th>Pole</th><th>Predvolené</th><th>Význam</th></tr>
+<tr><td>Meno odosielateľa</td><td>NetBox PIN</td><td>zobrazí sa ako meno odosielateľa</td></tr>
+<tr><td>E-mailová adresa odosielateľa</td><td>prázdne</td><td>napr. <code>netbox@firma.sk</code>. Povinná, ak je vyplnený SMTP server</td></tr>
+<tr><td>SMTP server</td><td>prázdne</td><td>napr. <code>mail.firma.sk</code>. Prázdne = použije sa konfigurácia NetBoxu</td></tr>
+<tr><td>SMTP port</td><td>25</td><td>1 až 65535</td></tr>
+<tr><td>SMTP časový limit (s)</td><td>10</td><td>1 až 120</td></tr>
+<tr><td>Šifrovanie</td><td>Vypnuté</td><td><em>Vypnuté (zvyčajne port 25)</em>, <em>STARTTLS (zvyčajne port 587)</em>, <em>SSL/TLS (zvyčajne port 465)</em></td></tr>
+<tr><td>Automatické TLS</td><td>zapnuté</td><td>pri vypnutom šifrovaní sa STARTTLS použije, keď ho server ponúka</td></tr>
+<tr><td>SMTP autentifikácia</td><td>vypnutá</td><td>ak je zapnutá, treba SMTP používateľa aj heslo</td></tr>
+<tr><td>SMTP používateľ</td><td>prázdne</td><td>servisný účet, z ktorého sa pošta posiela</td></tr>
+<tr><td>SMTP heslo</td><td>prázdne</td><td>uloží sa <strong>zašifrované kľúčom</strong> a nikdy sa nezobrazí; prázdne pole pri úprave = ponechať aktuálne. Pri zapnutej autentifikácii je povinné, ak ešte nie je uložené</td></tr>
+</table>
+<p>Pri uložení plugin kontroluje: SMTP server bez adresy odosielateľa je chyba (<em>A sender address is needed together with the SMTP server</em>), autentifikácia bez používateľa alebo hesla je chyba.</p>
+<h2>Upozornenia a zabudnutý PIN</h2>
+<table>
+<tr><th>Pole</th><th>Predvolené</th><th>Význam</th></tr>
+<tr><td>Bezpečnostné upozornenia e-mailom</td><td>zapnuté</td><td>PIN nastavený / zmenený / resetovaný, zablokovanie, blížiaca sa expirácia, zmeny 2FA, zobrazenie záložných kódov. Vypnutie nemá vplyv na ostatné maily (kódy, pozvánky, roly, oblasti)</td></tr>
+<tr><td>Samoobslužná obnova zabudnutého PINu</td><td>zapnutá</td><td>kód z e-mailu <strong>a</strong> kód 2FA spolu</td></tr>
+<tr><td>Platnosť kódu na obnovu (minúty)</td><td>15</td><td>5 až 60; platí aj pre overovací kód domény a pre kód na zobrazenie záložných kódov</td></tr>
+</table>
+<h2>Stav a test pripojenia</h2>
+<p>Karta <strong>Stav</strong> ukáže <em>Používa sa</em>: <em>SMTP z tejto stránky</em>, <em>Konfigurácia NetBoxu</em> alebo <em>nenastavené</em>, a podľa toho server, účet (alebo <em>bez autentifikácie</em>) a odosielateľa. Tlačidlo <strong>Test pripojenia</strong> sa pripojí k SMTP serveru zo stránky (a prihlási sa) a napíše výsledok. Funguje len pre SMTP zo stránky Mail, nie pre konfiguráciu NetBoxu.</p>
+<h2>Testovací e-mail</h2>
+<p>Vyber príjemcu a stlač <strong>Poslať testovací e-mail</strong>. Vyberať sa dajú len používatelia, ktorí <strong>smú používať PIN a majú e-mail v overenej doméne</strong>; výber ukáže účet, meno aj adresu. Ak nikto nespĺňa podmienky, stránka to napíše. Výsledok: <em>Test e-mail sent to …</em> alebo chyba s odkazom na audit log.</p>
+
+<h1>Povolené e-mailové domény</h1>
+<div class="facts">
+<div><strong>Kto:</strong> ten, kto môže meniť nastavenia pošty (pozri vyššie).</div>
+<div><strong>Kedy:</strong> raz pre každú doménu, ktorá má dostávať e-maily. Pridať novú treba aj keď pribudne firma s inou doménou.</div>
+<div><strong>Závisí od:</strong> pošta musí byť nastavená a niekto s adresou v tej doméne musí vedieť prečítať kód.</div>
+</div>
+<p>Pošta ide <strong>len na adresy v overených doménach</strong>. Kým doména nie je overená, e-maily do nej neodídu (v zozname sa ukáže <em>neoverená – zatiaľ žiadne e-maily</em>; bez domén stojí <em>Žiadna doména – neposielajú sa žiadne e-maily</em>).</p>
+<ul>
+<li>Doména sa zapisuje napr. <code>@firma.sk</code> (zavináč môže byť aj chýbať; plugin ho odstráni a prevedie na malé písmená). Musí obsahovať bodku a nesmie obsahovať medzery.</li>
+<li><strong>Zhoda je presná:</strong> <code>firma.sk</code> pustí <code>jan@firma.sk</code>, ale <strong>nie</strong> poddomény (<code>jan@mail.firma.sk</code>) ani podobné mená (<code>firma.sk.evil.com</code>).</li>
+</ul>
+<h2>Pridanie a overenie domény</h2>
+<ol>
+<li>V karte <em>Povolené e-mailové domény</em> napíš doménu a stlač <strong>Pridať</strong>. Hneď sa otvorí okno <em>Overenie domény</em>. (Ak je zapnuté schvaľovanie štyri oči, najprv sa pridanie musí schváliť.)</li>
+<li><strong>1. Adresa v tejto doméne:</strong> napíš jednu adresu, ktorá končí touto doménou, a stlač <strong>Poslať kód</strong>. Odíde e-mail s <strong>8-miestnym kódom</strong>.</li>
+<li><strong>2. Kód z e-mailu:</strong> zadaj kód a stlač <strong>Overiť</strong>.</li>
+</ol>
+<p>Kód platí <strong>Platnosť kódu na obnovu</strong> minút (predvolene 15) a dá sa zadať najviac <strong>5-krát</strong> (potom treba poslať nový). Ak už kód máš, v okne je odkaz <em>Už máte kód? Zadajte ho priamo</em>. Pri úspechu sa uloží, kto doménu overil a cez akú adresu. Chyby: <em>The address must end with @doména</em>, <em>No mail server is configured</em>, <em>The code is wrong or expired</em>.</p>
+<ul>
+<li><strong>Znovu overiť</strong> je dostupné kedykoľvek (napr. pre novú adresu); pri nej sa doména nezruší.</li>
+<li><strong>Odstránenie</strong> (tlačidlo pri doméne, s potvrdením) doménu zruší okamžite: e-maily do nej prestanú ísť. Odstránenie schvaľovanie štyri oči nevyžaduje.</li>
+<li>Pridanie, overenie aj odstránenie sa zapisujú do auditu.</li>
+</ul>
+
+<h1>Ktoré e-maily plugin posiela (jadro PIN)</h1>
+<p>Tu sú maily o samotnom PINe a 2FA. E-maily o rolách, schvaľovaní, oblastiach a prístupoch len cez PIN sú popísané pri ich kapitolách.</p>
+<table>
+<tr><th>Predmet (anglicky; v nastavenom jazyku sa preloží)</th><th>Kto dostane a kedy</th><th>Vypína ho „Bezpečnostné upozornenia“?</th></tr>
+<tr><td>Your PIN was set / was changed / was reset / was recovered</td><td>používateľ, po nastavení, zmene, resete správcom, obnove zabudnutého PINu</td><td>áno</td></tr>
+<tr><td>Your PIN was suspended / Your PIN is active again</td><td>používateľ, keď správca pozastaví alebo obnoví jeho PIN</td><td>áno</td></tr>
+<tr><td>Your PIN is locked</td><td>používateľ, po prekročení počtu zlých pokusov</td><td>áno</td></tr>
+<tr><td>Your PIN expires soon</td><td>používateľ, <strong>raz</strong> pri vstupe do obdobia upozornenia (predvolene 14 dní pred koncom platnosti)</td><td>áno</td></tr>
+<tr><td>Two-factor authentication enabled / disabled / reset</td><td>používateľ, pri zmene 2FA</td><td>áno</td></tr>
+<tr><td>Your backup codes were viewed</td><td>používateľ, po zobrazení záložných kódov</td><td>áno</td></tr>
+<tr><td>Reset of your PIN / two-factor authentication started</td><td>používateľ, keď správca spustí reset (musí ho potvrdiť v NetBoxe)</td><td>áno</td></tr>
+<tr><td>Verification code</td><td>8-miestny kód na zobrazenie záložných kódov bez telefónu (platnosť podľa nastavenia, najviac 5 pokusov, nový kód najskôr po 60 s)</td><td>nie</td></tr>
+<tr><td>PIN recovery code</td><td>8-miestny kód na obnovu zabudnutého PINu</td><td>nie</td></tr>
+<tr><td>Domain verification</td><td>kód na overenie domény (na zadanú adresu)</td><td>nie</td></tr>
+<tr><td>Test e-mail</td><td>vybraný príjemca zo stránky Mail</td><td>nie</td></tr>
+</table>
+<div class="note">Vypínač <em>Bezpečnostné upozornenia e-mailom</em> ovplyvňuje len prvých sedem riadkov. Kódy, pozvánky, maily o rolách, schvaľovaní, oblastiach a prístupoch len cez PIN idú vždy, keď sú splnené podmienky na začiatku tejto časti (pošta, adresa, overená doména).</div>
+
+<h1>E-maily: keď nejdú</h1>
+<table>
+<tr><th>Príznak</th><th>Čo skontrolovať</th></tr>
+<tr><td>Nikomu nič nechodí</td><td>Stránka Mail → karta <em>Stav</em>: je <em>Používa sa</em> iné než <em>nenastavené</em>? Potom <strong>Test pripojenia</strong> a <strong>testovací e-mail</strong>.</td></tr>
+<tr><td>Test pripojenia hlási chybu</td><td>server, port, šifrovanie (port 25 bez šifrovania, 587 STARTTLS, 465 SSL/TLS), prihlasovacie údaje; z NetBoxu servera musí byť SMTP server dostupný.</td></tr>
+<tr><td>Test prejde, niekomu mail nechodí</td><td>V zozname <em>Používatelia</em> pozri stĺpec E-mail: <em>bez e-mailu</em> alebo <em>doména</em> znamená, že adresa chýba alebo jej doména nie je overená.</td></tr>
+<tr><td>Doménu som pridal, ale nechodia maily</td><td>Doména musí byť <strong>overená</strong>: v zozname má byť <em>overená</em>, nie <em>neoverená</em>.</td></tr>
+<tr><td>Kód z e-mailu nepríde pri pridaní domény</td><td>Pošta nie je nastavená (<em>No mail server is configured</em>) alebo je zlá adresa. V audite je <em>E-mail failed</em> s chybou.</td></tr>
+<tr><td>Bezpečnostné upozornenia nechodia, ostatné áno</td><td>Vypnutý vypínač <em>Bezpečnostné upozornenia e-mailom</em>.</td></tr>
+<tr><td>Zhrnutia zmien osôb len s PIN-om nechodia</td><td>Nebeží <code>netbox-rq</code> (posiela ich fronta).</td></tr>
+</table>
+<p>Všetky odoslané aj zlyhané e-maily sú v <em>Audit logu</em> (udalosti <em>E-mail sent</em> a <em>E-mail failed</em>, bez obsahu e-mailu).</p>
