@@ -2302,6 +2302,8 @@ class ExceptionAllowedTest(AreaTestCase):
         self.assertNotIn('/user/api-tokens/', page)
         self.assertNotIn('/user/bookmarks/', page)
         self.assertIn('/user/password/', page)
+        self.assertIn('href="/user/password/" class="dropdown-item"', page)  # NetBox has no such link: the plugin adds it
+        self.assertLess(page.index('href="/user/password/" class="dropdown-item"'), page.index('/logout/'))
         areas.set_exception_allowed(self.plain, self.keeper, ['password', 'tokens', 'bookmarks'])
         page = self.client.get('/user/password/').content.decode()
         self.assertIn('/user/api-tokens/', page)

@@ -672,8 +672,22 @@ def _shape_html(request, text):
 
 def _shape_exception(user, text):
     """The user menu and the tabs of the account pages of a user with an exception: only what a keeper allowed."""
-    text = _USER_MENU.sub(lambda m: m.group(1) + _ANCHOR.sub(
-        lambda a: a.group(0) if _exception_href_allowed(user, a.group(1)) else '', m.group(2)) + m.group(3), text)
+    from django.utils.translation import gettext
+
+    def user_menu(match):
+        body = _ANCHOR.sub(lambda a: a.group(0) if _exception_href_allowed(user, a.group(1)) else '', match.group(2))
+        if areas.exception_allows(user, 'password') and '/user/password/' not in body:
+            # NetBox has no link to the password in the menu (only a tab of the profile, which may be closed)
+            with translation.override(service.get_settings().language or 'en'):
+                link = ('<a href="/user/password/" class="dropdown-item"><i class="dropdown-item-icon mdi '
+                        'mdi-lock-reset" aria-hidden="true"></i> %s</a>' % gettext('Change the password'))
+            logout = next((a for a in _ANCHOR.finditer(body) if '/logout/' in a.group(1)), None)
+            body = body[:logout.start()] + link + body[logout.start():] if logout else body + link
+        return match.group(1) + body + match.group(3)
+
+    text = _USER_MENU.sub(user_menu, text)
+    if not areas.exception_allows(user, 'notifications'):
+        text = _BELL.sub('', text)  # the bell opens the notifications
     return _ACCOUNT_TAB.sub(lambda m: m.group(0) if _exception_href_allowed(user, m.group(1)) else '', text)
 
 
