@@ -29,6 +29,19 @@
 <tr><td><strong>Users may create their own API key</strong></td><td>no</td><td>a key works with the NetBox permissions and the PIN does not judge it: a superuser with a key reads everything through a script. Allow it only for narrow permissions. A user then sees only their <strong>own</strong> keys</td></tr>
 </table>
 <div class="note">There is also a hidden option <em>Whom the protection applies to</em>: by default <strong>only people with a PIN</strong> (PIN-only people and users in a group or section managers; everybody else works by NetBox permissions and does not see the plugin). It cannot be changed in the interface.</div>
+<h2>E-mails about the changes in the protected areas</h2>
+<p>The card <strong>E-mails about the changes in the protected areas</strong> on the <em>Protected areas</em> page (set only by a keeper). When a user in a group of a protected area (not a keeper or a PIN-only person) <strong>adds, changes or deletes an object</strong> whose type the area protects:</p>
+<ul>
+<li>the event <em>Object changed in a protected area</em> is written to the <strong>audit log</strong> (user, area, type and name of the object),</li>
+<li>the <strong>keepers and the manager of the section</strong> that covers the object type get an <strong>e-mail</strong> (except the author of the change): the changed fields from → to.</li>
+</ul>
+<table>
+<tr><th>Option</th><th>Default</th><th>Meaning</th></tr>
+<tr><td>E-mail the administrators what users changed in the protected areas</td><td>on</td><td>off: no e-mails, the audit log is still written</td></tr>
+<tr><td>Summary every</td><td>60 minutes</td><td>5, 15, 30, 60, 120, 240 minutes or once a day: one e-mail with all the changes</td></tr>
+<tr><td>At every change</td><td>–</td><td>one e-mail per change, sent after the save through <code>netbox-rq</code>. Never both at once</td></tr>
+</table>
+<p>An e-mail goes only to somebody with an address in a <strong>verified domain</strong> (the E-mails chapter). The summaries are processed by the system job every 5 minutes, so <code>netbox-rq</code> must run. On the first run nothing from the past is sent. PIN-only people have their own e-mails (the chapter PIN-only people). The changes are also in the NetBox Change log.</p>
 <h2>Emergency on the server</h2>
 <pre>python manage.py userpin_keeper                 # shows the keepers
 python manage.py userpin_keeper --add &lt;name&gt;    # appoints a keeper

@@ -259,6 +259,18 @@ class PinSettings(models.Model):
         verbose_name=_('Summary every (minutes)'), default=60,
         validators=[MinValueValidator(5), MaxValueValidator(1440)],
     )
+    # what the users in the groups of a protected area changed: e-mailed to the keepers and the section managers
+    area_mail_changes = models.BooleanField(
+        verbose_name=_('E-mail the administrators what users changed in the protected areas'), default=True,
+        help_text=_('A user in a group of a protected area (not a keeper) adds, changes or deletes an object of that '
+                    'area: the keepers and the manager of the section get an e-mail (and the audit log records it).'))
+    area_mail_mode = models.CharField(
+        verbose_name=_('How the administrators get these changes'), max_length=10, default='summary',
+        choices=(('summary', _('Summary')), ('each', _('At every change'))))
+    area_mail_every = models.PositiveIntegerField(
+        verbose_name=_('Summary every (minutes)'), default=60,
+        validators=[MinValueValidator(5), MaxValueValidator(1440)])
+    area_changes_mailed = models.DateTimeField(null=True, blank=True, editable=False)
     areas_enabled = models.BooleanField(
         verbose_name=_('Protect areas and objects'),
         default=False,
@@ -495,6 +507,7 @@ class PinEventAction(models.TextChoices):
     AREA_REVOKED = 'area_revoked', _('Access to an area revoked')
     AREA_CANCELLED = 'area_cancelled', _('Access request cancelled')
     AREA_BLOCKED = 'area_blocked', _('Access to an area refused')
+    AREA_OBJECT_CHANGED = 'area_object_changed', _('Object changed in a protected area')
     KEEPER_ADDED = 'keeper_added', _('Protection keeper appointed')
     KEEPER_REMOVED = 'keeper_removed', _('Protection keeper removed')
     DENY_ENABLED = 'deny_enabled', _('Default deny switched on')

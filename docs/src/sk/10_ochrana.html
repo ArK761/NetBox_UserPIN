@@ -29,6 +29,19 @@
 <tr><td><strong>Používatelia smú vytvoriť vlastný API kľúč</strong></td><td>nie</td><td>kľúč pracuje s oprávneniami NetBoxu a PIN ho neposudzuje: superuser s kľúčom prečíta všetko cez skript. Povoľ len pri užších oprávneniach. Používateľ potom vidí len <strong>vlastné</strong> kľúče</td></tr>
 </table>
 <div class="note">Existuje aj skrytá voľba <em>Na koho sa ochrana vzťahuje</em>: predvolene <strong>len ľudia s PINom</strong> (osoby len s PIN-om a používatelia v skupine alebo správcovia úsekov; ostatní pracujú podľa oprávnení NetBoxu a plugin nevidia). V rozhraní sa nedá meniť.</div>
+<h2>E-maily o zmenách v chránených oblastiach</h2>
+<p>Karta <strong>E-maily o zmenách v chránených oblastiach</strong> na stránke <em>Chránené oblasti</em> (nastavuje len strážca). Keď používateľ v skupine chránenej oblasti (nie strážca ani osoba len s PIN-om) <strong>pridá, zmení alebo zmaže objekt</strong>, ktorého typ oblasť chráni:</p>
+<ul>
+<li>zapíše sa do <strong>Audit logu</strong> udalosť <em>Zmena objektu v chránenej oblasti</em> (používateľ, oblasť, typ a názov objektu),</li>
+<li><strong>strážcovia a správca úseku</strong>, ktorý pokrýva daný typ objektu, dostanú <strong>e-mail</strong> (vynímajúc samotného autora zmeny): zmenené polia z → na.</li>
+</ul>
+<table>
+<tr><th>Voľba</th><th>Predvolené</th><th>Význam</th></tr>
+<tr><td>Posielať administrátorom, čo používatelia zmenili v chránených oblastiach</td><td>zapnuté</td><td>vypnuté: e-maily neidú, do Audit logu sa zapisuje ďalej</td></tr>
+<tr><td>Súhrn každých</td><td>60 minút</td><td>5, 15, 30, 60, 120, 240 minút alebo raz za deň: jeden e-mail so všetkými zmenami</td></tr>
+<tr><td>Pri každej zmene</td><td>–</td><td>jeden e-mail na zmenu, odošle sa po uložení cez <code>netbox-rq</code>. Nikdy nie oboje naraz</td></tr>
+</table>
+<p>E-mail príde len tomu, kto má adresu v <strong>overenej doméne</strong> (kapitola E-maily). Súhrny spracúva systémová úloha každých 5 minút, preto treba bežiaci <code>netbox-rq</code>. Pri prvom spustení sa nič z minulosti neposiela. Osoby len s PIN-om majú vlastné e-maily (kapitola Osoby len s PIN-om). Zmeny nájdeš aj v Changelogu NetBoxu.</p>
 <h2>Núdza na serveri</h2>
 <pre>python manage.py userpin_keeper                 # zobrazí strážcov
 python manage.py userpin_keeper --add &lt;meno&gt;    # vymenuje strážcu

@@ -1963,6 +1963,28 @@ def remove_exception(user, actor, request=None):
     return bool(removed)
 
 
+def set_area_mails(actor, on, mode, every, request=None):
+    """A keeper chooses whether the changes of the users in the protected areas are e-mailed, and how."""
+    from .areachanges import MAIL_EVERY
+    if not is_keeper(actor):
+        raise PermissionDenied
+    if mode not in ('summary', 'each'):
+        raise ValidationError(_('Choose a summary or every change.'))
+    try:
+        every = int(every)
+    except (TypeError, ValueError):
+        every = 60
+    if every not in MAIL_EVERY:
+        raise ValidationError(_('Choose one of the offered intervals.'))
+    settings = service.get_settings()
+    settings.area_mail_changes, settings.area_mail_mode, settings.area_mail_every = bool(on), mode, every
+    settings.save(update_fields=['area_mail_changes', 'area_mail_mode', 'area_mail_every'])
+    service.log_event(PinEventAction.SETTINGS_CHANGED, actor=actor, request=request,
+                      detail=f'changes of the users in the protected areas: e-mail {"on" if on else "off"}, '
+                             f'{mode}{f" every {every} min" if mode == "summary" else ""}')
+    return settings
+
+
 def set_visibility(actor, mode, allow_requests, allow_own_tokens, request=None, scope=None):
     """
     What a user sees of what is not allowed to him (A: a door, B: nothing), what he may ask for / create, and whom the

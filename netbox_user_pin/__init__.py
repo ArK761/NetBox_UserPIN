@@ -41,9 +41,10 @@ class UserPinConfig(PluginConfig):
         area_guard.install()
         from . import fieldrules
         fieldrules.install()
-        from . import guests
+        from . import areachanges, guests
         guests.install_user_email_check()
         guests.install_signals()
+        areachanges.install()
 
     @staticmethod
     def _register_event_types():

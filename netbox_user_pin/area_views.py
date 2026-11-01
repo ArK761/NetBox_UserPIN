@@ -9,6 +9,7 @@ from django.utils.translation import gettext as _
 from django.views import View
 
 from . import areas, fieldrules, roles, service
+from .areachanges import MAIL_EVERY
 from .forms import ACCESS_HOURS
 from .forms import (
     AccessRequestForm, GroupForm, GroupMemberForm, AreaDecideForm, AreaForm, AreaGrantForm, AreaOwnerForm, AreaProfileForm, AreaRequestForm, AreaTargetForm,
@@ -177,6 +178,8 @@ class AreaListView(AreaViewMixin, View):
             if areas.is_keeper(request.user) else [],
             'denied_view': service.get_settings().denied_view, 'allow_requests': service.get_settings().allow_requests,
             'allow_own_tokens': service.get_settings().allow_own_tokens,
+            'area_mail': {'on': service.get_settings().area_mail_changes, 'mode': service.get_settings().area_mail_mode,
+                          'every': service.get_settings().area_mail_every, 'choices': MAIL_EVERY},
             'protect_scope': service.get_settings().protect_scope,
             'keeper_form': KeeperForm(),
             'settings': service.get_settings(), **_step_up_context(request),
@@ -276,6 +279,12 @@ class AreaListView(AreaViewMixin, View):
                 areas.remove_exception(get_object_or_404(get_user_model(), pk=request.POST.get('pk') or 0),
                                        request.user, request=request)
                 messages.success(request, _('The exception was taken away: the protection applies to him again.'))
+                return redirect('plugins:netbox_user_pin:areas')
+            if action == 'area-mails':
+                areas.set_area_mails(request.user, request.POST.get('area_mail_changes') == 'on',
+                                     request.POST.get('area_mail_mode', 'summary'),
+                                     request.POST.get('area_mail_every', 60), request=request)
+                messages.success(request, _('Saved.'))
                 return redirect('plugins:netbox_user_pin:areas')
             if action == 'visibility':
                 areas.set_visibility(request.user, request.POST.get('denied_view', 'doors'),

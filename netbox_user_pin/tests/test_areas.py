@@ -2457,6 +2457,119 @@ class ExceptionAllowedTest(AreaTestCase):
         self.assertFalse(areas.restricted(self.armed(self.plain)))
 
 
+class AreaChangeMailTest(AreaTestCase):
+    """What the users in the groups of a protected area change: the audit log and the e-mails to the administrators."""
+
+    def setUp(self):
+        super().setUp()
+        from netbox_user_pin.models import AllowedDomain
+        from tenancy.models import Tenant
+        AllowedDomain.objects.create(domain='example.com', verified=timezone.now())
+        self.keeper = User.objects.create_superuser('keeperx', 'kx@example.com', 'x')
+        service.set_pin(self.keeper, GOOD_PIN)
+        enable_2fa(self.keeper)
+        areas.add_keeper(self.keeper, self.master)
+        self.area = self.make_area(targets=('tenancy.tenant',))
+        self.tenant = Tenant.objects.create(name='T1', slug='t1')
+        self.worker = User.objects.create_user('worker', 'w@example.com')
+        areas.clear_cache()
+
+    def change(self, user=None, model=None, name='T1', action='update'):
+        from uuid import uuid4
+
+        from core.models import ObjectChange
+        from django.contrib.contenttypes.models import ContentType
+        from tenancy.models import Tenant
+        user = user or self.worker
+        return ObjectChange.objects.create(
+            user=user, user_name=user.username, request_id=uuid4(), action=action,
+            changed_object_type=ContentType.objects.get_for_model(model or Tenant),
+            changed_object_id=self.tenant.pk, object_repr=name,
+            prechange_data={'description': 'old'}, postchange_data={'description': 'new'})
+
+    def events(self):
+        from netbox_user_pin.models import PinEvent
+        return list(PinEvent.objects.filter(action='area_object_changed'))
+
+    def test_a_change_in_a_protected_area_is_in_the_audit_log(self):
+        from dcim.models import Site
+        self.change()
+        events = self.events()
+        self.assertEqual(len(events), 1)
+        self.assertEqual((events[0].username, events[0].scope), ('worker', self.area.key))
+        self.assertIn('T1', events[0].detail)
+        self.change(user=self.keeper)  # a keeper is not watched
+        self.change(model=Site)  # no area covers the type
+        self.assertEqual(len(self.events()), 1)
+
+    def test_the_summary_goes_to_the_keepers_and_the_managers_of_the_section(self):
+        from django.core import mail
+        with override_settings(EMAIL={'SERVER': 'localhost', 'FROM_EMAIL': 'netbox@example.com'}):
+            areas.set_area_mails(self.keeper, True, 'summary', 15)
+            from netbox_user_pin import areachanges
+            self.assertEqual(areachanges.report(), 0)  # the first run only sets the mark
+            self.change()
+            mail.outbox.clear()
+            self.assertEqual(areachanges.report(), 0)  # 15 minutes are not over yet
+            self.assertEqual(mail.outbox, [])
+            self.assertEqual(areachanges.report(force=True), 1)
+            recipients = sorted(address for m in mail.outbox for address in m.to)
+            self.assertEqual(recipients, ['kx@example.com', 'o1@example.com', 'o2@example.com'])
+            self.assertIn('worker', mail.outbox[0].subject)
+            self.assertIn('T1', mail.outbox[0].body)
+            self.assertIn('description: from "old" to "new"', mail.outbox[0].body)
+            mail.outbox.clear()
+            self.assertEqual(areachanges.report(force=True), 0)  # reported once
+
+    def test_at_every_change_it_is_queued_and_not_sent_while_the_page_saves(self):
+        from unittest import mock
+
+        from django.core import mail
+        with override_settings(EMAIL={'SERVER': 'localhost', 'FROM_EMAIL': 'netbox@example.com'}):
+            areas.set_area_mails(self.keeper, True, 'each', 60)
+            queued = []
+            mail.outbox.clear()
+            with mock.patch('django_rq.get_queue') as get_queue:
+                get_queue.return_value.enqueue.side_effect = lambda func, *args: queued.append((func, args))
+                with self.captureOnCommitCallbacks(execute=True):
+                    self.change()
+            self.assertEqual(mail.outbox, [])
+            for func, args in queued:
+                func(*args)  # what netbox-rq does
+            self.assertEqual(len(mail.outbox), 3)
+            from netbox_user_pin import areachanges
+            self.assertEqual(areachanges.report(force=True), 0)  # at once, so no summary as well
+
+    def test_switched_off_nothing_is_mailed_but_the_audit_log_has_it(self):
+        from django.core import mail
+        with override_settings(EMAIL={'SERVER': 'localhost', 'FROM_EMAIL': 'netbox@example.com'}):
+            areas.set_area_mails(self.keeper, False, 'summary', 15)
+            from netbox_user_pin import areachanges
+            areachanges.report()
+            self.change()
+            mail.outbox.clear()
+            self.assertEqual(areachanges.report(force=True), 0)
+            self.assertEqual(mail.outbox, [])
+            self.assertEqual(len(self.events()), 1)
+
+    def test_only_a_keeper_sets_it_and_the_page_saves_it(self):
+        from django.core.exceptions import PermissionDenied
+        with self.assertRaises(PermissionDenied):
+            areas.set_area_mails(self.owner1, True, 'each', 60)
+        with self.assertRaises(ValidationError):
+            areas.set_area_mails(self.keeper, True, 'each', 7)
+        with self.assertRaises(ValidationError):
+            areas.set_area_mails(self.keeper, True, 'daily', 60)
+        admin_login(self.client, self.keeper)
+        url = reverse('plugins:netbox_user_pin:areas')
+        self.assertIn('area-mails', self.client.get(url).content.decode())
+        self.client.post(url, {'action': 'area-mails', 'area_mail_changes': 'on', 'area_mail_mode': 'each',
+                               'area_mail_every': '30'})
+        settings = service.get_settings()
+        self.assertEqual((settings.area_mail_changes, settings.area_mail_mode, settings.area_mail_every),
+                         (True, 'each', 30))
+
+
 class ImportExportTest(AreaTestCase):
     """Importing and exporting are rights of their own: adding / reading does not bring them along."""
 

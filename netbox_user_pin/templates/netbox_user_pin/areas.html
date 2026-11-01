@@ -143,6 +143,23 @@
   </div>
 </div>
 {% endif %}
+{% if is_keeper %}
+<div class="card mt-3">
+  <h2 class="card-header"><i class="mdi mdi-email-alert-outline"></i> {% trans "E-mails about the changes in the protected areas" %}</h2>
+  <div class="card-body">
+    <form method="post" class="d-flex flex-column gap-2">{% csrf_token %}<input type="hidden" name="action" value="area-mails">
+      <p class="text-secondary mb-1">{% trans "A user in a group of a protected area (not a keeper) adds, changes or deletes an object of that area: the audit log records it and the keepers and the manager of the section get an e-mail." %}</p>
+      <div class="form-check form-switch"><input class="form-check-input" type="checkbox" name="area_mail_changes" id="am-on" {% if area_mail.on %}checked{% endif %}><label class="form-check-label" for="am-on">{% trans "E-mail the administrators what users changed in the protected areas" %}</label></div>
+      <div class="form-check"><input class="form-check-input" type="radio" name="area_mail_mode" value="summary" id="am-sum" {% if area_mail.mode == 'summary' %}checked{% endif %}>
+        <label class="form-check-label" for="am-sum">{% trans "Summary every" %}
+          <select name="area_mail_every" class="form-select form-select-sm d-inline-block w-auto">{% for v in area_mail.choices %}<option value="{{ v }}" {% if v == area_mail.every %}selected{% endif %}>{% if v == 1440 %}{% trans "once a day" %}{% else %}{{ v }} {% trans "min" %}{% endif %}</option>{% endfor %}</select></label></div>
+      <div class="form-check"><input class="form-check-input" type="radio" name="area_mail_mode" value="each" id="am-each" {% if area_mail.mode == 'each' %}checked{% endif %}><label class="form-check-label" for="am-each">{% trans "At every change (one e-mail per change)" %}</label></div>
+      <div><button class="btn btn-primary btn-sm" type="submit">{% trans "Save" %}</button></div>
+      <div class="form-text">{% trans "The e-mails go to the protection keepers and to the manager of the section that covers the object type. The people with a PIN only have their own e-mails (People with a PIN only)." %}</div>
+    </form>
+  </div>
+</div>
+{% endif %}
 <div class="card mt-3">
   <h2 class="card-header">{% trans "What is set up" %}</h2>
   <div class="card-body">

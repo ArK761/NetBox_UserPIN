@@ -10,7 +10,7 @@
 <tr><td>NetBox</td><td>version <strong>4.7.0 or newer</strong> (the plugin has <code>min_version = 4.7.0</code> and no upper limit). With an older NetBox the plugin does not load.</td></tr>
 <tr><td>Python</td><td>3.12 or newer (<code>requires-python &gt;= 3.12</code>).</td></tr>
 <tr><td><code>netbox-rq</code> worker</td><td>The plugin registers a system job <strong>User PIN role housekeeping</strong> that runs <strong>every 5 minutes</strong>. It expires invitations, moves and exceptions, sends reminders, returns rights after a temporary hand-over, announces the end of PIN-only accesses and sends the summaries of changes. The e-mails about the changes of a PIN-only person also go through the <code>default</code> queue. When the worker does not run, these things are not done.</td></tr>
-<tr><td>Database</td><td>the tables of the plugin are created by <code>migrate</code> (migrations 0001 to 0043).</td></tr>
+<tr><td>Database</td><td>the tables of the plugin are created by <code>migrate</code> (migrations 0001 to 0044).</td></tr>
 </table>
 <h2>Dependencies (Python packages)</h2>
 <table>

@@ -110,7 +110,8 @@ areas.can(request.user, 'netbox_libreoxi', 'config')   # True / False</pre>
 <li><strong>Editing the end of an exception</strong> (date and time, empty = no end); when it passes the switch moves to <em>off</em> by itself (system job, audit, e-mail to the keepers); an ended exception must be extended before switching on.</li>
 <li><strong>Searching and paging</strong> of the list of exceptions (name, account, reason; state filter; 25 per page) and a search field when adding a user.</li>
 <li>New field <code>PolicyException.active</code> (migration <code>0043</code>).</li>
-<li>The field <em>Owner group</em> (a helper field of a form) is hidden and locked together with the field <em>Owner</em>.</li>
+<li><strong>Helper fields of forms</strong> (Owner group, Tenant group, Contact group, the site selectors of a cable, rack etc.) are hidden and locked together with the field they belong to; the plugin finds them from the references of the drop-downs (checked on all 221 forms of NetBox 4.7.2).</li>
+<li><strong>E-mails and audit of changes in the protected areas</strong>: a change of an object by a user in a group is written to the audit log and the keepers and the section manager get an e-mail (a summary or at every change). New settings fields (migration <code>0044</code>).</li>
 </ul>
 <h2>Keys and security</h2>
 <ul>
