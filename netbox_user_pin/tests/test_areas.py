@@ -2552,6 +2552,30 @@ class AreaChangeMailTest(AreaTestCase):
             self.assertEqual(mail.outbox, [])
             self.assertEqual(len(self.events()), 1)
 
+    def test_the_user_is_told_when_added_to_or_removed_from_a_group(self):
+        from django.core import mail
+        with override_settings(EMAIL={'SERVER': 'localhost', 'FROM_EMAIL': 'netbox@example.com'}):
+            group = areas.create_group(self.area, 'tenancy.tenant', 'Readers', ['view'], self.owner1, records='all')
+            mail.outbox.clear()
+            with self.captureOnCommitCallbacks(execute=True):
+                areas.add_member(group, self.worker, None, self.owner1)
+            told = [m for m in mail.outbox if 'w@example.com' in m.to]
+            self.assertEqual(len(told), 1)  # being added is e-mailed once, where the access is granted
+            self.assertIn('Network', told[0].subject + told[0].body)
+            mail.outbox.clear()
+            from netbox_user_pin.models import AreaGrant
+            grant = AreaGrant.objects.get(user=self.worker, revoked__isnull=True)
+            with self.captureOnCommitCallbacks(execute=True):
+                areas.revoke_grant(grant, self.owner1)
+            self.assertEqual(len([m for m in mail.outbox if 'w@example.com' in m.to]), 1)
+            self.assertIn('removed from the group', [m for m in mail.outbox if 'w@example.com' in m.to][0].body)
+            # switched off: nobody is told
+            areas.set_area_mails(self.keeper, True, 'summary', 60, users=False)
+            mail.outbox.clear()
+            with self.captureOnCommitCallbacks(execute=True):
+                areas.add_member(group, self.worker, None, self.owner1)
+            self.assertEqual([m for m in mail.outbox if 'w@example.com' in m.to], [])
+
     def test_only_a_keeper_sets_it_and_the_page_saves_it(self):
         from django.core.exceptions import PermissionDenied
         with self.assertRaises(PermissionDenied):

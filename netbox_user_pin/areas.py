@@ -1577,7 +1577,7 @@ def grant_access(area, user, profile, hours, actor, request=None, notify=True, t
                                      granted_by_name=actor.username, target=target or '')
     _log(PinEventAction.AREA_GRANTED, area, actor, user=user, request=request,
          detail=f'{target or "*"} ({", ".join(profile.rights)}) {_until_text(grant)}')
-    if notify:
+    if notify and service.get_settings().area_mail_users:
         service.send_user_mail(user, _('Access granted: %(area)s') % {'area': area.name}, _(
             'You were given access to "%(area)s" (%(profile)s) %(until)s.') % {
             'area': area.name, 'profile': _profile_label(profile), 'until': _until_text(grant)}, request=request)
@@ -1963,7 +1963,7 @@ def remove_exception(user, actor, request=None):
     return bool(removed)
 
 
-def set_area_mails(actor, on, mode, every, request=None):
+def set_area_mails(actor, on, mode, every, request=None, users=None):
     """A keeper chooses whether the changes of the users in the protected areas are e-mailed, and how."""
     from .areachanges import MAIL_EVERY
     if not is_keeper(actor):
@@ -1978,10 +1978,13 @@ def set_area_mails(actor, on, mode, every, request=None):
         raise ValidationError(_('Choose one of the offered intervals.'))
     settings = service.get_settings()
     settings.area_mail_changes, settings.area_mail_mode, settings.area_mail_every = bool(on), mode, every
-    settings.save(update_fields=['area_mail_changes', 'area_mail_mode', 'area_mail_every'])
+    if users is not None:
+        settings.area_mail_users = bool(users)
+    settings.save(update_fields=['area_mail_changes', 'area_mail_mode', 'area_mail_every', 'area_mail_users'])
     service.log_event(PinEventAction.SETTINGS_CHANGED, actor=actor, request=request,
                       detail=f'changes of the users in the protected areas: e-mail {"on" if on else "off"}, '
-                             f'{mode}{f" every {every} min" if mode == "summary" else ""}')
+                             f'{mode}{f" every {every} min" if mode == "summary" else ""}; '
+                             f'e-mail to the user about their access {"on" if settings.area_mail_users else "off"}')
     return settings
 
 

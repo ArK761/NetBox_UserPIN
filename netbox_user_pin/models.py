@@ -270,6 +270,9 @@ class PinSettings(models.Model):
     area_mail_every = models.PositiveIntegerField(
         verbose_name=_('Summary every (minutes)'), default=60,
         validators=[MinValueValidator(5), MaxValueValidator(1440)])
+    area_mail_users = models.BooleanField(
+        verbose_name=_('E-mail the user about changes of their access'), default=True,
+        help_text=_('A user who is given access to a protected area or removed from a group of it is told by e-mail.'))
     area_changes_mailed = models.DateTimeField(null=True, blank=True, editable=False)
     areas_enabled = models.BooleanField(
         verbose_name=_('Protect areas and objects'),

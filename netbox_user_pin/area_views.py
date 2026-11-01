@@ -178,7 +178,8 @@ class AreaListView(AreaViewMixin, View):
             if areas.is_keeper(request.user) else [],
             'denied_view': service.get_settings().denied_view, 'allow_requests': service.get_settings().allow_requests,
             'allow_own_tokens': service.get_settings().allow_own_tokens,
-            'area_mail': {'on': service.get_settings().area_mail_changes, 'mode': service.get_settings().area_mail_mode,
+            'area_mail': {'on': service.get_settings().area_mail_changes, 'users': service.get_settings().area_mail_users,
+                          'mode': service.get_settings().area_mail_mode,
                           'every': service.get_settings().area_mail_every, 'choices': MAIL_EVERY},
             'protect_scope': service.get_settings().protect_scope,
             'keeper_form': KeeperForm(),
@@ -283,7 +284,8 @@ class AreaListView(AreaViewMixin, View):
             if action == 'area-mails':
                 areas.set_area_mails(request.user, request.POST.get('area_mail_changes') == 'on',
                                      request.POST.get('area_mail_mode', 'summary'),
-                                     request.POST.get('area_mail_every', 60), request=request)
+                                     request.POST.get('area_mail_every', 60), request=request,
+                                     users=request.POST.get('area_mail_users') == 'on')
                 messages.success(request, _('Saved.'))
                 return redirect('plugins:netbox_user_pin:areas')
             if action == 'visibility':

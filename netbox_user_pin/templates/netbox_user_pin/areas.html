@@ -149,6 +149,8 @@
   <div class="card-body">
     <form method="post" class="d-flex flex-column gap-2">{% csrf_token %}<input type="hidden" name="action" value="area-mails">
       <p class="text-secondary mb-1">{% trans "A user in a group of a protected area (not a keeper) adds, changes or deletes an object of that area: the audit log records it and the keepers and the manager of the section get an e-mail." %}</p>
+      <div class="form-check form-switch"><input class="form-check-input" type="checkbox" name="area_mail_users" id="am-users" {% if area_mail.users %}checked{% endif %}><label class="form-check-label" for="am-users">{% trans "E-mail the user about changes of their access" %}</label>
+        <div class="form-text mt-0">{% trans "A user who is given access to a protected area or removed from a group of it is told by e-mail." %}</div></div>
       <div class="form-check form-switch"><input class="form-check-input" type="checkbox" name="area_mail_changes" id="am-on" {% if area_mail.on %}checked{% endif %}><label class="form-check-label" for="am-on">{% trans "E-mail the administrators what users changed in the protected areas" %}</label></div>
       <div class="form-check"><input class="form-check-input" type="radio" name="area_mail_mode" value="summary" id="am-sum" {% if area_mail.mode == 'summary' %}checked{% endif %}>
         <label class="form-check-label" for="am-sum">{% trans "Summary every" %}

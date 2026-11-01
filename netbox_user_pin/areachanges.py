@@ -8,6 +8,7 @@ covers the type get the e-mail, either at every change or as a summary every N m
 import logging
 from datetime import timedelta
 
+from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.utils import timezone, translation
 from django.utils.translation import gettext as _
@@ -177,8 +178,41 @@ def report(force=False):
     return len(wanted)
 
 
+def _grant_saved(sender, instance, created, **kwargs):
+    """Removed from a group: the user is told (being added is e-mailed where the access is granted)."""
+    user = instance.user
+    if created or user is None or not user.is_active or PinGuest.objects.filter(user=user).exists():
+        return
+    if instance.revoked is None or timezone.now() - instance.revoked >= timedelta(minutes=1):
+        return
+    who = getattr(instance, 'revoked_by_name', '') or instance.granted_by_name
+    pk = instance.pk
+
+    def send():
+        from .models import AreaGrant
+        grant = AreaGrant.objects.select_related('user', 'profile', 'area').filter(pk=pk).first()
+        settings = service.get_settings()
+        if grant is None or not settings.area_mail_users:
+            return
+        try:
+            with translation.override(settings.language or 'en'):
+                what = _('You were removed from the group %(group)s.') % {
+                    'group': f'{grant.profile.name} ({grant.area.name})'}
+                admin = get_user_model().objects.filter(username=who).first()
+                name = (admin.get_full_name() or admin.username) if admin else (who or '-')
+                subject = _('Your NetBox access was changed')
+                body = _('Hello %(name)s,\n\n%(admin)s changed your access to NetBox:\n\n%(what)s') % {
+                    'name': grant.user.get_full_name() or grant.user.username, 'admin': name, 'what': what}
+            service.send_user_mail(grant.user, subject, body)
+        except Exception:  # noqa: BLE001 - a mail that cannot be sent must not break the change of the access
+            logger.exception('Cannot e-mail the change of an access')
+    transaction.on_commit(send)
+
+
 def install():
     from django.db.models.signals import post_save
 
     from core.models import ObjectChange
     post_save.connect(_changed, sender=ObjectChange, dispatch_uid='userpin_area_changes')
+    from .models import AreaGrant
+    post_save.connect(_grant_saved, sender=AreaGrant, dispatch_uid='userpin_area_grant_mail')
