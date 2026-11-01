@@ -169,9 +169,7 @@ class AreaListView(AreaViewMixin, View):
             'waiting': len(waiting_list), 'waiting_list': waiting_list,
             'deny_on': areas.default_deny_active(), 'keepers': areas.keepers(),
             'is_keeper': areas.is_keeper(request.user), 'can_keepers': areas.can_manage_keepers(request.user),
-            'exceptions': [setattr(e, 'groups', areas.group_names_of(e.user)) or setattr(
-                e, 'allow_rows', areas.allow_rows(e.allowed_set)) or e for e in areas.exceptions()]
-            if areas.is_keeper(request.user) else [],
+            **(self._exception_context(request) if areas.is_keeper(request.user) else {}),
             'allow_rows': areas.allow_rows(),
             'exception_users': [(pk, label) for pk, label in _all_user_choices()
                                 if pk not in {k.pk for k in areas.keepers()}
@@ -183,6 +181,39 @@ class AreaListView(AreaViewMixin, View):
             'keeper_form': KeeperForm(),
             'settings': service.get_settings(), **_step_up_context(request),
         })
+
+    @staticmethod
+    def _exception_context(request):
+        """The exceptions of the list: searched (name, account, reason), filtered by state and paged."""
+        from django.core.paginator import Paginator
+        everything = areas.exceptions()
+        query = (request.GET.get('q') or '').strip().lower()
+        status = request.GET.get('status') or ''
+
+        def state(e):
+            return 'ended' if e.is_expired else ('on' if e.active else 'off')
+
+        def found(e):
+            text = ' '.join((e.user.username, e.user.first_name, e.user.last_name, e.note)).lower()
+            return not query or query in text
+
+        rows = [e for e in everything if found(e) and (not status or state(e) == status)]
+        page = Paginator(rows, 25).get_page(request.GET.get('page'))
+        for e in page:
+            e.groups = areas.group_names_of(e.user)
+            e.allow_rows = areas.allow_rows(e.allowed_set)
+        on = sum(1 for e in everything if e.in_effect)
+        return {'exception_page': page, 'exception_q': query, 'exception_status': status,
+                'exception_counts': {'total': len(everything), 'on': on, 'off': len(everything) - on}}
+
+    @staticmethod
+    def _areas_url(request):
+        """The page of the areas again, with the search the keeper was on (only a plain query string is taken)."""
+        from urllib.parse import parse_qsl, urlencode
+        url = reverse('plugins:netbox_user_pin:areas')
+        query = urlencode([(k, v) for k, v in parse_qsl(request.POST.get('qs', ''))
+                           if k in ('q', 'status', 'page')])
+        return f'{url}?{query}' if query else url
 
     def get(self, request):
         return self._render(request)
@@ -213,11 +244,33 @@ class AreaListView(AreaViewMixin, View):
                     messages.warning(request, _('%(user)s is in groups (%(groups)s): they do not apply to him while '
                                                 'the exception lasts.') % {'user': user.username, 'groups': groups})
                 return redirect('plugins:netbox_user_pin:areas')
+            if action == 'exception-enable':
+                user = get_object_or_404(get_user_model(), pk=request.POST.get('pk') or 0)
+                on = request.POST.get('state') == 'on'
+                areas.set_exception_enabled(user, request.user, on, request=request)
+                messages.success(request, (_('The exception of %(user)s is on: NetBox rules him.') if on else
+                                           _('The exception of %(user)s is off: the PIN rules him.'))
+                                 % {'user': user.username})
+                return redirect(self._areas_url(request))
+            if action == 'exception-expires':
+                from django.utils.dateparse import parse_datetime
+                end = None
+                if request.POST.get('expires'):
+                    end = parse_datetime(request.POST['expires'])
+                    if end is None:
+                        raise ValidationError(_('Write the end as a date and a time.'))
+                    if timezone.is_naive(end):
+                        end = timezone.make_aware(end)
+                areas.set_exception_expires(get_object_or_404(get_user_model(), pk=request.POST.get('pk') or 0),
+                                            request.user, end, request=request)
+                messages.success(request, _('The end of the exception was saved.') if end else
+                                 _('The exception has no end now.'))
+                return redirect(self._areas_url(request))
             if action == 'exception-allow':
                 areas.set_exception_allowed(get_object_or_404(get_user_model(), pk=request.POST.get('pk') or 0),
                                             request.user, request.POST.getlist('allow'), request=request)
                 messages.success(request, _('Saved: what the user with the exception may use.'))
-                return redirect('plugins:netbox_user_pin:areas')
+                return redirect(self._areas_url(request))
             if action == 'exception-remove':
                 from django.contrib.auth import get_user_model
                 areas.remove_exception(get_object_or_404(get_user_model(), pk=request.POST.get('pk') or 0),

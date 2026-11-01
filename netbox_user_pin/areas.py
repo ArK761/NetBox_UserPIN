@@ -162,7 +162,7 @@ def _refresh():
         _cache['guest_path'] = _settings.guest_path or 'pin'
         _cache['keepers'] = keepers
         _live = list(PolicyException.objects.filter(
-            Q(expires__isnull=True) | Q(expires__gt=timezone.now()), user__is_active=True))
+            Q(expires__isnull=True) | Q(expires__gt=timezone.now()), user__is_active=True, active=True))
         _cache['exempt'] = frozenset(e.user_id for e in _live)
         _cache['allowed'] = {e.user_id: e.allowed_set for e in _live}
         _cache['scope'] = _settings.protect_scope or 'all'
@@ -1838,7 +1838,7 @@ def add_exception(user, actor, expires=None, note='', request=None, allowed=None
         raise ValidationError(_('The end of the exception must be in the future.'))
     exception, created = PolicyException.objects.update_or_create(
         user=user, defaults={'expires': expires, 'note': (note or '').strip()[:200],
-                             'added_by_name': actor.username, 'since': timezone.now(),
+                             'added_by_name': actor.username, 'since': timezone.now(), 'active': True,
                              'allowed': _clean_allowed(EXCEPTION_DEFAULT if allowed is None else allowed)})
     service.log_event(PinEventAction.SETTINGS_CHANGED, user=user, actor=actor, request=request,
                       detail=f'EXCEPTION {"added" if created else "changed"} for {user.username}: '
@@ -1880,6 +1880,75 @@ def set_exception_allowed(user, actor, allowed, request=None):
                       detail=f'EXCEPTION of {user.username} allows: {exception.allowed or "nothing"}')
     clear_cache()
     return exception
+
+
+def _tell_keepers_about_exception(user, actor, subject, text, request=None):
+    for keeper in keepers():
+        if actor is None or keeper.pk != actor.pk:
+            service.send_user_mail(keeper, subject, text, request=request)
+
+
+def set_exception_enabled(user, actor, on, request=None):
+    """A keeper switches an exception on (NetBox rules the user) or off (the PIN rules him) - the row stays."""
+    if not is_keeper(actor):
+        raise PermissionDenied
+    exception = PolicyException.objects.filter(user=user).first()
+    if exception is None:
+        raise ValidationError(_('The user has no exception.'))
+    on = bool(on)
+    if on and exception.is_expired:
+        raise ValidationError(_('The exception has ended: set a new end (or none) before switching it on.'))
+    if exception.active == on:
+        return exception
+    exception.active = on
+    exception.save(update_fields=['active'])
+    service.log_event(PinEventAction.SETTINGS_CHANGED, user=user, actor=actor, request=request,
+                      detail=f'EXCEPTION of {user.username} switched {"on" if on else "off"}')
+    _tell_keepers_about_exception(
+        user, actor, _('Protection exception %(state)s: %(user)s') % {
+            'state': _('switched on') if on else _('switched off'), 'user': user.username},
+        _('%(actor)s switched the exception of %(user)s %(state)s. %(effect)s') % {
+            'actor': actor.username, 'user': user.username, 'state': _('on') if on else _('off'),
+            'effect': _('He works with the permissions of NetBox.') if on else _('The PIN rules him again.')},
+        request=request)
+    clear_cache()
+    return exception
+
+
+def set_exception_expires(user, actor, expires, request=None):
+    """A keeper changes the end of an exception (``None`` = no end). The end must be in the future."""
+    if not is_keeper(actor):
+        raise PermissionDenied
+    exception = PolicyException.objects.filter(user=user).first()
+    if exception is None:
+        raise ValidationError(_('The user has no exception.'))
+    if expires is not None and expires <= timezone.now():
+        raise ValidationError(_('The end of the exception must be in the future.'))
+    exception.expires = expires
+    exception.save(update_fields=['expires'])
+    service.log_event(PinEventAction.SETTINGS_CHANGED, user=user, actor=actor, request=request,
+                      detail=f'EXCEPTION of {user.username}: ' + (f'ends {expires.isoformat()}' if expires else 'no end'))
+    clear_cache()
+    return exception
+
+
+def expire_exceptions():
+    """Every 5 minutes: an exception whose end has passed is switched off (the PIN rules the user again)."""
+    done = []
+    for exception in PolicyException.objects.filter(active=True, expires__isnull=False,
+                                                    expires__lte=timezone.now()).select_related('user'):
+        exception.active = False
+        exception.save(update_fields=['active'])
+        service.log_event(PinEventAction.SETTINGS_CHANGED, user=exception.user,
+                          detail=f'EXCEPTION of {exception.user.username} ended and switched off')
+        _tell_keepers_about_exception(
+            exception.user, None, _('Protection exception ended: %(user)s') % {'user': exception.user.username},
+            _('The exception of %(user)s ended and was switched off. The PIN rules him again.') % {
+                'user': exception.user.username})
+        done.append(exception.user)
+    if done:
+        clear_cache()
+    return done
 
 
 def remove_exception(user, actor, request=None):

@@ -43,8 +43,31 @@ python manage.py userpin_default_deny --off     # switches the protection off</p
 <div><strong>Depends on:</strong> the protection switched on (while it is off nothing is taken away).</div>
 </div>
 <p>A user with an exception is not bound by the protection: they work with the permissions NetBox gives them. Their groups, accesses and roles stay as they are and apply again when the exception is taken away or ends. A superuser with an exception sees everything without the PIN. The <strong>Exceptions</strong> card is on the <em>Protected areas</em> page.</p>
+<h2>An exception on and off (the switch)</h2>
+<p>At every user there is a <strong>slide switch</strong>. The user stays in the list with all the settings (what they may use, the reason, the end) and you switch the exception on and off with one click, <strong>without removing it</strong>:</p>
+<table>
+<tr><th>Switch</th><th>What applies</th></tr>
+<tr><td><strong>Exception on</strong></td><td>the user is ruled <strong>by NetBox</strong> and of the account pages and the API may use only what the keeper ticked (<em>May use</em>)</td></tr>
+<tr><td><strong>Exception off</strong></td><td>the user is ruled <strong>by the PIN</strong>: the protection applies to them like to a regular user (groups, denials). The list of allowances is not used then, but it stays stored and applies again when switched on</td></tr>
+</table>
+<ul>
+<li>Only a keeper can switch. The change takes effect at once (within 5 seconds at the latest), is written to the audit log and the other keepers get the e-mail <em>Protection exception switched on / off</em>.</li>
+<li>Every row in the list has a tag <em>Exception on</em> (green), <em>Exception off</em> (yellow) or <em>Ended</em> (grey) and under the switch a text saying who rules them now (<em>NetBox rules him, only what is allowed</em> / <em>The PIN rules him</em>).</li>
+</ul>
+<h2>The end of an exception (date and time)</h2>
+<ul>
+<li>At every user there is the field <strong>Until</strong> with a date and time and a <em>Save</em> button: you can change the end at any time. <strong>An empty field = no end.</strong> A new end must be in the future.</li>
+<li><strong>When the end passes</strong> the PIN rules the user again at once (within 5 seconds) and the system job (every 5 minutes) moves the switch to <em>Exception off</em> and writes it to the audit log; the other keepers get the e-mail <em>Protection exception ended</em>. The row stays in the list with the tag <em>Ended</em>.</li>
+<li><strong>You switch an ended exception on again</strong> by first setting a new end (or clearing it) and then switching it on. Switching on with a past end is refused (<em>The exception has ended: set a new end (or none) before switching it on</em>).</li>
+</ul>
+<h2>Searching and a list for many users</h2>
+<ul>
+<li>Above the list there is <strong>Search</strong> (name, account or reason) and the filter <strong>State</strong>: All / Exception on / Exception off / Ended. The <em>Clear</em> button resets it. After changing a switch or an end the search is kept.</li>
+<li>The list is <strong>paged by 25</strong>. At the top there is a summary (<em>N exceptions: X on, Y off</em>).</li>
+<li>When adding there is a <strong>search field</strong> above the choice of the user: you type and the list narrows; when one is left it is chosen by itself.</li>
+</ul>
 <h2>Adding an exception</h2>
-<p>The form: <em>User</em> (keepers and those who already have an exception are not offered), <em>Until (optional)</em> (the end; must be in the future), <em>Why (optional)</em> (up to 200 characters) and the button <em>May use</em> with the items (see below), then <em>Set the exception</em>. The other keepers get the e-mail <em>Protection exception: name</em> and it is written to the audit log. If the user is in groups the page warns that they do not apply while the exception lasts. Adding the same user again is refused (changes are made in the list).</p>
+<p>The form: <em>User</em> (keepers and those who already have an exception are not offered), <em>Until (optional)</em> (the end; must be in the future), <em>Why (optional)</em> (up to 200 characters) and the button <em>May use</em> with the items (see below), then <em>Set the exception</em>. A new exception is <strong>on</strong>. The other keepers get the e-mail <em>Protection exception: name</em> and it is written to the audit log. If the user is in groups the page warns that they do not apply while the exception lasts. Adding the same user again is refused (changes are made in the list).</p>
 <h2>What a user with an exception may use</h2>
 <p>The exception concerns the protection, not the account pages and the API. Those the user may use only as the keeper allowed:</p>
 <table>
@@ -62,7 +85,7 @@ python manage.py userpin_default_deny --off     # switches the protection off</p
 <li>Under the name of every user there is an arrow <strong>▾ May use</strong> that unfolds the check boxes with a <em>Save</em> button, and small tags: <span class="ok">green ✓</span> allowed, <span class="no">red ✗</span> not allowed.</li>
 <li>What is not allowed disappears from the menu and the tabs and the direct address returns 403 (<em>Not allowed for this account</em>, with the names of the keepers).</li>
 <li>NetBox has no link to the password in the user menu (only a tab of the profile). While the password is allowed, the plugin adds one to the menu.</li>
-<li><strong>A keeper can always do everything.</strong> While the protection is off nothing is taken away. A superuser who is not a keeper is not limited either while there is no keeper.</li>
+<li><strong>A keeper can always do everything.</strong> While the protection is off nothing is taken away. A superuser who is not a keeper is not limited either while there is no keeper. With the exception <em>off</em> the list of allowances is not used (the PIN rules the user).</li>
 </ul>
 <div class="note"><strong>Why it matters.</strong> NetBox gives every signed-in user the right to their own API tokens (<code>DEFAULT_PERMISSIONS</code>), so a user without any rights sees <em>Admin → API Tokens</em> in the menu. A token carries only the permissions of its owner, but the plugin does not judge requests with a token: a user with rights could read beyond their areas through a token. The list of allowances solves it without touching the NetBox configuration.</div>
 

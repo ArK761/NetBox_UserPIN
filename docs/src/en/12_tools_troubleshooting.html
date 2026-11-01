@@ -106,6 +106,10 @@ areas.can(request.user, 'netbox_libreoxi', 'config')   # True / False</pre>
 <li>A "Change the password" link in the user menu; the bell is hidden when notifications are not allowed.</li>
 <li>An arrow ▾ under the name of the user with check boxes and green/red tags; an existing user is not offered again and adding one again resets nothing.</li>
 <li>New field <code>PolicyException.allowed</code> (migration <code>0042</code>); Slovak translation.</li>
+<li>A <strong>switch of the exception</strong> (<em>Exception on / off</em>) at every user: an off exception lets the PIN rule the user without removing the row; an on one lets NetBox rule them.</li>
+<li><strong>Editing the end of an exception</strong> (date and time, empty = no end); when it passes the switch moves to <em>off</em> by itself (system job, audit, e-mail to the keepers); an ended exception must be extended before switching on.</li>
+<li><strong>Searching and paging</strong> of the list of exceptions (name, account, reason; state filter; 25 per page) and a search field when adding a user.</li>
+<li>New field <code>PolicyException.active</code> (migration <code>0043</code>).</li>
 </ul>
 <h2>Keys and security</h2>
 <ul>

@@ -9,8 +9,8 @@
 <tr><th>Čo</th><th>Podrobnosti</th></tr>
 <tr><td>NetBox</td><td>verzia <strong>4.7.0 a novšia</strong> (plugin má <code>min_version = 4.7.0</code> a hornú hranicu nemá). Ak starší NetBox, plugin sa nenačíta.</td></tr>
 <tr><td>Python</td><td>3.12 alebo novší (<code>requires-python &gt;= 3.12</code>).</td></tr>
-<tr><td>Worker <code>netbox-rq</code></td><td>Plugin si registruje systémovú úlohu <strong>User PIN role housekeeping</strong>, ktorá beží <strong>každých 5 minút</strong>. Spracúva vypršané pozvánky a presuny, posiela pripomienky, vracia práva po dočasnom odovzdaní, oznamuje koniec platnosti prístupov len cez PIN a posiela zhrnutia zmien. E-maily o zmenách osoby len s PIN-om idú tiež cez frontu <code>default</code>. Keď worker nebeží, tieto veci sa nevykonajú.</td></tr>
-<tr><td>Databáza</td><td>tabuľky pluginu vytvorí <code>migrate</code> (migrácie 0001 až 0042).</td></tr>
+<tr><td>Worker <code>netbox-rq</code></td><td>Plugin si registruje systémovú úlohu <strong>User PIN role housekeeping</strong>, ktorá beží <strong>každých 5 minút</strong>. Spracúva vypršané pozvánky, presuny a výnimky, posiela pripomienky, vracia práva po dočasnom odovzdaní, oznamuje koniec platnosti prístupov len cez PIN a posiela zhrnutia zmien. E-maily o zmenách osoby len s PIN-om idú tiež cez frontu <code>default</code>. Keď worker nebeží, tieto veci sa nevykonajú.</td></tr>
+<tr><td>Databáza</td><td>tabuľky pluginu vytvorí <code>migrate</code> (migrácie 0001 až 0043).</td></tr>
 </table>
 <h2>Závislosti (Python balíky)</h2>
 <table>

@@ -106,6 +106,10 @@ areas.can(request.user, 'netbox_libreoxi', 'config')   # True / False</pre>
 <li>Odkaz „Zmeniť heslo“ v menu používateľa; zvonček sa skryje, ak nie sú povolené notifikácie.</li>
 <li>Šípka ▾ pod menom používateľa so zaškrtávacími poľami a zelenými/červenými štítkami; existujúci používateľ sa neponúka znova a opätovné pridanie nič neprepíše.</li>
 <li>Nové pole <code>PolicyException.allowed</code> (migrácia <code>0042</code>); slovenský preklad.</li>
+<li><strong>Prepínač výnimky</strong> (<em>Výnimka zapnutá / vypnutá</em>) pri každom používateľovi: vypnutá výnimka nechá používateľa riadiť PIN-om bez odobratia riadku; zapnutá ho nechá riadiť NetBoxom.</li>
+<li><strong>Úprava konca výnimky</strong> (dátum a čas, prázdne = bez konca); po uplynutí sa prepínač sám prepne na <em>vypnutá</em> (systémová úloha, audit, e-mail strážcom); ukončenú výnimku treba pred zapnutím predĺžiť.</li>
+<li><strong>Hľadanie a stránkovanie</strong> zoznamu výnimiek (meno, účet, dôvod; filter stavu; po 25) a vyhľadávacie pole pri pridávaní používateľa.</li>
+<li>Nové pole <code>PolicyException.active</code> (migrácia <code>0043</code>).</li>
 </ul>
 <h2>Kľúče a bezpečnosť</h2>
 <ul>

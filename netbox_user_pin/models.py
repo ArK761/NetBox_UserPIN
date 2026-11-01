@@ -1012,6 +1012,9 @@ class PolicyException(models.Model):
     note = models.CharField(max_length=200, blank=True)
     # what the user may use of the account pages and the API (a keeper allows it one by one; the password by default)
     allowed = models.CharField(max_length=200, blank=True, default='password')
+    # a keeper switches the exception off (the PIN rules the user) and on again without taking it away; it also
+    # switches itself off when its end passes
+    active = models.BooleanField(default=True)
 
     class Meta:
         verbose_name = _('protection exception')
@@ -1022,8 +1025,16 @@ class PolicyException(models.Model):
         return str(self.user)
 
     @property
-    def is_active(self):
-        return self.expires is None or self.expires > timezone.now()
+    def is_expired(self):
+        return self.expires is not None and self.expires <= timezone.now()
+
+    @property
+    def in_effect(self):
+        return self.active and not self.is_expired
+
+    @property
+    def is_active(self):  # not ended by time (kept for the pages)
+        return not self.is_expired
 
     @property
     def allowed_set(self):

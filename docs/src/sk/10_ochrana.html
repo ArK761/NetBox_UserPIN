@@ -43,8 +43,31 @@ python manage.py userpin_default_deny --off     # vypne ochranu</pre>
 <div><strong>Závisí od:</strong> zapnutá ochrana (pri vypnutej sa nič neberie).</div>
 </div>
 <p>Používateľ s výnimkou nie je viazaný ochranou: pracuje s oprávneniami, ktoré mu dáva NetBox. Jeho skupiny, prístupy a roly ostávajú a platia znova, keď sa výnimka odoberie alebo skončí. Superuser s výnimkou vidí všetko bez PINu. Karta <strong>Výnimky</strong> je na stránke <em>Chránené oblasti</em>.</p>
+<h2>Zapnutá a vypnutá výnimka (prepínač)</h2>
+<p>Pri každom používateľovi je <strong>posuvný prepínač</strong>. Používateľ ostáva v zozname so všetkými nastaveniami (čo smie používať, dôvod, koniec) a výnimku zapínaš a vypínaš jedným klikom, <strong>bez odoberania</strong>:</p>
+<table>
+<tr><th>Prepínač</th><th>Čo platí</th></tr>
+<tr><td><strong>Výnimka zapnutá</strong></td><td>používateľ ide <strong>podľa NetBoxu</strong> a z účtových stránok a API smie len to, čo mu strážca zaškrtol (<em>Smie používať</em>)</td></tr>
+<tr><td><strong>Výnimka vypnutá</strong></td><td>používateľ ide <strong>podľa PIN-u</strong>: ochrana naňho platí ako na bežného používateľa (skupiny, zákazy). Zoznam povolení sa vtedy nepoužíva, ale ostáva uložený a platí znova po zapnutí</td></tr>
+</table>
+<ul>
+<li>Prepínať môže len strážca. Zmena sa prejaví hneď (najneskôr do 5 sekúnd), zapíše sa do auditu a ostatným strážcom príde e-mail <em>Protection exception switched on / off</em>.</li>
+<li>V zozname má každý riadok štítok <em>Výnimka zapnutá</em> (zelený), <em>Výnimka vypnutá</em> (žltý) alebo <em>Ukončená</em> (šedý) a pod prepínačom text, kto ho práve riadi (<em>Riadi ho NetBox, len to, čo je povolené</em> / <em>Riadi ho PIN</em>).</li>
+</ul>
+<h2>Koniec výnimky (dátum a čas)</h2>
+<ul>
+<li>Pri každom používateľovi je pole <strong>Do</strong> s dátumom a časom a tlačidlom <em>Uložiť</em>: koniec môžeš kedykoľvek zmeniť. <strong>Prázdne pole = bez konca.</strong> Nový koniec musí byť v budúcnosti.</li>
+<li><strong>Keď koniec uplynie</strong>, používateľa hneď (do 5 sekúnd) znova riadi PIN a systémová úloha (každých 5 minút) prepne prepínač na <em>Výnimka vypnutá</em> a zapíše to do auditu; ostatní strážcovia dostanú e-mail <em>Protection exception ended</em>. Riadok zostane v zozname so štítkom <em>Ukončená</em>.</li>
+<li><strong>Ukončenú výnimku znova zapneš</strong> tak, že najprv nastavíš nový koniec (alebo ho vymažeš) a potom prepínač zapneš. Zapnutie s uplynulým koncom stránka odmietne (<em>Výnimka skončila: pred zapnutím nastav nový koniec (alebo žiadny)</em>).</li>
+</ul>
+<h2>Hľadanie a zoznam pre veľa používateľov</h2>
+<ul>
+<li>Nad zoznamom je <strong>Hľadanie</strong> (meno, účet alebo dôvod) a filter <strong>Stav</strong>: Všetky / Výnimka zapnutá / Výnimka vypnutá / Ukončená. Tlačidlo <em>Zrušiť filter</em> ho vyčistí. Po zmene prepínača alebo konca sa vyhľadávanie zachová.</li>
+<li>Zoznam je <strong>stránkovaný po 25</strong>. Hore je súhrn (<em>Výnimiek: N, zapnutých X, vypnutých Y</em>).</li>
+<li>Pri pridávaní je nad výberom používateľa <strong>pole na hľadanie</strong>: píšeš a zoznam sa zúži; keď ostane jeden, vyberie sa sám.</li>
+</ul>
 <h2>Pridanie výnimky</h2>
-<p>Formulár: <em>Používateľ</em> (neponúkajú sa strážcovia ani tí, čo už výnimku majú), <em>Do (voliteľné)</em> (koniec; musí byť v budúcnosti), <em>Prečo (voliteľné)</em> (do 200 znakov) a tlačidlo <em>Smie používať</em> s položkami (pozri nižšie), potom <em>Nastaviť výnimku</em>. Ostatným strážcom príde e-mail <em>Protection exception: meno</em> a zapíše sa do auditu. Ak je používateľ v skupinách, stránka upozorní, že pre čas výnimky neplatia. Opätovné pridanie toho istého používateľa sa odmietne (zmeny sa robia v zozname).</p>
+<p>Formulár: <em>Používateľ</em> (neponúkajú sa strážcovia ani tí, čo už výnimku majú), <em>Do (voliteľné)</em> (koniec; musí byť v budúcnosti), <em>Prečo (voliteľné)</em> (do 200 znakov) a tlačidlo <em>Smie používať</em> s položkami (pozri nižšie), potom <em>Nastaviť výnimku</em>. Nová výnimka je <strong>zapnutá</strong>. Ostatným strážcom príde e-mail <em>Protection exception: meno</em> a zapíše sa do auditu. Ak je používateľ v skupinách, stránka upozorní, že pre čas výnimky neplatia. Opätovné pridanie toho istého používateľa sa odmietne (zmeny sa robia v zozname).</p>
 <h2>Čo smie používateľ s výnimkou</h2>
 <p>Výnimka sa týka ochrany, nie účtových stránok a API. Tie smie používateľ používať len ako strážca povolil:</p>
 <table>
@@ -62,7 +85,7 @@ python manage.py userpin_default_deny --off     # vypne ochranu</pre>
 <li>Pri každom používateľovi je pod menom šípka <strong>▾ Smie používať</strong>, ktorá rozbalí zaškrtávacie polia s tlačidlom <em>Uložiť</em>, a malé štítky: <span class="ok">zelený ✓</span> povolené, <span class="no">červený ✗</span> zakázané.</li>
 <li>Čo nie je povolené, zmizne z menu a kariet a priama adresa vráti 403 (<em>Not allowed for this account</em>, s menami strážcov).</li>
 <li>NetBox nemá v menu používateľa odkaz na heslo (je len ako karta v Profile). Kým je heslo povolené, plugin ho do menu doplní.</li>
-<li><strong>Strážca môže vždy všetko.</strong> Pri vypnutej ochrane sa nič neberie. Superuser, ktorý nie je strážca, kým strážca nie je, tiež nie je obmedzený.</li>
+<li><strong>Strážca môže vždy všetko.</strong> Pri vypnutej ochrane sa nič neberie. Superuser, ktorý nie je strážca, kým strážca nie je, tiež nie je obmedzený. Pri <em>vypnutej</em> výnimke sa zoznam povolení nepoužíva (používateľa riadi PIN).</li>
 </ul>
 <div class="note"><strong>Prečo to je dôležité.</strong> NetBox dáva každému prihlásenému právo na vlastné API tokeny (<code>DEFAULT_PERMISSIONS</code>), takže používateľ bez akýchkoľvek práv vidí v menu <em>Admin → API Tokens</em>. Token nesie len oprávnenia svojho majiteľa, no požiadavky s tokenom plugin PIN-om neposudzuje: používateľ s právami by cez token čítal aj mimo svojich oblastí. Zoznam povolení to rieši bez zásahu do konfigurácie NetBoxu.</div>
 

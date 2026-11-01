@@ -2362,6 +2362,96 @@ class ExceptionAllowedTest(AreaTestCase):
         self.assertEqual(self.plain.policy_exception.__class__.objects.get(user=self.plain).allowed_set,
                          {'password', 'api'})  # nothing was reset
 
+    def test_the_switch_puts_the_user_under_the_pin_and_back_without_taking_the_exception_away(self):
+        from django.core.exceptions import PermissionDenied
+        user = self.armed(self.plain)
+        self.assertTrue(areas.has_exception(user) and areas.restricted(user))
+        areas.set_exception_enabled(self.plain, self.keeper, False)
+        user = self.armed(self.plain)
+        self.assertFalse(areas.has_exception(user))  # the PIN rules him again
+        self.assertFalse(areas.restricted(user))     # and the list of allowances is not asked
+        self.assertTrue(self.plain.policy_exception.__class__.objects.filter(user=self.plain).exists())  # the row stays
+        self.assertEqual(self.plain.policy_exception.__class__.objects.get(user=self.plain).allowed_set, {'password'})
+        areas.set_exception_enabled(self.plain, self.keeper, True)
+        self.assertTrue(areas.restricted(self.armed(self.plain)))
+        with self.assertRaises(PermissionDenied):
+            areas.set_exception_enabled(self.plain, self.owner1, False)
+
+    def test_the_end_can_be_changed_and_an_ended_exception_switches_itself_off(self):
+        from datetime import timedelta
+
+        from django.core.exceptions import ValidationError
+        from django.utils import timezone
+
+        from netbox_user_pin.models import PolicyException
+        with self.assertRaises(ValidationError):
+            areas.set_exception_expires(self.plain, self.keeper, timezone.now() - timedelta(hours=1))
+        end = timezone.now() + timedelta(days=2)
+        areas.set_exception_expires(self.plain, self.keeper, end)
+        self.assertEqual(PolicyException.objects.get(user=self.plain).expires, end)
+        areas.set_exception_expires(self.plain, self.keeper, None)
+        self.assertIsNone(PolicyException.objects.get(user=self.plain).expires)
+        # the end passes: the user is ruled by the PIN at once, the job switches the row off
+        PolicyException.objects.filter(user=self.plain).update(expires=timezone.now() - timedelta(minutes=1))
+        self.assertFalse(areas.has_exception(self.armed(self.plain)))
+        self.assertEqual([u.pk for u in areas.expire_exceptions()], [self.plain.pk])
+        exception = PolicyException.objects.get(user=self.plain)
+        self.assertFalse(exception.active)
+        self.assertEqual(areas.expire_exceptions(), [])  # only once
+        with self.assertRaises(ValidationError):  # switching an ended one on needs a new end first
+            areas.set_exception_enabled(self.plain, self.keeper, True)
+        areas.set_exception_expires(self.plain, self.keeper, timezone.now() + timedelta(days=1))
+        areas.set_exception_enabled(self.plain, self.keeper, True)
+        self.assertTrue(areas.has_exception(self.armed(self.plain)))
+
+    def test_adding_an_exception_again_after_it_ended_switches_it_on(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        from netbox_user_pin.models import PolicyException
+        PolicyException.objects.filter(user=self.plain).update(active=False)
+        areas.remove_exception(self.plain, self.keeper)
+        areas.add_exception(self.plain, self.keeper, timezone.now() + timedelta(days=1))
+        self.assertTrue(PolicyException.objects.get(user=self.plain).active)
+
+    def test_the_page_switches_the_exception_changes_its_end_and_searches_the_list(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        from netbox_user_pin.models import PolicyException
+        admin_login(self.client, self.keeper)
+        url = reverse('plugins:netbox_user_pin:areas')
+        self.client.post(url, {'action': 'exception-enable', 'pk': self.plain.pk})  # the box not ticked = off
+        self.assertFalse(PolicyException.objects.get(user=self.plain).active)
+        self.client.post(url, {'action': 'exception-enable', 'pk': self.plain.pk, 'state': 'on'})
+        self.assertTrue(PolicyException.objects.get(user=self.plain).active)
+        when = (timezone.localtime(timezone.now() + timedelta(days=3))).strftime('%Y-%m-%dT%H:%M')
+        response = self.client.post(url, {'action': 'exception-expires', 'pk': self.plain.pk, 'expires': when,
+                                          'qs': 'q=plain&status=on'})
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response['Location'], url + '?q=plain&status=on')  # the search is kept
+        self.assertIsNotNone(PolicyException.objects.get(user=self.plain).expires)
+        self.client.post(url, {'action': 'exception-expires', 'pk': self.plain.pk, 'expires': ''})
+        self.assertIsNone(PolicyException.objects.get(user=self.plain).expires)
+        areas.add_exception(self.su, self.keeper, note='a duty')
+        page = self.client.get(url).content.decode()
+        self.assertIn('plainx', page)
+        self.assertIn('name="state" value="on"', page)  # the switch
+        self.assertIn('type="datetime-local" name="expires"', page)
+        switch = 'id="sw-%s"'
+        found = self.client.get(url, {'q': 'duty'}).content.decode()
+        self.assertIn(switch % self.su.pk, found)
+        self.assertNotIn(switch % self.plain.pk, found)  # the search narrowed the list to the reason
+        PolicyException.objects.filter(user=self.su).update(active=False)
+        off = self.client.get(url, {'status': 'off'}).content.decode()
+        self.assertIn(switch % self.su.pk, off)
+        self.assertNotIn(switch % self.plain.pk, off)
+        on = self.client.get(url, {'status': 'on'}).content.decode()
+        self.assertIn(switch % self.plain.pk, on)
+        self.assertNotIn(switch % self.su.pk, on)
+
     def test_while_the_protection_is_off_nothing_is_taken_away(self):
         areas.set_default_deny(False, self.keeper)
         self.assertFalse(areas.restricted(self.armed(self.plain)))
