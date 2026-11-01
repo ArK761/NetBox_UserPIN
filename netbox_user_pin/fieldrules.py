@@ -25,9 +25,52 @@ logger = logging.getLogger('netbox_user_pin')
 
 RANK = {AreaFieldMode.HIDDEN: 0, AreaFieldMode.READ: 1, AreaFieldMode.WRITE: 2}
 SKIP_FIELDS = {'id', 'created', 'last_updated', 'custom_field_data'}
-# form-only helpers of NetBox: not fields of the model, so no rule exists for them; they follow the field they narrow
-# (the "Owner group" drop-down only narrows the choices of "Owner" and is not stored)
-FORM_HELPERS = {'owner_group': 'owner'}
+# Form-only helpers of NetBox (Owner group, Tenant group, Region, Manufacturer ...): not fields of the model, so no rule
+# exists for them. They only narrow the choices of another field (the other field's ``query_params`` / the helper's own
+# ``initial_params`` point at them with ``$name``) and follow that field: hidden / read only with it.
+HELPER_LINKS = ('query_params', 'initial_params')
+
+
+def _references(field):
+    """The names this form field points at with ``$name`` (the drop-downs it is narrowed by or narrows)."""
+    names = set()
+    for attr in HELPER_LINKS:
+        value = getattr(field, attr, None)
+        if isinstance(value, dict):
+            names.update(v[1:] for v in value.values() if isinstance(v, str) and v.startswith('$') and len(v) > 1)
+    return names
+
+
+def helper_modes(form, model, policy):
+    """{helper name: mode} for the form-only helper fields that belong to a hidden / read only field."""
+    model_fields = {f.name for f in model._meta.get_fields()} | {'tags'}
+    fields = form.fields
+    links = {name: set() for name in fields}  # who is tied to whom by the ``$name`` references
+    for name, field in fields.items():
+        for ref in _references(field):
+            if ref in fields and ref != name:
+                links[name].add(ref)
+                links[ref].add(name)
+    helpers = [n for n in fields if n not in model_fields and not n.startswith('cf_') and links[n]]
+    decided = {}
+    for _round in range(len(helpers) + 1):  # a chain (site <- location <- rack) settles from the model field outwards
+        changed = False
+        for name in helpers:
+            if name in decided:
+                continue
+            modes = [policy.mode(n) if n in model_fields else decided[n]
+                     for n in links[name] if n in model_fields or n in decided]
+            if not modes:
+                continue
+            if all(m == AreaFieldMode.HIDDEN for m in modes):
+                decided[name], changed = AreaFieldMode.HIDDEN, True
+            elif all(m in (AreaFieldMode.HIDDEN, AreaFieldMode.READ) for m in modes):
+                decided[name], changed = AreaFieldMode.READ, True
+            else:
+                decided[name], changed = AreaFieldMode.DEFAULT, True
+        if not changed:
+            break
+    return {name: mode for name, mode in decided.items() if mode != AreaFieldMode.DEFAULT}
 
 
 class FieldPolicy:
@@ -533,10 +576,11 @@ def _hook_forms():
         policy = policy_of_model(model)
         if policy is None:
             return
+        helpers = helper_modes(form, model, policy)
         for name in list(form.fields):
             if name.startswith('cf_'):
                 continue  # custom fields are handled where they are built
-            mode = policy.mode(FORM_HELPERS.get(name, name))
+            mode = helpers[name] if name in helpers else policy.mode(name)
             if mode == AreaFieldMode.HIDDEN:
                 # not removed: the templates of NetBox draw some fields by name (render_field form.description) and
                 # a missing one breaks the page. The field stays, switched off and drawn as nothing - its value is
@@ -547,7 +591,7 @@ def _hook_forms():
             elif mode == AreaFieldMode.READ:
                 form.fields[name].disabled = True
                 form.fields[name].required = False
-            elif name not in FORM_HELPERS and (texts := policy.texts(name)) and hasattr(form.fields[name], 'queryset'):
+            elif name not in helpers and (texts := policy.texts(name)) and hasattr(form.fields[name], 'queryset'):
                 form.fields[name].validators = list(form.fields[name].validators) + [_must_include(texts)]
 
     from django.forms.forms import DeclarativeFieldsMetaclass

@@ -172,6 +172,27 @@ class FormAndTableTest(FieldRulesCase):
         self.assertRegex(html, r'<[^>]*(?=[^>]*id="id_owner_group")[^>]*disabled')
         self.assertRegex(html, r'<[^>]*(?=[^>]*id="id_owner")[^>]*disabled')
 
+    def test_the_helper_fields_of_a_device_follow_their_field(self):
+        add = reverse('dcim:device_add')
+        self.login(self.appadmin)
+        html = self.client.get(add).content.decode()
+        for name in ('id_device_type', 'id_tenant_group', 'id_tenant', 'id_site'):
+            self.assertRegex(html, f'id="{name}"', name)
+        self.rule('tenant', 'hidden', target='dcim.device')
+        html = self.client.get(add).content.decode()
+        self.assertNotRegex(html, 'id="id_tenant"')
+        self.assertNotRegex(html, 'id="id_tenant_group"')  # it only narrows the tenant
+        self.assertRegex(html, 'id="id_device_type"')
+        self.assertRegex(html, 'id="id_site"')  # an unrelated field stays
+
+    def test_a_helper_shared_with_a_visible_field_stays(self):
+        # the "Owner group" drop-down narrows the owner: with the owner visible it stays whatever else is hidden
+        self.login(self.appadmin)
+        self.rule('description', 'hidden')
+        html = self.client.get(self.edit_url()).content.decode()
+        self.assertIn('id_owner_group', html)
+        self.assertIn('id_owner', html)
+
     def test_saving_does_not_wipe_a_hidden_field(self):
         from tenancy.models import Tenant
         self.rule('cf:secret_note', 'hidden')
