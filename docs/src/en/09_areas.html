@@ -63,6 +63,7 @@
 <li>The option <strong>Hidden from everybody in the area</strong> hides the field from everybody in the area, managers included.</li>
 <li><strong>Custom fields linked to other objects</strong> can be limited to the values matching a condition (<em>Values must include</em>, or the <em>Conditions</em> button: <em>contains</em>, <em>starts with</em>, <em>is one of</em>; several values as chips). For example the user picks only devices whose name contains <code>PRINTER</code>. The condition is also checked on saving. It does not apply to fixed fields.</li>
 <li>A hidden custom field <strong>keeps its stored data</strong> (saving an object never wipes it).</li>
+<li><strong>Helper fields of a form.</strong> Some fields of a form are not fields of the model, for example <em>Owner group</em> next to <em>Owner</em> (it only narrows the choice of owners and stores nothing). They are not in the list of fields; they follow the field they belong to: hiding or locking <em>Owner</em> hides or locks <em>Owner group</em> too.</li>
 </ul>
 <table>
 <tr><th>Where the rules apply</th><th>custom fields</th><th>model fields</th></tr>

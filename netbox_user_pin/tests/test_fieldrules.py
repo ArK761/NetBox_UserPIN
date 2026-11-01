@@ -158,6 +158,20 @@ class FormAndTableTest(FieldRulesCase):
         self.assertNotIn('id_cf_secret_note', html)
         self.assertRegex(html, r'<[^>]*(?=[^>]*id="id_description")[^>]*disabled')
 
+    def test_the_owner_group_helper_follows_the_owner_field(self):
+        self.login(self.appadmin)
+        html = self.client.get(self.edit_url()).content.decode()
+        self.assertIn('id_owner_group', html)  # NetBox's helper that narrows the owners
+        self.assertIn('id_owner', html)
+        self.rule('owner', 'hidden')
+        html = self.client.get(self.edit_url()).content.decode()
+        self.assertNotIn('id_owner_group', html)  # not left alone when the owner is hidden
+        self.assertNotRegex(html, r'id="id_owner"')
+        self.rule('owner', 'read')
+        html = self.client.get(self.edit_url()).content.decode()
+        self.assertRegex(html, r'<[^>]*(?=[^>]*id="id_owner_group")[^>]*disabled')
+        self.assertRegex(html, r'<[^>]*(?=[^>]*id="id_owner")[^>]*disabled')
+
     def test_saving_does_not_wipe_a_hidden_field(self):
         from tenancy.models import Tenant
         self.rule('cf:secret_note', 'hidden')

@@ -110,6 +110,7 @@ areas.can(request.user, 'netbox_libreoxi', 'config')   # True / False</pre>
 <li><strong>Editing the end of an exception</strong> (date and time, empty = no end); when it passes the switch moves to <em>off</em> by itself (system job, audit, e-mail to the keepers); an ended exception must be extended before switching on.</li>
 <li><strong>Searching and paging</strong> of the list of exceptions (name, account, reason; state filter; 25 per page) and a search field when adding a user.</li>
 <li>New field <code>PolicyException.active</code> (migration <code>0043</code>).</li>
+<li>The field <em>Owner group</em> (a helper field of a form) is hidden and locked together with the field <em>Owner</em>.</li>
 </ul>
 <h2>Keys and security</h2>
 <ul>

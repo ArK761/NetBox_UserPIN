@@ -25,6 +25,9 @@ logger = logging.getLogger('netbox_user_pin')
 
 RANK = {AreaFieldMode.HIDDEN: 0, AreaFieldMode.READ: 1, AreaFieldMode.WRITE: 2}
 SKIP_FIELDS = {'id', 'created', 'last_updated', 'custom_field_data'}
+# form-only helpers of NetBox: not fields of the model, so no rule exists for them; they follow the field they narrow
+# (the "Owner group" drop-down only narrows the choices of "Owner" and is not stored)
+FORM_HELPERS = {'owner_group': 'owner'}
 
 
 class FieldPolicy:
@@ -533,7 +536,7 @@ def _hook_forms():
         for name in list(form.fields):
             if name.startswith('cf_'):
                 continue  # custom fields are handled where they are built
-            mode = policy.mode(name)
+            mode = policy.mode(FORM_HELPERS.get(name, name))
             if mode == AreaFieldMode.HIDDEN:
                 # not removed: the templates of NetBox draw some fields by name (render_field form.description) and
                 # a missing one breaks the page. The field stays, switched off and drawn as nothing - its value is
@@ -544,7 +547,7 @@ def _hook_forms():
             elif mode == AreaFieldMode.READ:
                 form.fields[name].disabled = True
                 form.fields[name].required = False
-            elif (texts := policy.texts(name)) and hasattr(form.fields[name], 'queryset'):
+            elif name not in FORM_HELPERS and (texts := policy.texts(name)) and hasattr(form.fields[name], 'queryset'):
                 form.fields[name].validators = list(form.fields[name].validators) + [_must_include(texts)]
 
     from django.forms.forms import DeclarativeFieldsMetaclass
