@@ -10,7 +10,7 @@ import subprocess
 import sys
 
 HERE = pathlib.Path(__file__).parent
-VERSION = '2.0.1'
+VERSION = '2.5.0'
 DATE = '2026-11-02'
 
 DOCS = {
