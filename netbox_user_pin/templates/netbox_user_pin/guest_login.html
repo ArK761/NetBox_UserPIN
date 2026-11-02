@@ -6,6 +6,7 @@
 {% if not has_pin %}
   {% if setup_ok %}
     <p class="text-secondary">{% blocktrans with n=min_length %}Choose your own PIN ({{ n }} or more characters). Nobody can read it, not even the administrator.{% endblocktrans %}</p>
+<p class="small">{{ rule_text }}</p>
     <form method="post" autocomplete="off">{% csrf_token %}
       <div class="mb-3"><label class="form-label" for="pin">{% trans "New PIN" %}</label><input class="form-control" type="password" id="pin" name="pin" autocomplete="new-password" required autofocus></div>
       <div class="mb-3"><label class="form-label" for="pin2">{% trans "New PIN again" %}</label><input class="form-control" type="password" id="pin2" name="pin2" autocomplete="new-password" required></div>

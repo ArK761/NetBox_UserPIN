@@ -62,10 +62,10 @@ def _lines(change):
 SECRET = ('pass', 'secret', 'token', 'key', 'pin', 'hash')
 
 
-def detail_of(change, action):
+def detail_of(change, action, prefix=''):
     """The audit text: the first line says what happened, the next ones which field changed (values of secrets hidden)."""
     kind = change.changed_object_type
-    head = f'{kind.app_label}.{kind.model} "{change.object_repr}" {action}'
+    head = f'{prefix}{kind.app_label}.{kind.model} "{change.object_repr}" {action}'
     rows = []
     for line in _lines(change)[2:]:
         field = line.strip().split(':', 1)[0].lower()
@@ -130,8 +130,10 @@ def _changed(sender, instance, created, **kwargs):
             # a person with a PIN only: the e-mail is the guests' own (PIN-only page); the audit log gets it here
             action = {'create': _('added'), 'update': _('changed'), 'delete': _('deleted')}.get(
                 str(instance.action), '')
+            guest = PinGuest.objects.filter(user_id=instance.user_id).first()
+            prefix = f'OS:{guest.person_number} ' if guest and guest.person_number else ''
             service.log_event(PinEventAction.AREA_OBJECT_CHANGED, user=instance.user, scope='guest',
-                              detail=detail_of(instance, action))
+                              detail=detail_of(instance, action, prefix))
             return
         area = record(instance)
     except Exception:  # noqa: BLE001 - a record that cannot be written must not break the user's save

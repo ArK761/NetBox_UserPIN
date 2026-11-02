@@ -56,6 +56,8 @@
       <div class="col-lg-3"><div class="fw-bold small">{% trans "Alias and description" %}</div>
         <form method="post" class="mb-2">{% csrf_token %}<input type="hidden" name="pk" value="{{ r.guest.pk }}"><input type="hidden" name="action" value="alias">
           <div class="small text-secondary mb-1">ID: <code>{{ r.guest.user.username }}</code> ({% trans "never changes" %})</div>
+          <label class="small">{% trans "Personal number (sign-in)" %}</label>
+          <input class="form-control form-control-sm mb-1" name="person_number" value="{{ r.guest.person_number|default:'' }}" maxlength="40" placeholder="{% trans 'Personal number of the organisation' %}">
           <input class="form-control form-control-sm mb-1" name="alias" value="{{ r.guest.alias }}" maxlength="100" placeholder="{% trans 'Alias (any text)' %}">
           <input class="form-control form-control-sm mb-1" name="description" value="{{ r.guest.description }}" maxlength="150" placeholder="{% trans 'Description, e.g. technician of company XY' %}">
           <label class="small">{% trans "Language of the PIN pages and e-mails" %}</label>
@@ -105,6 +107,16 @@
   {% empty %}<tr><td colspan="7" class="text-secondary">{% trans "Nobody yet." %}</td></tr>{% endfor %}
   </tbody></table>
 </div></div>
+<div class="card mb-3"><h2 class="card-header"><i class="mdi mdi-shield-key-outline"></i> {% trans "Sign-in and PIN rules (for everybody)" %}</h2>
+<div class="card-body"><form method="post" class="row g-2 align-items-center">{% csrf_token %}<input type="hidden" name="action" value="pin-policy">
+  <div class="col-md-12"><div class="form-check"><input class="form-check-input" type="checkbox" name="number_required" id="gnr"{% if pin_settings.guest_number_required %} checked{% endif %}><label class="form-check-label" for="gnr">{% trans "The personal number is a must: sign in with the number and the PIN (the PIN alone no longer works)" %}</label></div>
+    <div class="form-text">{% trans "Every access needs its personal number first. Everybody gets an e-mail about it." %}</div></div>
+  <div class="col-md-3"><label class="form-label">{% trans "Shortest PIN" %}</label><input class="form-control" type="number" name="pin_min" min="6" max="64" value="{{ pin_settings.guest_pin_min }}"></div>
+  <div class="col-md-3"><div class="form-check"><input class="form-check-input" type="checkbox" name="pin_letter" id="gpl"{% if pin_settings.guest_pin_letter %} checked{% endif %}><label class="form-check-label" for="gpl">{% trans "The PIN must contain a letter" %}</label></div></div>
+  <div class="col-md-3"><div class="form-check"><input class="form-check-input" type="checkbox" name="pin_digit" id="gpd"{% if pin_settings.guest_pin_digit %} checked{% endif %}><label class="form-check-label" for="gpd">{% trans "The PIN must contain a digit" %}</label></div></div>
+  <div class="col-md-3"><button class="btn btn-primary" type="submit">{% trans "Save" %}</button></div>
+  <div class="form-text">{% trans "A stricter rule: everybody gets an e-mail and must choose a new PIN at the next sign-in." %}</div>
+</form></div></div>
 <div class="card mb-3"><h2 class="card-header"><i class="mdi mdi-email-outline"></i> {% trans "E-mails (for everybody)" %}</h2>
 <div class="card-body"><form method="post" class="row g-2 align-items-center">{% csrf_token %}<input type="hidden" name="action" value="mails-default">
   <div class="col-md-5"><div class="form-check"><input class="form-check-input" type="checkbox" name="mail_person" id="gmp"{% if pin_settings.guest_mail_person %} checked{% endif %}><label class="form-check-label" for="gmp">{% trans "Send to the person with a PIN only" %}</label></div>
@@ -150,6 +162,7 @@
   <div class="col-md-3"><label class="form-label">{% trans "Idle (minutes)" %}</label><input class="form-control" type="number" name="idle" value="30" min="5" max="240"></div>
   <div class="col-md-3"><label class="form-label">{% trans "Session (hours)" %}</label><input class="form-control" type="number" name="hours" value="8" min="1" max="24"></div>
   <div class="col-md-3"><label class="form-label">{% trans "Allowed IP addresses (optional)" %}</label><input class="form-control" name="ips" placeholder="10.0.0.0/24, 192.168.1.5"></div>
+  <div class="col-md-3"><label class="form-label">{% trans "Personal number" %}</label><input class="form-control" name="person_number" maxlength="40"><div class="form-text">{% trans "The person signs in with it and the PIN." %}</div></div>
   <div class="col-md-3"><label class="form-label">{% trans "Alias (optional)" %}</label><input class="form-control" name="alias" maxlength="100"><div class="form-text">{% trans "Any text. The account gets its own ID (PinUser0001 ...) that never changes." %}</div></div>
   <div class="col-md-2"><label class="form-label">{% trans "PIN language" %}</label><select class="form-select" name="pin_language"><option value="">{% trans "default" %}</option>{% for code, label in languages %}<option value="{{ code }}">{{ label }}</option>{% endfor %}</select></div>
   <div class="col-md-2"><label class="form-label">{% trans "NetBox language" %}</label><select class="form-select" name="ui_language"><option value="">{% trans "default" %}</option>{% for code, label in languages %}<option value="{{ code }}">{{ label }}</option>{% endfor %}</select></div>

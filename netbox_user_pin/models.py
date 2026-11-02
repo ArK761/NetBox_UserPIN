@@ -244,6 +244,11 @@ class PinSettings(models.Model):
                     'administrator who created the access and to the protection keepers. Can also be switched off per '
                     'access.'),
     )
+    guest_number_required = models.BooleanField(
+        verbose_name=_('PIN-only people sign in with the personal number and the PIN'), default=False)
+    guest_pin_min = models.PositiveSmallIntegerField(verbose_name=_('Shortest PIN of the PIN-only people'), default=8)
+    guest_pin_letter = models.BooleanField(verbose_name=_('The PIN must contain a letter'), default=False)
+    guest_pin_digit = models.BooleanField(verbose_name=_('The PIN must contain a digit'), default=False)
     guest_work_on = models.BooleanField(
         verbose_name=_('Limit the working time of the PIN-only accesses'), default=False)
     guest_work_country = models.CharField(
@@ -1130,6 +1135,7 @@ class PinGuest(models.Model):
     reset_sent = models.DateTimeField(null=True, blank=True)
     note = models.CharField(max_length=200, blank=True)
     description = models.CharField(max_length=150, blank=True)  # e.g. technician of company XY
+    person_number = models.CharField(max_length=40, null=True, blank=True, unique=True, default=None)  # the organisation's personal number: signs in with the PIN
     alias = models.CharField(max_length=100, blank=True)  # free text shown next to the account ID (PinUser0001)
     expiry_warned = models.CharField(max_length=10, blank=True)  # '30' / '1': the e-mails before the end were sent
     pin_language = models.CharField(max_length=5, blank=True)  # language of the PIN pages / e-mails ('' = default)

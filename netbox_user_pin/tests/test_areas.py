@@ -2504,12 +2504,13 @@ class AreaChangeMailTest(AreaTestCase):
 
     def test_a_change_of_a_person_with_a_pin_only_is_in_the_audit_log(self):
         from netbox_user_pin import guests
-        guest, _token = guests.create('Jan Novak', 'jan@example.com', None, self.keeper)
+        guest, _token = guests.create('Jan Novak', 'jan@example.com', None, self.keeper, person_number='12345')
         self.change(user=guest.user)
         events = self.events()
         self.assertEqual(len(events), 1)
         self.assertEqual((events[0].username, events[0].scope), (guest.user.username, 'guest'))
         self.assertIn('description', events[0].detail_more)
+        self.assertTrue(events[0].detail_first.startswith('OS:12345 '))
         self.assertIn('new', events[0].detail_more)
 
     def test_the_summary_goes_to_the_keepers_and_the_managers_of_the_section(self):
@@ -3153,6 +3154,49 @@ class GuestAccessTest(AreaTestCase):
         cache.clear()
         response = self.client.post('/plugins/user-pin/pin/', {'pin': 'Nobody-pin-3'})
         self.assertContains(response, 'not correct')
+
+    def test_the_personal_number_and_the_pin_sign_in_and_the_pin_need_not_be_unique(self):
+        cache = __import__('django.core.cache', fromlist=['cache']).cache
+        self.sign_in()  # Jan: Secret-pin-1
+        other, _token = self.guests.create('Eva', 'eva@example.com', self.group, self.keeper, person_number='E-200')
+        self.guests.set_person_number(self.guest, self.keeper, 'J-100')
+        self.guests.set_pin(other, 'Secret-pin-1', first=True)  # the same PIN: fine with a personal number
+        with self.assertRaises(ValidationError):
+            self.guests.set_person_number(other, self.keeper, 'j-100')  # a number belongs to one access
+        self.client.logout()
+        cache.clear()
+        self.assertRedirects(self.client.post('/plugins/user-pin/pin/', {'number': 'E-200', 'pin': 'Secret-pin-1'}),
+                             '/plugins/user-pin/guest/', fetch_redirect_response=False)
+        self.assertEqual(self.client.session[self.guests.SESSION_KEY]['id'], other.pk)
+        self.client.logout()
+        cache.clear()
+        self.assertContains(self.client.post('/plugins/user-pin/pin/', {'number': 'E-200', 'pin': 'bad-bad-pin'}),
+                            'not correct')
+
+    def test_the_rule_of_the_pin_and_the_number_a_must_tell_everybody(self):
+        from django.core import mail
+        cache = __import__('django.core.cache', fromlist=['cache']).cache
+        from netbox_user_pin.models import AllowedDomain
+        AllowedDomain.objects.create(domain='example.com', verified=timezone.now())
+        self.sign_in()
+        with override_settings(EMAIL={'SERVER': 'localhost', 'FROM_EMAIL': 'netbox@example.com'}):
+            with self.assertRaises(ValidationError):  # the people without a number first
+                self.guests.set_pin_policy(self.keeper, True, 8, False, False)
+            self.guests.set_person_number(self.guest, self.keeper, 'J-100')
+            self.guests.set_pin_policy(self.keeper, True, 8, True, True)
+        self.assertTrue(any('personal number' in m.body and 'Kava2026Moja' in m.body for m in mail.outbox))
+        self.client.logout()
+        cache.clear()
+        response = self.client.post('/plugins/user-pin/pin/', {'pin': 'Secret-pin-1'})
+        self.assertContains(response, 'personal number')
+        self.assertContains(self.client.get('/plugins/user-pin/pin/'), 'MUST')
+        self.assertRedirects(self.client.post('/plugins/user-pin/pin/', {'number': 'J-100', 'pin': 'Secret-pin-1'}),
+                             '/plugins/user-pin/guest/', fetch_redirect_response=False)
+        # the old PIN has no digit: the change is forced, and the new one must hold a letter and a digit
+        self.assertContains(self.client.get('/plugins/user-pin/guest/change/'), 'Example')
+        with self.assertRaises(ValidationError):
+            self.guests.set_pin(self.guests.PinGuest.objects.get(pk=self.guest.pk), 'onlyletters', first=True)
+        self.guests.set_pin(self.guests.PinGuest.objects.get(pk=self.guest.pk), 'letters1234', first=True)
 
     def test_wrong_pins_from_a_computer_make_it_wait(self):
         self.sign_in()

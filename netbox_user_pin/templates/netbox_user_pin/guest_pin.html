@@ -3,8 +3,10 @@
 {% block guest_title %}{% trans "Sign in with a PIN" %}{% endblock %}
 {% block guest_body %}
 <h2 class="text-center mb-3">{% trans "Sign in with a PIN" %}</h2>
+{% if number_required %}<div class="alert alert-danger fw-bold fs-5 text-center">{% trans "From now on you MUST sign in with your personal number and your PIN. The PIN alone no longer works." %}</div>{% endif %}
 <form method="post" autocomplete="off">{% csrf_token %}
-  <div class="mb-3"><label class="form-label" for="pin">{% trans "PIN" %}</label><input class="form-control" type="password" id="pin" name="pin" autocomplete="current-password" required autofocus {% if pause %}disabled{% endif %}></div>
+  <div class="mb-3"><label class="form-label" for="number">{% trans "Personal number" %}{% if not number_required %} <span class="text-secondary">({% trans "if you have one" %})</span>{% endif %}</label><input class="form-control" type="text" id="number" name="number" value="{{ number|default:'' }}" autocomplete="username" {% if number_required %}required autofocus{% endif %} {% if pause %}disabled{% endif %}></div>
+  <div class="mb-3"><label class="form-label" for="pin">{% trans "PIN" %}</label><input class="form-control" type="password" id="pin" name="pin" autocomplete="current-password" required {% if pause %}disabled{% endif %}></div>
   <button class="btn btn-primary w-100" type="submit" {% if pause %}disabled{% endif %}>{% trans "Sign in" %}</button>
 </form>
 {% if pause %}

@@ -210,8 +210,34 @@ def _pin_matches(guest, pin):
         return False
 
 
+PIN_EXAMPLE = 'Kava2026Moja'
+
+
+def pin_rules():
+    """(shortest, letter needed, digit needed) of the PINs of the people with a PIN only."""
+    settings = service.get_settings()
+    return (max(6, min(MAX_PIN_LENGTH, settings.guest_pin_min or MIN_PIN_LENGTH)), settings.guest_pin_letter,
+            settings.guest_pin_digit)
+
+
+def rule_text():
+    """The rule of the PIN in words, with an example (for the pages and the e-mails)."""
+    shortest, letter, digit = pin_rules()
+    parts = [_('at least %(n)d characters') % {'n': shortest}]
+    if letter:
+        parts.append(_('a letter'))
+    if digit:
+        parts.append(_('a digit'))
+    return _('The PIN has %(rule)s. Example (choose your own): %(example)s') % {
+        'rule': ', '.join(parts), 'example': PIN_EXAMPLE}
+
+
 def _take_pin_index(guest, pin):
-    """The PIN identifies the person on the shared page: two accesses never hold the same one."""
+    """
+    Only a person without a personal number is found by the PIN alone (the old sign-in), so only those PINs are unique.
+    """
+    if guest.person_number:
+        return None
     index = crypto.pin_lookup(pin)
     if PinGuest.objects.exclude(pk=guest.pk).filter(pin_index__in=crypto.pin_lookups(pin)).exists():
         raise ValidationError(_('Choose another PIN.'))
@@ -220,9 +246,12 @@ def _take_pin_index(guest, pin):
 
 def _clean_pin(pin):
     pin = pin or ''
-    if not MIN_PIN_LENGTH <= len(pin) <= MAX_PIN_LENGTH:
+    shortest, letter, digit = pin_rules()
+    if not shortest <= len(pin) <= MAX_PIN_LENGTH:
         raise ValidationError(_('The PIN must have %(min)d to %(max)d characters.') % {
-            'min': MIN_PIN_LENGTH, 'max': MAX_PIN_LENGTH})
+            'min': shortest, 'max': MAX_PIN_LENGTH})
+    if (letter and not any(c.isalpha() for c in pin)) or (digit and not any(c.isdigit() for c in pin)):
+        raise ValidationError(rule_text())
     if len(set(pin)) < 4:
         raise ValidationError(_('This PIN is too easy to guess. Use at least four different characters.'))
     return pin
@@ -424,6 +453,81 @@ def set_alias(guest, actor, alias, description='', request=None):
     return guest.alias
 
 
+def set_person_number(guest, actor, number, request=None):
+    """The personal number of the organisation: the administrator sets it, the person signs in with it and the PIN."""
+    if not _may_manage(actor, guest):
+        raise PermissionDenied
+    number = (number or '').strip()[:40]
+    if number == (guest.person_number or ''):
+        return guest.person_number
+    if not number:
+        if has_pin(guest) or service.get_settings().guest_number_required:
+            raise ValidationError(_('The personal number cannot be removed from an access that has a PIN.'))
+        guest.person_number = None
+    else:
+        if PinGuest.objects.exclude(pk=guest.pk).filter(person_number__iexact=number).exists():
+            raise ValidationError(_('This personal number belongs to another access.'))
+        guest.person_number = number
+        guest.pin_index = None  # found by the number from now on: its PIN need not be unique
+    guest.save(update_fields=['person_number', 'pin_index'])
+    _log(PinEventAction.GUEST_RULES, guest, actor, request, f'personal number: {guest.person_number or "-"}')
+    if guest.person_number:
+        _tell(guest, actor, lambda: _(
+            'Your personal number is %(number)s. From now on you sign in to the PIN page with two fields: the '
+            'personal number and your PIN.') % {'number': guest.person_number})
+    return guest.person_number
+
+
+def set_pin_policy(actor, number_required, minimum, letter, digit, request=None):
+    """
+    The rules of the PIN-only sign-in for everybody: the personal number a must, the shortest PIN, a letter / a digit.
+    Whoever is made to change: an e-mail now and a new PIN at the next sign-in (with an example).
+    """
+    if not _keeper_level(actor):
+        raise PermissionDenied
+    settings = service.get_settings()
+    try:
+        minimum = int(minimum)
+    except (TypeError, ValueError):
+        minimum = settings.guest_pin_min
+    if not 6 <= minimum <= MAX_PIN_LENGTH:
+        raise ValidationError(_('The shortest PIN is 6 to %(max)d characters.') % {'max': MAX_PIN_LENGTH})
+    number_required, letter, digit = bool(number_required), bool(letter), bool(digit)
+    people = PinGuest.objects.select_related('user').filter(revoked__isnull=True)
+    newly_number = number_required and not settings.guest_number_required
+    if newly_number:
+        missing = [g.user.username for g in people.filter(person_number__isnull=True)]
+        if missing:
+            raise ValidationError(_('Set the personal number first: %(people)s.') % {
+                'people': ', '.join(missing[:10]) + (' ...' if len(missing) > 10 else '')})
+    stricter = (minimum > settings.guest_pin_min or (letter and not settings.guest_pin_letter)
+                or (digit and not settings.guest_pin_digit))
+    settings.guest_number_required = number_required
+    settings.guest_pin_min, settings.guest_pin_letter, settings.guest_pin_digit = minimum, letter, digit
+    settings.save()
+    service.log_event(PinEventAction.GUEST_RULES, actor=actor, request=request, scope='guest',
+                      detail=f'sign-in: personal number {"required" if number_required else "not required"}; PIN: '
+                             f'{minimum}+ characters, letter {letter}, digit {digit}')
+    if not (newly_number or stricter):
+        return 0
+    from .models import UserPin
+    for guest in people:
+        if stricter and has_pin(guest):
+            UserPin.objects.filter(user=guest.user).exclude(pin_hash='').update(must_change=True)
+
+        def make(guest=guest):
+            lines = [_('Hello %(name)s,') % {'name': guest.name}, '']
+            if newly_number:
+                lines.append(_('From now on you MUST sign in to the PIN page with your personal number (%(number)s) '
+                               'and your PIN. The PIN alone no longer works.') % {'number': guest.person_number})
+            if stricter:
+                lines.append(_('The rules of the PIN changed. At your next sign-in with the old data you will be '
+                               'asked to choose a new PIN. %(rule)s') % {'rule': rule_text()})
+            return _('Your NetBox sign-in is changing'), '\n'.join(lines)
+        _say(guest, make)
+    return people.count()
+
+
 MAIL_EVERY = (5, 15, 30, 60, 120, 240, 1440)
 
 
@@ -532,7 +636,7 @@ def display(guest):
 
 
 def create(name, email, group, actor, expires=None, ips='', idle=30, hours=8, note='', request=None, alias='',
-           description='', pin_language='', ui_language=''):
+           description='', pin_language='', ui_language='', person_number=''):
     """
     Create the access: the technical user, its group and the personal link. Returns ``(guest, token)``; the token is
     shown only now (and e-mailed by ``invite``).
@@ -571,6 +675,11 @@ def create(name, email, group, actor, expires=None, ips='', idle=30, hours=8, no
         raise ValidationError(_('Idle time is 5 to 240 minutes, the whole session 1 to 24 hours.'))
     ips = _parse_ips(ips)
     alias = (alias or '').strip()[:100]
+    person_number = (person_number or '').strip()[:40] or None
+    if person_number is None and service.get_settings().guest_number_required:
+        raise ValidationError(_('Write the personal number of the person.'))
+    if person_number and PinGuest.objects.filter(person_number__iexact=person_number).exists():
+        raise ValidationError(_('This personal number belongs to another access.'))
     description = ' – '.join(x for x in ((description or '').strip(), (note or '').strip()) if x)[:150]
     valid = {code for code, _label in LANGUAGES}
     pin_language = pin_language if pin_language in valid else ''
@@ -587,7 +696,7 @@ def create(name, email, group, actor, expires=None, ips='', idle=30, hours=8, no
             user=user, name=name, email=email, token_hash=_hash(token), expires=expires, allowed_ips=ips,
             idle_minutes=idle, max_hours=hours, created_by_name=actor.username,
             manager=None if _keeper_level(actor) else actor,
-            description=description, alias=alias, pin_language=pin_language, ui_language=ui_language,
+            description=description, alias=alias, person_number=person_number, pin_language=pin_language, ui_language=ui_language,
             invite_expires=timezone.now() + timedelta(days=INVITE_DAYS))
         if group is not None:
             _join(group, user, actor, request)
@@ -797,7 +906,9 @@ def check_pin(guest, pin, request=None):
         if service._check_hash(user_pin, stored, pin):
             guest = PinGuest.objects.select_for_update().get(pk=guest.pk)
             guest.failed, guest.retry_after = 0, None
-            if guest.pin_index:
+            if guest.person_number:
+                pass
+            elif guest.pin_index:
                 _refresh_pin_index(guest, pin)
             elif not PinGuest.objects.exclude(pk=guest.pk).filter(pin_index__in=crypto.pin_lookups(pin)).exists():
                 guest.pin_index = crypto.pin_lookup(pin)
@@ -1062,19 +1173,63 @@ def ip_pause(request):
     return max(0, int(state['until'] - time.time()) + 1) if state and state.get('until', 0) > time.time() else 0
 
 
-def pin_only_login(request, pin):
+def _fail_by_address(request, address, detail):
+    """A wrong sign-in that cannot be put down to a person: the computer waits by the steps of the default rules."""
+    step, waits = rules()
+    state = cache.get(_ip_key(address)) or {'n': 0, 'until': 0}
+    state['n'] += 1
+    if state['n'] % step == 0:
+        state['until'] = time.time() + waits[min(state['n'] // step, len(waits)) - 1]
+    cache.set(_ip_key(address), state, 3600)
+    service.log_event(PinEventAction.GUEST_FAILED, scope='guest', request=request,
+                      detail=f'{detail}, address {address}, attempt {state["n"]}')
+    if state['n'] % (step * len(waits)) == 0:
+        for keeper in areas.keepers():
+            service.send_user_mail(keeper, _('Wrong PINs from %(ip)s') % {'ip': address}, _(
+                '%(n)d wrong PINs on the PIN-only page from the address %(ip)s.') % {'n': state['n'], 'ip': address},
+                request=request)
+
+
+def number_login(request, number, pin):
+    """Personal number + PIN: ``('ok', guest)`` or the same words as ``pin_only_login``."""
+    address = _client_ip(request)
+    if address is None:
+        return 'blocked', None
+    if ip_pause(request):
+        return 'pause', None
+    guest = (PinGuest.objects.select_related('user').filter(person_number__iexact=(number or '').strip()).first()
+             if (number or '').strip() else None)
+    if guest is None:
+        _fail_by_address(request, address, 'PIN page, unknown personal number')
+        return 'wrong', None
+    status = check_pin(guest, pin or '', request=request)
+    if status == 'ok':
+        cache.delete(_ip_key(address))
+        return 'ok', PinGuest.objects.select_related('user').get(pk=guest.pk)
+    if status in ('disabled', 'ended', 'locked'):
+        return status, guest
+    if status == 'nopin':
+        return 'wrong', None
+    return status, None
+
+
+def pin_only_login(request, pin, number=''):
     """
     ``('ok', guest)``, ``('wrong', None)``, ``('pause', None)`` or ``('blocked', None)``. The PIN alone tells who the person
     is (it is unique). A wrong PIN cannot be put down to a person, so the computer (its address) waits by the steps of the
     default rules; the last wait repeats and nobody is blocked. The keepers get an e-mail after every full round.
     """
+    if (number or '').strip():
+        return number_login(request, number, pin)
+    if service.get_settings().guest_number_required:
+        return 'number', None  # the personal number is a must from now on
     address = _client_ip(request)
     if address is None:
         return 'blocked', None
     if ip_pause(request):
         return 'pause', None
     guest = None
-    if pin and MIN_PIN_LENGTH <= len(pin) <= MAX_PIN_LENGTH:
+    if pin and len(pin) <= MAX_PIN_LENGTH:
         guest = PinGuest.objects.select_related('user').filter(pin_index__in=crypto.pin_lookups(pin)).first()
     if guest is not None and _pin_matches(guest, pin):
         if guest.revoked:
@@ -1093,19 +1248,7 @@ def pin_only_login(request, pin):
         guest.save(update_fields=['failed', 'retry_after', 'last_login', 'last_ip'])
         return 'ok', guest
     # the person is not known: the computer waits by the same steps (the last wait repeats, nobody is blocked)
-    step, waits = rules()
-    state = cache.get(_ip_key(address)) or {'n': 0, 'until': 0}
-    state['n'] += 1
-    if state['n'] % step == 0:
-        state['until'] = time.time() + waits[min(state['n'] // step, len(waits)) - 1]
-    cache.set(_ip_key(address), state, 3600)
-    service.log_event(PinEventAction.GUEST_FAILED, scope='guest', request=request,
-                      detail=f'PIN page, address {address}, attempt {state["n"]}')
-    if state['n'] % (step * len(waits)) == 0:
-        for keeper in areas.keepers():
-            service.send_user_mail(keeper, _('Wrong PINs from %(ip)s') % {'ip': address}, _(
-                '%(n)d wrong PINs on the PIN-only page from the address %(ip)s.') % {'n': state['n'], 'ip': address},
-                request=request)
+    _fail_by_address(request, address, 'PIN page')
     return 'wrong', None
 
 
@@ -1226,7 +1369,8 @@ def _send_changes(guest, changes, since, settings):
     if creator is not None and creator not in recipients:
         recipients.insert(0, creator)
     with translation.override(settings.language or 'en'):
-        who = guest.user.username + (f' ({guest.alias})' if guest.alias else '')
+        who = (guest.user.username + (f' OS:{guest.person_number}' if guest.person_number else '')
+               + (f' ({guest.alias})' if guest.alias else ''))
         subject = (_('%(id)s made a change') % {'id': who} if len(changes) == 1 else
                    _('%(id)s made changes (%(n)d)') % {'id': who, 'n': len(changes)})
         body = '\n\n'.join('\n'.join(_change_lines(change)) for change in changes)
