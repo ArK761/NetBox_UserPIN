@@ -12,7 +12,7 @@
 <li>záložné kódy 2FA,</li>
 <li>SMTP heslo zo stránky Mail.</li>
 </ul>
-<p>Kľúčom sa navyše počítajú odtlačky (nešifrujú sa): vyhľadávací index PINu pre osoby len s PIN-om a overovacie kódy domén. Výpis databázy samotný teda neobsahuje nič použiteľné, ani čo by sa dalo lámať offline.</p>
+<p>Kľúčom sa navyše počítajú odtlačky (nešifrujú sa): vyhľadávací index PINu pre osoby len s PIN-om bez osobného čísla a overovacie kódy domén. Výpis databázy samotný teda neobsahuje nič použiteľné, ani čo by sa dalo lámať offline.</p>
 <h2>Ako kľúč vygenerovať</h2>
 <pre># kým plugin ešte nebeží – obyčajný Python:
 python3 -c "import base64,os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"
@@ -59,7 +59,7 @@ cd /opt/netbox/netbox &amp;&amp; python manage.py userpin_generate_key --key-id 
 <li>Over: <code>python manage.py userpin_check</code>.</li>
 <li><strong>Starý kľúč odstráň až keď <code>userpin_check</code> napíše</strong> <em>Everything decrypts with the active key; old keys can be removed.</em></li>
 </ol>
-<p><strong>Prečo starý kľúč nemazať hneď:</strong> index osôb len s PIN-om sa presunie na nový kľúč až pri ďalšom prihlásení každej osoby. Kým sa niektorá neprihlási, čaká na starý kľúč. Príkaz to vypíše (<em>PIN-only accesses still on an old key: N</em>) a potom ešte <em>Do NOT remove the old key yet</em>.</p>
+<p><strong>Prečo starý kľúč nemazať hneď:</strong> index osôb len s PIN-om bez osobného čísla (osoby s číslom ho nemajú) sa presunie na nový kľúč až pri ďalšom prihlásení každej osoby. Kým sa niektorá neprihlási, čaká na starý kľúč. Príkaz to vypíše (<em>PIN-only accesses still on an old key: N</em>) a potom ešte <em>Do NOT remove the old key yet</em>.</p>
 <h2>Čo vypisuje <code>userpin_check</code></h2>
 <table>
 <tr><th>Riadok</th><th>Význam</th></tr>

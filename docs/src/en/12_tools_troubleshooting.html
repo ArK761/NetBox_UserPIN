@@ -136,7 +136,7 @@ areas.can(request.user, 'netbox_libreoxi', 'config')   # True / False</pre>
 </ul>
 <h2>PIN-only people</h2>
 <ul>
-<li>E-mails both ways: the person about the changes of an administrator; the administrators a summary every N minutes or at every change (not both), subject <em>PinUserNNNN made a change</em>, body: time, object, changed fields (from → to); sent after the save through <code>netbox-rq</code>.</li>
+<li>E-mails both ways: the person about the changes of an administrator; the administrators a summary every N minutes or at every change (not both), subject <em>UserPIN : PN made a change</em>, body: time, object, changed fields (from → to); sent after the save through <code>netbox-rq</code>.</li>
 <li>The drop-downs of forms work; saving own table columns.</li>
 <li>Conditions on relation fields: contains / starts with / is one of, several values, the Conditions button.</li>
 </ul>

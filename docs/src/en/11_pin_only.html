@@ -23,7 +23,7 @@
 </table>
 <h2>The person's first sign-in</h2>
 <ol>
-<li>The person gets a <strong>personal link</strong> by e-mail (valid <strong>7 days</strong>; <em>Send the link again</em> issues a new one and the old one stops). The link opens the page <em>Hello name</em>.</li>
+<li>The person gets a <strong>personal link</strong> by e-mail (valid <strong>7 days</strong>; <em>Send the link again</em> issues a new one and the old one stops). The link opens the page <em>Hello UserPIN : PN</em> (the person is called by the personal number).</li>
 <li>They choose <strong>their own PIN</strong>: by the PIN rules (by default <strong>8 to 64 characters</strong>, not only digits, at least 4 different characters; the administrator can also require a letter and a digit, see below). For a person with a personal number the PIN <strong>need not be unique</strong>. Nobody can read it, not even the administrator.</li>
 <li>The button <em>Set the PIN and sign in</em>. If the invitation expired: <em>Ask the administrator for a new one.</em></li>
 </ol>
@@ -57,7 +57,8 @@
 <table>
 <tr><th>Where</th><th>What happens</th></tr>
 <tr><td><strong>The personal link</strong></td><td>the person is known: after every 5 wrong PINs a wait (10, 20, 30 s); after the last step the access is <strong>blocked</strong> (the person and the keepers get an e-mail). Only an administrator unblocks (<em>Unblock</em>), or the person sets a new PIN through an e-mail with a link</td></tr>
-<tr><td><strong>The shared page</strong></td><td>a wrong PIN cannot be put down to a person: the <strong>computer</strong> (its address) waits by the same steps, the last wait repeats, <strong>nobody is blocked</strong>, and the keepers get an e-mail after every full round (15 wrong PINs) <em>Wrong PINs from …</em></td></tr>
+<tr><td><strong>The shared page with a personal number</strong></td><td>a right number and a wrong PIN is put down to the person: the same steps and the same <strong>blocking</strong> as with the personal link. An unknown number is like a wrong PIN without a person (the computer waits) and the message is the same <em>The personal number or the PIN is not correct</em>, so nobody can find out which numbers exist</td></tr>
+<tr><td><strong>The shared page without a number</strong> (while the number is not a must)</td><td>a wrong PIN cannot be put down to a person: the <strong>computer</strong> (its address) waits by the same steps, the last wait repeats, <strong>nobody is blocked</strong>, and the keepers get an e-mail after every full round (15 wrong PINs) <em>Wrong PINs from …</em></td></tr>
 </table>
 <p>A blocked person sees <em>Signing in is not possible</em> and the button <em>Ask the administrator to unblock my account</em> (at most once an hour; an e-mail to the administrator who disabled the access, or to the keepers).</p>
 <h2>Actions at a person</h2>

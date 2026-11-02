@@ -23,7 +23,7 @@
 </table>
 <h2>Prvé prihlásenie osoby</h2>
 <ol>
-<li>Osoba dostane e-mailom <strong>osobný odkaz</strong> (platí <strong>7 dní</strong>; <em>Poslať odkaz znova</em> vydá nový a starý prestane platiť). Odkaz otvorí stránku <em>Ahoj meno</em>.</li>
+<li>Osoba dostane e-mailom <strong>osobný odkaz</strong> (platí <strong>7 dní</strong>; <em>Poslať odkaz znova</em> vydá nový a starý prestane platiť). Odkaz otvorí stránku <em>Ahoj UserPIN : OC</em> (osoba sa volá osobným číslom).</li>
 <li>Zvolí si <strong>vlastný PIN</strong>: podľa pravidiel PINu (predvolene <strong>8 až 64 znakov</strong>, nie len číslice, aspoň 4 rôzne znaky; správca môže vyžadovať aj písmeno a číslicu, pozri nižšie). Pri osobách s osobným číslom <strong>nemusí byť PIN jedinečný</strong>. Nikto ho neprečíta, ani správca.</li>
 <li>Tlačidlo <em>Nastaviť PIN a prihlásiť sa</em>. Ak pozvánka vypršala: <em>Požiadajte správcu o novú.</em></li>
 </ol>
@@ -57,7 +57,8 @@
 <table>
 <tr><th>Kde</th><th>Čo sa stane</th></tr>
 <tr><td><strong>Osobný odkaz</strong></td><td>osoba je známa: po každých 5 zlých PINoch čakanie (10, 20, 30 s); po poslednom kroku je prístup <strong>zablokovaný</strong> (osoba aj strážcovia dostanú e-mail). Odblokuje len správca (<em>Odblokovať</em>), alebo osoba nastaví nový PIN cez e-mail s odkazom</td></tr>
-<tr><td><strong>Spoločná stránka</strong></td><td>zlý PIN sa nedá pripísať osobe: čaká <strong>počítač</strong> (jeho adresa) podľa rovnakých krokov, posledné čakanie sa opakuje, <strong>nikto sa neblokuje</strong>, a strážcovia dostanú e-mail po každom plnom kole (15 zlých PINov) <em>Wrong PINs from …</em></td></tr>
+<tr><td><strong>Spoločná stránka s osobným číslom</strong></td><td>správne číslo a zlý PIN sa pripíše osobe: rovnaké kroky a <strong>zablokovanie</strong> ako pri osobnom odkaze. Neznáme číslo je ako zlý PIN bez osoby (čaká počítač) a hláška je rovnaká <em>Osobné číslo alebo PIN nie je správny</em>, takže sa nedá zistiť, ktoré čísla existujú</td></tr>
+<tr><td><strong>Spoločná stránka bez čísla</strong> (kým číslo nie je povinné)</td><td>zlý PIN sa nedá pripísať osobe: čaká <strong>počítač</strong> (jeho adresa) podľa rovnakých krokov, posledné čakanie sa opakuje, <strong>nikto sa neblokuje</strong>, a strážcovia dostanú e-mail po každom plnom kole (15 zlých PINov) <em>Wrong PINs from …</em></td></tr>
 </table>
 <p>Zablokovaná osoba vidí <em>Prihlásenie nie je možné</em> a tlačidlo <em>Požiadať správcu o odblokovanie</em> (najviac raz za hodinu; e-mail správcovi, ktorý prístup zakázal, alebo strážcom).</p>
 <h2>Akcie pri osobe</h2>

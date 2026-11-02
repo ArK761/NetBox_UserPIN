@@ -12,7 +12,7 @@
 <li>the 2FA backup codes,</li>
 <li>the SMTP password from the Mail page.</li>
 </ul>
-<p>The key is also used to compute digests (these are not encrypted): the lookup index of the PIN of the PIN-only people and the verification codes of the domains. A database dump alone therefore contains nothing usable, not even something to brute-force offline.</p>
+<p>The key is also used to compute digests (these are not encrypted): the lookup index of the PIN of the PIN-only people without a personal number and the verification codes of the domains. A database dump alone therefore contains nothing usable, not even something to brute-force offline.</p>
 <h2>How to generate a key</h2>
 <pre># while the plugin does not run yet – plain Python:
 python3 -c "import base64,os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"
@@ -59,7 +59,7 @@ cd /opt/netbox/netbox &amp;&amp; python manage.py userpin_generate_key --key-id 
 <li>Verify: <code>python manage.py userpin_check</code>.</li>
 <li><strong>Remove the old key only when <code>userpin_check</code> prints</strong> <em>Everything decrypts with the active key; old keys can be removed.</em></li>
 </ol>
-<p><strong>Why not delete the old key at once:</strong> the index of the PIN-only people moves to the new key only at each person's next sign-in. Until a person signs in, they wait for the old key. The command prints it (<em>PIN-only accesses still on an old key: N</em>) and then <em>Do NOT remove the old key yet</em>.</p>
+<p><strong>Why not delete the old key at once:</strong> the index of the PIN-only people without a personal number (people with a number have none) moves to the new key only at each person's next sign-in. Until a person signs in, they wait for the old key. The command prints it (<em>PIN-only accesses still on an old key: N</em>) and then <em>Do NOT remove the old key yet</em>.</p>
 <h2>What <code>userpin_check</code> prints</h2>
 <table>
 <tr><th>Line</th><th>Meaning</th></tr>
