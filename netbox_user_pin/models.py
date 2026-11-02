@@ -1137,6 +1137,11 @@ class PinGuest(models.Model):
     description = models.CharField(max_length=150, blank=True)  # e.g. technician of company XY
     person_number = models.CharField(max_length=40, null=True, blank=True, unique=True, default=None)  # the organisation's personal number: signs in with the PIN
     @property
+    def shown(self):
+        """What the person is called to their face: the personal number (UserPIN : 12345), else the name."""
+        return self.label if self.person_number else self.name
+
+    @property
     def label(self):
         """'UserPIN : 12345' (the personal number) once it is set, else the technical ID."""
         return f'UserPIN : {self.person_number}' if self.person_number else self.user.username

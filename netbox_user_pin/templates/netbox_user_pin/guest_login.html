@@ -2,7 +2,7 @@
 {% load i18n %}
 {% block guest_title %}{% trans "PIN" %}{% endblock %}
 {% block guest_body %}
-<h2 class="text-center mb-3">{% blocktrans with name=guest.name %}Hello {{ name }}{% endblocktrans %}</h2>
+<h2 class="text-center mb-3">{% blocktrans with name=guest.shown %}Hello {{ name }}{% endblocktrans %}</h2>
 {% if not has_pin %}
   {% if setup_ok %}
     <p class="text-secondary">{% blocktrans with n=min_length %}Choose your own PIN ({{ n }} or more characters). Nobody can read it, not even the administrator.{% endblocktrans %}</p>

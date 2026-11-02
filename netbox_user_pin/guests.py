@@ -120,7 +120,7 @@ def request_unblock(guest, request=None):
         subject = _('Request to unblock the PIN-only access %(id)s') % {'id': guest.user.username}
         body = _('%(name)s (%(id)s%(alias)s, %(email)s) asks to get the access back – %(state)s.\n\n'
                  'Enable it or extend its validity here: %(link)s') % {
-            'name': guest.name, 'id': guest.user.username, 'alias': f', {guest.alias}' if guest.alias else '',
+            'name': guest.shown, 'id': guest.user.username, 'alias': f', {guest.alias}' if guest.alias else '',
             'email': guest.email, 'state': state, 'link': link}
         sent = [r.username for r in recipients if service.send_user_mail(r, subject, body, request=request)]
     cache.set(key, True, UNBLOCK_EVERY)
@@ -157,7 +157,7 @@ def announce_expiry():
         _say(guest, lambda: (_('Your NetBox access ends on %(time)s') % {
             'time': timezone.localtime(guest.expires).strftime('%d.%m.%Y %H:%M')}, _(
             'Hello %(name)s,\n\nyour access to NetBox ends on %(time)s. If you still need it, ask the administrator '
-            'to extend it.') % {'name': guest.name,
+            'to extend it.') % {'name': guest.shown,
                                 'time': timezone.localtime(guest.expires).strftime('%d.%m.%Y %H:%M')}))
         _log(PinEventAction.GUEST_EXPIRY_WARNED, guest, detail=f'{step} day(s) before')
 
@@ -316,7 +316,7 @@ def _tell_keepers(guest, actor, action, detail):
         label = str(PinEventAction(action).label)
         subject = _('PIN-only access %(id)s: %(what)s') % {'id': guest.user.username, 'what': label}
         body = _('%(actor)s did this with the PIN-only access %(id)s (%(name)s, %(email)s):\n\n%(what)s%(detail)s') % {
-            'actor': actor.username, 'id': guest.user.username, 'name': guest.name, 'email': guest.email,
+            'actor': actor.username, 'id': guest.user.username, 'name': guest.shown, 'email': guest.email,
             'what': label, 'detail': f'\n{detail}' if detail else ''}
     for keeper in areas.keepers():
         service.send_user_mail(keeper, subject, body)
@@ -354,7 +354,7 @@ def _tell(guest, actor, what):
     """One e-mail to the person about an action of an administrator; ``what`` is built in the person's language."""
     _say(guest, lambda: (_('Your NetBox access was changed'), _(
         'Hello %(name)s,\n\nthe administrator %(admin)s changed your access to NetBox:\n\n%(what)s') % {
-            'name': guest.name, 'admin': actor.get_full_name() or actor.username, 'what': what()}))
+            'name': guest.shown, 'admin': actor.get_full_name() or actor.username, 'what': what()}))
 
 
 def _say(guest, make):
@@ -516,7 +516,7 @@ def set_pin_policy(actor, number_required, minimum, letter, digit, request=None)
             UserPin.objects.filter(user=guest.user).exclude(pin_hash='').update(must_change=True)
 
         def make(guest=guest):
-            lines = [_('Hello %(name)s,') % {'name': guest.name}, '']
+            lines = [_('Hello %(name)s,') % {'name': guest.shown}, '']
             if newly_number:
                 lines.append(_('From now on you MUST sign in to the PIN page with your personal number (%(number)s) '
                                'and your PIN. The PIN alone no longer works.') % {'number': guest.person_number})
@@ -624,7 +624,7 @@ def set_manager(guest, actor, manager):
     for person in {before, manager} - {None}:
         service.send_user_mail(person, _('PIN-only access %(id)s: manager changed') % {'id': guest.user.username}, _(
             'The PIN-only access %(id)s (%(name)s) is now managed by %(who)s.') % {
-                'id': guest.user.username, 'name': guest.name, 'who': manager.username if manager else _('the keepers')})
+                'id': guest.user.username, 'name': guest.shown, 'who': manager.username if manager else _('the keepers')})
 
 
 def display(guest):
@@ -724,7 +724,7 @@ def invite(guest, actor, request=None):
     sent = _say(guest, lambda: (_('Your access to NetBox'), _(
         'Hello %(name)s,\n\nyou were given access to NetBox through a PIN.\n\nYour personal link:\n%(link)s\n\n'
         '%(first)s\nKeep the link to yourself: it works only together with your PIN.') % {
-            'name': guest.name, 'link': link,
+            'name': guest.shown, 'link': link,
             'first': (_('Open it and choose your own PIN within %(days)d days.') % {'days': INVITE_DAYS}
                       if guest.invite_expires and not has_pin(guest) else _('Open it and enter your PIN.'))
             + '\n' + _('Afterwards save this page and sign in there with your PIN only: %(page)s') % {
@@ -792,7 +792,7 @@ def unblock(guest, actor, request=None):
     _log(PinEventAction.GUEST_UNBLOCKED, guest, actor, request)
     _say(guest, lambda: (_('Your NetBox access works again'), _(
         'Hello %(name)s,\n\nthe administrator unblocked your access. You can sign in with your PIN again.') % {
-            'name': guest.name}))
+            'name': guest.shown}))
 
 
 def force_change(guest, actor, request=None):
@@ -805,7 +805,7 @@ def force_change(guest, actor, request=None):
         _say(guest, lambda: (_('You must change your PIN'), _(
             'Hello %(name)s,\n\nthe administrator %(admin)s asked you to choose a new PIN. If you are signed in, you '
             'are asked for it right away; otherwise at your next sign-in.') % {
-                'name': guest.name, 'admin': actor.username}))
+                'name': guest.shown, 'admin': actor.username}))
 
 
 def must_change(guest):
@@ -823,12 +823,12 @@ def _block(guest, request):
     _log(PinEventAction.GUEST_BLOCKED, guest, request=request, detail=f'after {guest.failed} wrong PINs')
     _say(guest, lambda: (_('Your NetBox access is blocked'), _(
         'Hello %(name)s,\n\nafter %(n)d wrong PINs your access was blocked. Ask the administrator to unblock it or to '
-        'send you a link for a new PIN.') % {'name': guest.name, 'n': guest.failed}))
+        'send you a link for a new PIN.') % {'name': guest.shown, 'n': guest.failed}))
     for keeper in areas.keepers():
-        service.send_user_mail(keeper, _('PIN-only access blocked: %(name)s') % {'name': guest.name}, _(
+        service.send_user_mail(keeper, _('PIN-only access blocked: %(name)s') % {'name': guest.shown}, _(
             'The PIN-only access of %(name)s (%(email)s) was blocked after %(n)d wrong PINs. Unblock it or send a '
             'reset e-mail on the page People with a PIN only.') % {
-                'name': guest.name, 'email': guest.email, 'n': guest.failed}, request=request)
+                'name': guest.shown, 'email': guest.email, 'n': guest.failed}, request=request)
 
 
 def _after_wrong(guest, request):
@@ -941,7 +941,7 @@ def request_reset(guest, request=None, actor=None):
     sent = _say(guest, lambda: (_('New PIN for your NetBox access'), _(
         'Hello %(name)s,\n\nyou asked for a new PIN. Open this link and choose it (valid %(minutes)d minutes, once):'
         '\n%(link)s\n\nIf it was not you, ignore this message.') % {
-            'name': guest.name, 'link': link, 'minutes': RESET_MINUTES}))
+            'name': guest.shown, 'link': link, 'minutes': RESET_MINUTES}))
     _log(PinEventAction.GUEST_RESET, guest, actor, request=request,
          detail=('sent by the administrator' if actor else 'requested') + ('' if sent else ' (not sent)'))
     return sent
@@ -967,7 +967,7 @@ def revoke(guest, actor, request=None):
     _say(guest, lambda: (_('Your NetBox access was disabled'), _(
         'Hello %(name)s,\n\nthe administrator %(admin)s disabled your access to NetBox on %(time)s. Signing in with '
         'your PIN shows a page where you can ask the administrator to enable it again.') % {
-            'name': guest.name, 'admin': actor.get_full_name() or actor.username,
+            'name': guest.shown, 'admin': actor.get_full_name() or actor.username,
             'time': timezone.localtime(guest.revoked).strftime('%d.%m.%Y %H:%M')}))
     areas.clear_cache()
 
@@ -981,7 +981,7 @@ def restore(guest, actor, request=None):
     guest.user.save(update_fields=['is_active'])
     _say(guest, lambda: (_('Your NetBox access works again'), _(
         'Hello %(name)s,\n\nthe administrator enabled your access again. You can sign in with your PIN.') % {
-            'name': guest.name}))
+            'name': guest.shown}))
     _log(PinEventAction.GUEST_INVITED, guest, actor, request, 'restored')
     areas.clear_cache()
 
@@ -992,7 +992,7 @@ def delete(guest, actor, request=None):
     _log(PinEventAction.GUEST_DELETED, guest, actor, request)
     _say(guest, lambda: (_('Your NetBox access was deleted'), _(
         'Hello %(name)s,\n\nthe administrator %(admin)s deleted your access to NetBox. Your PIN does not work any '
-        'more.') % {'name': guest.name, 'admin': actor.get_full_name() or actor.username}))
+        'more.') % {'name': guest.shown, 'admin': actor.get_full_name() or actor.username}))
     guest.user.delete()  # takes the access, the PIN and the grants along; the changelog keeps the name
     areas.clear_cache()
 
@@ -1320,7 +1320,7 @@ def _grant_saved(sender, instance, created, **kwargs):
     actor = get_user_model().objects.filter(username=who).first()
     _say(guest, lambda: (_('Your NetBox access was changed'), _(
         'Hello %(name)s,\n\nthe administrator %(admin)s changed your access to NetBox:\n\n%(what)s') % {
-            'name': guest.name, 'admin': (actor.get_full_name() or actor.username) if actor else who, 'what': what()}))
+            'name': guest.shown, 'admin': (actor.get_full_name() or actor.username) if actor else who, 'what': what()}))
 
 
 def install_display():

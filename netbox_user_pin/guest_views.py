@@ -35,7 +35,7 @@ def _stopped(request, guest, message):
     """The account may not sign in (disabled, ended, blocked): no PIN form, no reset – only 'ask the administrator'."""
     import time
     request.session[STOP_KEY] = {'id': guest.pk, 't': time.time()}
-    return render(request, T + 'stopped.html', {'error': message, 'guest_name': guest.name}, status=403)
+    return render(request, T + 'stopped.html', {'error': message, 'guest_name': guest.shown}, status=403)
 
 
 def _same(request):
@@ -152,7 +152,7 @@ class GuestUnblockRequestView(View):
                 'admins': ', '.join(sent)}
         else:
             text = _('Your request was sent already. You can ask again in an hour.')
-        return render(request, T + 'stopped.html', {'info': text, 'sent': True, 'guest_name': guest.name})
+        return render(request, T + 'stopped.html', {'info': text, 'sent': True, 'guest_name': guest.shown})
 
 
 class GuestPinForgotView(View):

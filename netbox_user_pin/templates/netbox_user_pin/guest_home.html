@@ -4,7 +4,7 @@
 <form method="post" action="{% url 'plugins:netbox_user_pin:guest_language' %}" class="text-end mb-2">{% csrf_token %}
   {% for code, label in languages %}<button class="btn btn-sm {% if pin_language == code %}btn-secondary{% else %}btn-outline-secondary{% endif %}" name="language" value="{{ code }}">{{ code|upper }}</button> {% endfor %}
 </form>
-<h2 class="text-center mb-1">{% blocktrans with name=guest.name %}You are signed in as {{ name }}{% endblocktrans %}</h2>
+<h2 class="text-center mb-1">{% blocktrans with name=guest.shown %}You are signed in as {{ name }}{% endblocktrans %}</h2>
 <p class="text-center mb-1"><code>{{ guest.label }}</code></p>
 {% if pin_until %}<p class="text-center mb-1 {% if pin_warn %}text-warning fw-bold{% else %}text-secondary{% endif %}">
   <i class="mdi mdi-calendar-clock"></i> {% blocktrans with d=pin_days h=pin_hours date=pin_until|date:"d.m.Y H:i" %}Your PIN expires in {{ d }} days and {{ h }} hours ({{ date }}).{% endblocktrans %}</p>{% endif %}
