@@ -11,7 +11,7 @@ import sys
 
 HERE = pathlib.Path(__file__).parent
 VERSION = '2.0.1'
-DATE = '2026-10-31'
+DATE = '2026-11-02'
 
 DOCS = {
     'en': dict(src='en', out='../GUIDE_User_PIN_EN.pdf', lang='en',

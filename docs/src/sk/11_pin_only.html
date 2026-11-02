@@ -8,8 +8,9 @@
 <h2>Nový prístup (formulár)</h2>
 <table>
 <tr><th>Pole</th><th>Povinné</th><th>Význam</th></tr>
-<tr><td>Meno</td><td>áno</td><td>meno osoby (do 150 znakov)</td></tr>
+<tr><td>Meno</td><td>áno</td><td>meno osoby (do 150 znakov); používa sa len pre správcu, osoba sa volá osobným číslom</td></tr>
 <tr><td>E-mail</td><td>áno</td><td>platná adresa. <strong>Nesmie</strong> patriť inému prístupu ani účtu NetBoxu: ak ju už má účet, stránka vysvetlí, že osoba sa má prihlasovať vlastným účtom (pridaj ho do skupiny ako bežného používateľa)</td></tr>
+<tr><td>Osobné číslo</td><td><strong>áno</strong></td><td>osobné číslo osoby v organizácii (do 40 znakov). <strong>Jedinečné</strong> a po uložení sa <strong>nedá zmeniť</strong>; pred uložením sa systém opýta „Skontrolujte osobné číslo ešte raz“. Osoba sa ním a PIN-om prihlasuje a podľa neho sa všade volá: <code>UserPIN : 12345</code></td></tr>
 <tr><td>Skupina</td><td>strážca nie; správca áno</td><td>skupina z chránenej oblasti. Bez skupiny (len strážca) môže osoba iba meniť svoj PIN. Správca vyberá len zo skupín svojho úseku</td></tr>
 <tr><td>Prístup končí (voliteľné)</td><td>nie</td><td>dátum a čas v budúcnosti; potom sa osoba neprihlási. Prázdne = bez konca</td></tr>
 <tr><td>Nečinnosť (minúty)</td><td>–</td><td>predvolene 30 (5 až 240)</td></tr>
@@ -23,19 +24,30 @@
 <h2>Prvé prihlásenie osoby</h2>
 <ol>
 <li>Osoba dostane e-mailom <strong>osobný odkaz</strong> (platí <strong>7 dní</strong>; <em>Poslať odkaz znova</em> vydá nový a starý prestane platiť). Odkaz otvorí stránku <em>Ahoj meno</em>.</li>
-<li>Zvolí si <strong>vlastný PIN</strong>: <strong>8 až 64 znakov</strong> (nie len číslice), aspoň 4 rôzne znaky, <strong>jedinečný</strong> medzi všetkými prístupmi (<em>Zvoľte iný PIN</em>, ak ho už niekto má). Nikto ho neprečíta, ani správca.</li>
+<li>Zvolí si <strong>vlastný PIN</strong>: podľa pravidiel PINu (predvolene <strong>8 až 64 znakov</strong>, nie len číslice, aspoň 4 rôzne znaky; správca môže vyžadovať aj písmeno a číslicu, pozri nižšie). Pri osobách s osobným číslom <strong>nemusí byť PIN jedinečný</strong>. Nikto ho neprečíta, ani správca.</li>
 <li>Tlačidlo <em>Nastaviť PIN a prihlásiť sa</em>. Ak pozvánka vypršala: <em>Požiadajte správcu o novú.</em></li>
 </ol>
 <p>Ak nie je nastavená pošta, odkaz sa správcovi <strong>ukáže na obrazovke</strong> (iba raz, <em>Odovzdajte tento osobný odkaz sami</em>).</p>
+<h2>Osobné číslo a pravidlá prihlásenia</h2>
+<ul>
+<li><strong>Osobné číslo (OC)</strong> zadáva správca pri vytvorení osoby (povinné) alebo neskôr v riadku osoby (blok <em>Alias a popis</em>, pole <em>Osobné číslo (prihlásenie)</em>). Je jedinečné a po uložení <strong>sa nedá zmeniť</strong>; osoba o ňom dostane e-mail.</li>
+<li>Osoba sa volá <code>UserPIN : OC</code> všade: v zozname osôb (druhý riadok <em>ID: 1</em> je číslo technického účtu), v Audit logu (používateľ aj vykonal), v e-mailoch, v hornom menu, na úvodnej stránke osoby a na stránkach zablokovania. Meno sa v zozname nezobrazuje.</li>
+<li>Karta <strong>Pravidlá prihlásenia a PIN-u (pre všetkých)</strong> (stránka <em>Ľudia len s PIN-om</em>, len strážca): <em>Osobné číslo je povinné</em>, <em>Najkratší PIN</em> (6 až 64), <em>PIN musí obsahovať písmeno</em>, <em>PIN musí obsahovať číslicu</em>.</li>
+<li><strong>Osobné číslo povinné</strong> sa nedá zapnúť, kým má niektorý prístup bez čísla (stránka vypíše, komu chýba). Po zapnutí dostane každý e-mail <em>Prihlasovanie do NetBoxu sa mení</em> a samotný PIN už nestačí; prihlasovacia stránka má dve polia (<em>Osobné číslo</em> a <em>PIN</em>) a veľký červený oznam.</li>
+<li><strong>Prísnejšie pravidlo PINu</strong> (dlhší PIN, povinné písmeno alebo číslica): každý dostane e-mail a pri najbližšom prihlásení pôvodnými údajmi si musí zvoliť nový PIN; stránka zmeny ukáže pravidlo a príklad (<code>Kava2026Moja</code>).</li>
+<li>Kým číslo povinné nie je, osoba bez čísla sa prihlási samotným PIN-om (PINy takých osôb zostávajú jedinečné, <em>Zvoľte iný PIN</em>). Osoba s číslom sa môže prihlásiť číslom a PIN-om; zlé číslo alebo PIN dáva rovnakú hlášku <em>Osobné číslo alebo PIN nie je správny</em>.</li>
+</ul>
+<h2>Čo osoba vidí: len svoje oblasti</h2>
+<p>Osoba len s PIN-om vždy žije v režime B (nech je v nastaveniach akýkoľvek): vidí <strong>len oblasti, kde je v skupine</strong>. Ak nie je v žiadnej, nevidí nič. Položky mimo jej skupín (napr. Devices) z menu zmiznú a nemajú ani „dvere“.</p>
 <h2>Bežné prihlasovanie: jedna spoločná adresa</h2>
 <ul>
-<li>Všetci používajú <strong>jednu spoločnú stránku</strong> (predvolene <code>/pin/</code>) a zadajú <strong>len PIN</strong>: PIN povie, kto to je. Adresu volí strážca na stránke (<em>Adresa prihlásenia PINom</em>: časť A a voliteľne B, napr. <code>/tenanti/</code> alebo <code>/aqer/x2/</code>; nerozlišuje veľkosť písmen). Osoba si ju uloží ako záložku; <strong>nemení sa</strong>, kým ju strážca nezmení (po zmene si ju musia uložiť znova).</li>
+<li>Všetci používajú <strong>jednu spoločnú stránku</strong> (predvolene <code>/pin/</code>) a zadajú <strong>osobné číslo a PIN</strong> (kým číslo nie je povinné, osoby bez čísla zadajú len PIN: PIN povie, kto to je). Adresu volí strážca na stránke (<em>Adresa prihlásenia PINom</em>: časť A a voliteľne B, napr. <code>/tenanti/</code> alebo <code>/aqer/x2/</code>; nerozlišuje veľkosť písmen). Osoba si ju uloží ako záložku; <strong>nemení sa</strong>, kým ju strážca nezmení (po zmene si ju musia uložiť znova).</li>
 <li>Osobný odkaz z e-mailu funguje tiež (osoba je na ňom známa).</li>
 <li>Ak PIN zabudla: <em>Zabudol som PIN – pošlite mi odkaz na nový</em> (adresa, odkaz platí <strong>1 hodinu, raz</strong>, najviac jeden za minútu; nefunguje pre zakázaný alebo skončený prístup).</li>
 </ul>
 <h2>Čo osoba vidí a nemôže</h2>
 <ul>
-<li>Úvodná stránka: <em>Ste prihlásený ako meno</em>, platnosť PINu (dni a hodiny), <strong>pracovný čas</strong> (<em>Váš pracovný čas</em>), po konci času <em>Je po čase: ešte jedno uloženie, potom len čítanie</em>, nečinnosť po ktorej relácia končí a zoznam prístupov (<em>skupina X, smiete…, platí do …</em>) s tlačidlom <em>Pokračovať</em>. Bez skupiny: <em>Zatiaľ vám nebol daný žiadny prístup. Môžete len zmeniť PIN.</em> Pri vypnutej ochrane: <em>Funkciu zatiaľ vypol správca. Môžete len zmeniť PIN.</em></li>
+<li>Úvodná stránka: <em>Ste prihlásený ako UserPIN : OC</em>, platnosť PINu (dni a hodiny), <strong>pracovný čas</strong> (<em>Váš pracovný čas</em>), po konci času <em>Je po čase: ešte jedno uloženie, potom len čítanie</em>, nečinnosť po ktorej relácia končí a zoznam prístupov (<em>skupina X, smiete…, platí do …</em>) s tlačidlom <em>Pokračovať</em>. Bez skupiny: <em>Zatiaľ vám nebol daný žiadny prístup. Môžete len zmeniť PIN.</em> Pri vypnutej ochrane: <em>Funkciu zatiaľ vypol správca. Môžete len zmeniť PIN.</em></li>
 <li>Menu používateľa: <em>Môj prístup</em>, <em>Zmeniť môj PIN</em>, <em>Odhlásiť</em>. Nemá heslo, 2FA, API ani token; nikdy nie je strážca, správca ani výnimka. Účtové stránky a stránky pluginu sú jej zatvorené. Žiadosti o prístup robiť nemôže.</li>
 <li>Rozbaľovacie zoznamy vo formulároch jej fungujú (stručné zoznamy API); zvyšok API je zatvorený. Ukladá si vlastné stĺpce tabuliek.</li>
 <li><strong>Zmena PINu</strong> (<em>Zmeniť môj PIN</em>): aktuálny PIN, nový PIN, nový PIN znova. Po vypršaní alebo vynútení sa pýta pred pokračovaním.</li>
@@ -66,9 +78,10 @@
 <table>
 <tr><th>Smer</th><th>Čo</th><th>Nastavenie</th></tr>
 <tr><td><strong>Osobe</strong></td><td>každá akcia správcu: skupiny, zakázanie / povolenie, reset PINu, odblokovanie, platnosť, jazyky, pravidlá, pracovný čas, správca, alias/popis, zmazanie. Mail ide na jej vlastnú adresu (bez ohľadu na povolené domény) v jej jazyku</td><td><em>Posielať osobe</em> (celá stránka) a <em>Posielať osobe (každá zmena prístupu)</em> pri prístupe. Ak je vypnuté na stránke, <strong>vyhráva to</strong></td></tr>
+<tr><td><strong>Audit log</strong></td><td>každá zmena objektu osobou (aj osobou len s PIN-om) je v Audit logu (<em>Zmena objektu v chránenej oblasti</em>) s <strong>rozbaliteľným detailom</strong>: ktoré polia sa zmenili (z → na); hodnoty polí s názvom obsahujúcim pass, secret, token, key, pin alebo hash sú ako ***</td><td>vždy</td></tr>
 <tr><td><strong>Správcom</strong></td><td>čo osoba v NetBoxe pridala, zmenila alebo zmazala (so zmenenými poľami), správcovi, ktorý prístup vytvoril, a strážcom</td><td><em>Posielať správcom</em> (celá stránka) a pri prístupe</td></tr>
 </table>
-<p>Správcovia dostanú zmeny buď ako <strong>zhrnutie</strong> každých N minút (<em>Zhrnutie každých</em>: 5, 15, 30, 60, 120, 240 minút alebo raz za deň; predvolene 60), alebo <strong>pri každej zmene</strong> (jeden e-mail na zmenu): <strong>nikdy oboje naraz</strong>. Predmet pri každej zmene: <em>PinUser0001 vykonal zmenu</em>; telo: čas, objekt a zmenené polia (z → na). E-mail sa odošle až po uložení cez frontu <code>netbox-rq</code>, takže ukladanie ostáva rýchle; zhrnutia spracúva systémová úloha každých 5 minút. Strážca zmeny nastavuje v karte <em>E-maily (pre všetkých)</em>.</p>
+<p>Správcovia dostanú zmeny buď ako <strong>zhrnutie</strong> každých N minút (<em>Zhrnutie každých</em>: 5, 15, 30, 60, 120, 240 minút alebo raz za deň; predvolene 60), alebo <strong>pri každej zmene</strong> (jeden e-mail na zmenu): <strong>nikdy oboje naraz</strong>. Predmet pri každej zmene: <em>UserPIN : OC vykonal zmenu</em>; telo: čas, objekt a zmenené polia (z → na). E-mail sa odošle až po uložení cez frontu <code>netbox-rq</code>, takže ukladanie ostáva rýchle; zhrnutia spracúva systémová úloha každých 5 minút. Strážca zmeny nastavuje v karte <em>E-maily (pre všetkých)</em>.</p>
 <div class="note">Správca úseku pri práci s prístupom oznamuje strážcom e-mailom (nič sa nedeje potichu). Prístup vytvorený strážcom patrí strážcom, kým ho nepresunú pod správcu.</div>
 
 <h1>Pracovný čas</h1>

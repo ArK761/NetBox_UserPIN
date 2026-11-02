@@ -8,8 +8,9 @@
 <h2>A new access (the form)</h2>
 <table>
 <tr><th>Field</th><th>Required</th><th>Meaning</th></tr>
-<tr><td>Name</td><td>yes</td><td>the person's name (up to 150 characters)</td></tr>
+<tr><td>Name</td><td>yes</td><td>the person's name (up to 150 characters); only the administrator uses it, the person is called by the personal number</td></tr>
 <tr><td>E-mail</td><td>yes</td><td>a valid address. It <strong>must not</strong> belong to another access or a NetBox account: if an account already has it, the page explains that the person should sign in with their own account (add it to the group as a regular user)</td></tr>
+<tr><td>Personal number</td><td><strong>yes</strong></td><td>the person's personal number in the organisation (up to 40 characters). <strong>Unique</strong> and <strong>cannot be changed</strong> after saving; the system asks “Check the personal number once more” before saving. The person signs in with it and the PIN and is called by it everywhere: <code>UserPIN : 12345</code></td></tr>
 <tr><td>Group</td><td>keeper no; manager yes</td><td>a group of a protected area. Without a group (keeper only) the person can only change their PIN. A manager chooses only from the groups of their section</td></tr>
 <tr><td>Access ends (optional)</td><td>no</td><td>a date and time in the future; afterwards the person cannot sign in. Empty = no end</td></tr>
 <tr><td>Idle (minutes)</td><td>–</td><td>30 by default (5 to 240)</td></tr>
@@ -23,19 +24,30 @@
 <h2>The person's first sign-in</h2>
 <ol>
 <li>The person gets a <strong>personal link</strong> by e-mail (valid <strong>7 days</strong>; <em>Send the link again</em> issues a new one and the old one stops). The link opens the page <em>Hello name</em>.</li>
-<li>They choose <strong>their own PIN</strong>: <strong>8 to 64 characters</strong> (not only digits), at least 4 different characters, <strong>unique</strong> among all accesses (<em>Choose another PIN</em> if somebody already has it). Nobody can read it, not even the administrator.</li>
+<li>They choose <strong>their own PIN</strong>: by the PIN rules (by default <strong>8 to 64 characters</strong>, not only digits, at least 4 different characters; the administrator can also require a letter and a digit, see below). For a person with a personal number the PIN <strong>need not be unique</strong>. Nobody can read it, not even the administrator.</li>
 <li>The button <em>Set the PIN and sign in</em>. If the invitation expired: <em>Ask the administrator for a new one.</em></li>
 </ol>
 <p>If mail is not set up, the link is <strong>shown to the administrator on the screen</strong> (once, <em>Give this personal link yourself</em>).</p>
+<h2>The personal number and the sign-in rules</h2>
+<ul>
+<li>The <strong>personal number (PN)</strong> is entered by the administrator when the person is created (required) or later in the person's row (block <em>Alias and description</em>, field <em>Personal number (sign-in)</em>). It is unique and <strong>cannot be changed</strong> once saved; the person gets an e-mail about it.</li>
+<li>The person is called <code>UserPIN : PN</code> everywhere: in the list of people (the second line <em>ID: 1</em> is the number of the technical account), in the audit log (user and done by), in e-mails, in the top menu, on the person's welcome page and on the blocking pages. The name is not shown in the list.</li>
+<li>The card <strong>Sign-in and PIN rules (for everybody)</strong> (page <em>People with a PIN only</em>, keepers only): <em>The personal number is a must</em>, <em>Shortest PIN</em> (6 to 64), <em>The PIN must contain a letter</em>, <em>The PIN must contain a digit</em>.</li>
+<li>The <strong>personal number as a must</strong> cannot be switched on while an access has no number (the page lists who lacks it). Once on, everybody gets the e-mail <em>Your NetBox sign-in is changing</em> and the PIN alone no longer works; the sign-in page has two fields (<em>Personal number</em> and <em>PIN</em>) and a big red notice.</li>
+<li>A <strong>stricter PIN rule</strong> (a longer PIN, a letter or a digit required): everybody gets an e-mail and must choose a new PIN at the next sign-in with the old data; the change page shows the rule and an example (<code>Kava2026Moja</code>).</li>
+<li>While the number is not a must, a person without a number signs in with the PIN alone (such PINs stay unique, <em>Choose another PIN</em>). A person with a number can sign in with the number and the PIN; a wrong number or PIN gives the same message <em>The personal number or the PIN is not correct</em>.</li>
+</ul>
+<h2>What the person sees: only their areas</h2>
+<p>A person with a PIN only always lives in mode B (whatever the settings say): they see <strong>only the areas where they are in a group</strong>. If in none, they see nothing. Items outside their groups (e.g. Devices) disappear from the menu and have no “door” either.</p>
 <h2>Regular sign-in: one shared address</h2>
 <ul>
-<li>Everybody uses <strong>one shared page</strong> (<code>/pin/</code> by default) and enters <strong>only the PIN</strong>: the PIN tells who the person is. The address is chosen by a keeper on the page (<em>Address for signing in with a PIN</em>: part A and optionally B, e.g. <code>/tenants/</code> or <code>/aqer/x2/</code>; case-insensitive). The person saves it as a bookmark; it <strong>does not change</strong> until a keeper changes it (after a change they must save the new one).</li>
+<li>Everybody uses <strong>one shared page</strong> (<code>/pin/</code> by default) and enters the <strong>personal number and the PIN</strong> (while the number is not a must, people without a number enter only the PIN: the PIN tells who they are). The address is chosen by a keeper on the page (<em>Address for signing in with a PIN</em>: part A and optionally B, e.g. <code>/tenants/</code> or <code>/aqer/x2/</code>; case-insensitive). The person saves it as a bookmark; it <strong>does not change</strong> until a keeper changes it (after a change they must save the new one).</li>
 <li>The personal link from the e-mail works too (the person is known there).</li>
 <li>If they forgot the PIN: <em>I forgot my PIN – send me a link to set a new one</em> (the address; the link is valid <strong>1 hour, once</strong>, at most one per minute; it does not work for a disabled or ended access).</li>
 </ul>
 <h2>What the person sees and cannot do</h2>
 <ul>
-<li>The welcome page: <em>You are signed in as name</em>, the PIN validity (days and hours), the <strong>working time</strong> (<em>Your working time</em>), after the end <em>It is over: one more save, then you only read</em>, the inactivity after which the session ends, and the list of accesses (<em>group X, you may…, valid until …</em>) with the button <em>Continue</em>. Without a group: <em>No access has been given to you yet. You can only change your PIN.</em> With the protection off: <em>The function is switched off by the administrator for now. You can only change your PIN.</em></li>
+<li>The welcome page: <em>You are signed in as UserPIN : PN</em>, the PIN validity (days and hours), the <strong>working time</strong> (<em>Your working time</em>), after the end <em>It is over: one more save, then you only read</em>, the inactivity after which the session ends, and the list of accesses (<em>group X, you may…, valid until …</em>) with the button <em>Continue</em>. Without a group: <em>No access has been given to you yet. You can only change your PIN.</em> With the protection off: <em>The function is switched off by the administrator for now. You can only change your PIN.</em></li>
 <li>The user menu: <em>My access</em>, <em>Change my PIN</em>, <em>Sign out</em>. They have no password, 2FA, API or token; they are never a keeper, a manager or an exception. The account pages and the pages of the plugin are closed to them. They cannot make access requests.</li>
 <li>The drop-downs of forms work for them (brief API lists); the rest of the API is closed. They save their own table columns.</li>
 <li><strong>Changing the PIN</strong> (<em>Change my PIN</em>): the current PIN, the new PIN, the new PIN again. After the expiry or a forced change it is asked before continuing.</li>
@@ -66,9 +78,10 @@
 <table>
 <tr><th>Direction</th><th>What</th><th>Setting</th></tr>
 <tr><td><strong>To the person</strong></td><td>every action of an administrator: groups, disable / enable, PIN reset, unblock, validity, languages, rules, working time, manager, alias/description, deletion. The mail goes to their own address (whatever the allowed domains are) in their language</td><td><em>Send to the person</em> (the whole page) and <em>Send to the person (every change of the access)</em> at an access. If it is off on the page, <strong>that wins</strong></td></tr>
+<tr><td><strong>Audit log</strong></td><td>every change of an object by the person (also by a PIN-only person) is in the audit log (<em>Object changed in a protected area</em>) with an <strong>expandable detail</strong>: which fields changed (from → to); values of fields whose name contains pass, secret, token, key, pin or hash are shown as ***</td><td>always</td></tr>
 <tr><td><strong>To the administrators</strong></td><td>what the person added, changed or deleted in NetBox (with the changed fields), to the administrator who created the access and to the keepers</td><td><em>Send to the administrators</em> (the whole page) and per access</td></tr>
 </table>
-<p>The administrators get the changes either as a <strong>summary</strong> every N minutes (<em>Summary every</em>: 5, 15, 30, 60, 120, 240 minutes or once a day; 60 by default), or <strong>at every change</strong> (one e-mail per change): <strong>never both at once</strong>. The subject at every change: <em>PinUser0001 made a change</em>; the body: time, object and the changed fields (from → to). The e-mail is sent after the save through the <code>netbox-rq</code> queue, so saving stays fast; the summaries are processed by the system job every 5 minutes. A keeper sets it in the card <em>E-mails (for everybody)</em>.</p>
+<p>The administrators get the changes either as a <strong>summary</strong> every N minutes (<em>Summary every</em>: 5, 15, 30, 60, 120, 240 minutes or once a day; 60 by default), or <strong>at every change</strong> (one e-mail per change): <strong>never both at once</strong>. The subject at every change: <em>UserPIN : PN made a change</em>; the body: time, object and the changed fields (from → to). The e-mail is sent after the save through the <code>netbox-rq</code> queue, so saving stays fast; the summaries are processed by the system job every 5 minutes. A keeper sets it in the card <em>E-mails (for everybody)</em>.</p>
 <div class="note">When a section manager works with an access, the keepers are told by e-mail (nothing happens quietly). An access made by a keeper belongs to the keepers until it is moved under a manager.</div>
 
 <h1>Working time</h1>

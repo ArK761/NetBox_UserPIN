@@ -112,6 +112,9 @@ areas.can(request.user, 'netbox_libreoxi', 'config')   # True / False</pre>
 <li>Nové pole <code>PolicyException.active</code> (migrácia <code>0043</code>).</li>
 <li><strong>Pomocné polia formulárov</strong> (Owner group, Tenant group, Contact group, výbery lokality pri kábloch, rack a pod.) sa skrývajú a zamykajú spolu s poľom, ku ktorému patria; plugin ich nájde sám zo väzieb výberov (overené na všetkých 221 formulároch NetBoxu 4.7.2).</li>
 <li><strong>E-maily a audit zmien v chránených oblastiach</strong>: zmena objektu používateľom v skupine sa zapíše do Audit logu a strážcovia a správca úseku dostanú e-mail (súhrn alebo pri každej zmene). Nové polia v nastaveniach (migrácia <code>0044</code>).</li>
+<li><strong>Osobné číslo + PIN</strong> pre osoby len s PIN-om: osobné číslo je povinné, jedinečné a nemenné; osoba sa volá <code>UserPIN : OC</code> všade; prihlásenie číslom a PIN-om, PIN nemusí byť jedinečný; globálne pravidlá (povinné číslo, najkratší PIN, písmeno, číslica) s e-mailom a vynútenou zmenou PINu; červený oznam na prihlasovacej stránke. Migrácia <code>0046</code>.</li>
+<li><strong>Audit zmien objektov</strong> aj pre osoby len s PIN-om, s rozbaliteľným detailom zmenených polí (hodnoty tajných polí skryté).</li>
+<li>Osoba len s PIN-om vidí <strong>len oblasti svojich skupín</strong> (vždy režim B).</li>
 </ul>
 <h2>Kľúče a bezpečnosť</h2>
 <ul>

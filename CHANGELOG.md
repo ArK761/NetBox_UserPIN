@@ -27,6 +27,15 @@ v histórii commitov boli pracovné označenia, všetko patrí do línie 2.0.0 a
 * New field `PolicyException.allowed` (migration `0042`). Existing exceptions get only the password. / Nové pole
   `PolicyException.allowed` (migrácia `0042`); existujúce výnimky dostanú len heslo.
 
+* PIN-only people sign in with the **personal number + PIN**: the number is required, unique and unchangeable; the person is
+  called `UserPIN : number` everywhere; the PIN need not be unique; global rules (number a must, shortest PIN, letter,
+  digit) with an e-mail and a forced PIN change (migration `0046`). / Osoby len s PIN-om sa prihlasujú **osobným číslom
+  a PIN-om**: číslo je povinné, jedinečné a nemenné; osoba sa volá `UserPIN : číslo` všade; PIN nemusí byť jedinečný;
+  globálne pravidlá (povinné číslo, najkratší PIN, písmeno, číslica) s e-mailom a vynútenou zmenou PINu.
+* The audit log records the changes of objects also by PIN-only people, with an expandable detail of the changed fields.
+  / Audit zapisuje zmeny objektov aj osôb len s PIN-om, s rozbaliteľným detailom zmenených polí.
+* A PIN-only person sees only the areas of their groups (always B). / Osoba len s PIN-om vidí len oblasti svojich skupín.
+
 ## Keys and security / Kľúče a bezpečnosť
 
 * Key rotation covers 2FA, backup codes, the SMTP password and the PIN-only index; `userpin_check` verifies every
