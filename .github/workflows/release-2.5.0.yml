@@ -1,0 +1,16 @@
+name: release-2.5.0
+on:
+  push:
+    branches: [tmp-release-2-5-0]
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create release 2.5.0
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create 2.5.0 --repo "$GITHUB_REPOSITORY" --target 8f44443925ccede0294571f002190b114acf194c \
+            --title "2.5.0" --notes "User PIN 2.5.0: personal number + PIN for PIN-only people, audit of object changes with detail, PIN rules, guides (SK, EN). Commit 8f44443."
