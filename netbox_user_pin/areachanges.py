@@ -111,6 +111,14 @@ def _changed(sender, instance, created, **kwargs):
     if not created or not instance.user_id:
         return
     try:
+        if PinGuest.objects.filter(user_id=instance.user_id).exists():
+            # a person with a PIN only: the e-mail is the guests' own (PIN-only page); the audit log gets it here
+            action = {'create': _('added'), 'update': _('changed'), 'delete': _('deleted')}.get(
+                str(instance.action), '')
+            kind = instance.changed_object_type
+            service.log_event(PinEventAction.AREA_OBJECT_CHANGED, user=instance.user, scope='guest',
+                              detail=f'{kind.app_label}.{kind.model} "{instance.object_repr}" {action}'[:300])
+            return
         area = record(instance)
     except Exception:  # noqa: BLE001 - a record that cannot be written must not break the user's save
         logger.exception('Cannot record the change in a protected area')

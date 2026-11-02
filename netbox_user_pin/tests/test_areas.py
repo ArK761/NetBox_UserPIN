@@ -2502,6 +2502,14 @@ class AreaChangeMailTest(AreaTestCase):
         self.change(model=Site)  # no area covers the type
         self.assertEqual(len(self.events()), 1)
 
+    def test_a_change_of_a_person_with_a_pin_only_is_in_the_audit_log(self):
+        from netbox_user_pin import guests
+        guest, _token = guests.create('Jan Novak', 'jan@example.com', None, self.keeper)
+        self.change(user=guest.user)
+        events = self.events()
+        self.assertEqual(len(events), 1)
+        self.assertEqual((events[0].username, events[0].scope), (guest.user.username, 'guest'))
+
     def test_the_summary_goes_to_the_keepers_and_the_managers_of_the_section(self):
         from django.core import mail
         with override_settings(EMAIL={'SERVER': 'localhost', 'FROM_EMAIL': 'netbox@example.com'}):
