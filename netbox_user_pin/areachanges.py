@@ -59,6 +59,22 @@ def _lines(change):
     return _change_lines(change)
 
 
+SECRET = ('pass', 'secret', 'token', 'key', 'pin', 'hash')
+
+
+def detail_of(change, action):
+    """The audit text: the first line says what happened, the next ones which field changed (values of secrets hidden)."""
+    kind = change.changed_object_type
+    head = f'{kind.app_label}.{kind.model} "{change.object_repr}" {action}'
+    rows = []
+    for line in _lines(change)[2:]:
+        field = line.strip().split(':', 1)[0].lower()
+        if any(word in field for word in SECRET):
+            line = '    ' + line.strip().split(':', 1)[0] + ': ***'
+        rows.append(line)
+    return '\n'.join([head, *rows])[:3000]
+
+
 def _who(user):
     return service.user_label(user)
 
@@ -77,8 +93,7 @@ def record(change):
         return None
     action = {'create': _('added'), 'update': _('changed'), 'delete': _('deleted')}.get(str(change.action), '')
     service.log_event(PinEventAction.AREA_OBJECT_CHANGED, user=change.user, scope=area.key,
-                      detail=f'{change.changed_object_type.app_label}.{change.changed_object_type.model} '
-                             f'"{change.object_repr}" {action}'[:300])
+                      detail=detail_of(change, action))
     return area
 
 
@@ -115,9 +130,8 @@ def _changed(sender, instance, created, **kwargs):
             # a person with a PIN only: the e-mail is the guests' own (PIN-only page); the audit log gets it here
             action = {'create': _('added'), 'update': _('changed'), 'delete': _('deleted')}.get(
                 str(instance.action), '')
-            kind = instance.changed_object_type
             service.log_event(PinEventAction.AREA_OBJECT_CHANGED, user=instance.user, scope='guest',
-                              detail=f'{kind.app_label}.{kind.model} "{instance.object_repr}" {action}'[:300])
+                              detail=detail_of(instance, action))
             return
         area = record(instance)
     except Exception:  # noqa: BLE001 - a record that cannot be written must not break the user's save

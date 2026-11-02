@@ -26,7 +26,7 @@
           <td>{{ event.actor_username|default:"—" }}</td>
           <td>{{ event.scope|default:"—" }}</td>
           <td>{{ event.ip_address|default:"—" }}</td>
-          <td class="small" style="white-space: pre-line">{{ event.detail }}</td>
+          <td class="small" style="white-space: pre-line">{% if event.detail_more %}<details><summary>{{ event.detail_first }}</summary>{{ event.detail_more }}</details>{% else %}{{ event.detail }}{% endif %}</td>
         </tr>
       {% empty %}
         <tr><td colspan="7" class="text-secondary">{% trans "No events." %}</td></tr>

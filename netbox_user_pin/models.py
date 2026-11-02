@@ -565,6 +565,14 @@ class PinEvent(models.Model):
     user_agent = models.CharField(max_length=255, blank=True, editable=False)
     detail = models.TextField(blank=True, editable=False)
 
+    @property
+    def detail_first(self):
+        return self.detail.split('\n', 1)[0]
+
+    @property
+    def detail_more(self):
+        return self.detail.split('\n', 1)[1] if '\n' in self.detail else ''
+
     class Meta:
         verbose_name = _('PIN event')
         verbose_name_plural = _('PIN events')

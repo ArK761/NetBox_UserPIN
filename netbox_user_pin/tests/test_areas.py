@@ -2509,6 +2509,8 @@ class AreaChangeMailTest(AreaTestCase):
         events = self.events()
         self.assertEqual(len(events), 1)
         self.assertEqual((events[0].username, events[0].scope), (guest.user.username, 'guest'))
+        self.assertIn('description', events[0].detail_more)
+        self.assertIn('new', events[0].detail_more)
 
     def test_the_summary_goes_to_the_keepers_and_the_managers_of_the_section(self):
         from django.core import mail
