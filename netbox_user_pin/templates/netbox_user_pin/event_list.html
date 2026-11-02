@@ -21,9 +21,9 @@
       {% for event in page %}
         <tr>
           <td class="text-nowrap">{{ event.time|date:"Y-m-d H:i:s" }}</td>
-          <td>{{ event.username|default:"—" }}</td>
+          <td>{{ event.shown_user|default:"—" }}</td>
           <td>{{ event.get_action_display }}</td>
-          <td>{{ event.actor_username|default:"—" }}</td>
+          <td>{{ event.shown_actor|default:"—" }}</td>
           <td>{{ event.scope|default:"—" }}</td>
           <td>{{ event.ip_address|default:"—" }}</td>
           <td class="small" style="white-space: pre-line">{% if event.detail_more %}<details><summary>{{ event.detail_first }}</summary>{{ event.detail_more }}</details>{% else %}{{ event.detail }}{% endif %}</td>

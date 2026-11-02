@@ -43,6 +43,7 @@ class UserPinConfig(PluginConfig):
         fieldrules.install()
         from . import areachanges, guests
         guests.install_user_email_check()
+        guests.install_display()
         guests.install_signals()
         areachanges.install()
 

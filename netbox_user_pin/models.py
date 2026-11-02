@@ -1136,6 +1136,11 @@ class PinGuest(models.Model):
     note = models.CharField(max_length=200, blank=True)
     description = models.CharField(max_length=150, blank=True)  # e.g. technician of company XY
     person_number = models.CharField(max_length=40, null=True, blank=True, unique=True, default=None)  # the organisation's personal number: signs in with the PIN
+    @property
+    def label(self):
+        """'UserPIN : 12345' (the personal number) once it is set, else the technical ID."""
+        return f'UserPIN : {self.person_number}' if self.person_number else self.user.username
+
     alias = models.CharField(max_length=100, blank=True)  # free text shown next to the account ID (PinUser0001)
     expiry_warned = models.CharField(max_length=10, blank=True)  # '30' / '1': the e-mails before the end were sent
     pin_language = models.CharField(max_length=5, blank=True)  # language of the PIN pages / e-mails ('' = default)

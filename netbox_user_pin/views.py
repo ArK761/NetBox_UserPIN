@@ -815,6 +815,12 @@ class PinEventListView(AdminViewMixin, View):
         if action:
             events = events.filter(action=action)
         page = Paginator(events.order_by('-time', '-pk'), 50).get_page(request.GET.get('page'))
+        from .models import PinGuest
+        names = {g.user.username: g.label for g in PinGuest.objects.select_related('user').filter(
+            person_number__isnull=False, user__username__in={e.username for e in page} | {e.actor_username for e in page})}
+        for event in page:
+            event.shown_user = names.get(event.username, event.username)
+            event.shown_actor = names.get(event.actor_username, event.actor_username)
         return render(request, 'netbox_user_pin/event_list.html', {
             'page': page,
             'user_filter': user,

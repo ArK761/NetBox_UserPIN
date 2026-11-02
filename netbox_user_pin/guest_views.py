@@ -418,6 +418,9 @@ class GuestListView(AreaViewMixin, View):
                 messages.success(request, _('Saved.'))
                 return redirect('plugins:netbox_user_pin:guests')
             if action == 'create':
+                if not (request.POST.get('person_number') or '').strip():
+                    messages.error(request, _('Write the personal number of the person.'))
+                    return redirect('plugins:netbox_user_pin:guests')
                 group = (get_object_or_404(areas.AreaProfile, pk=request.POST.get('group'))
                          if request.POST.get('group') else None)
                 guest, token = guests.create(

@@ -28,7 +28,7 @@
   {% if not mail_ok %}<div class="alert alert-warning">{% trans "E-mail is not set up (Mail page): the links are shown here for you to hand over." %}</div>{% endif %}
   <table class="table table-hover"><thead><tr><th>{% trans "Name" %}</th><th>{% trans "E-mail" %}</th><th>{% trans "Group" %}</th><th>{% trans "State" %}</th><th>{% trans "Last sign-in" %}</th><th>{% trans "Ends" %}</th><th></th></tr></thead><tbody>
   {% for r in rows %}<tr>
-    <td>{{ r.guest.name }} <code>{{ r.guest.user.username }}</code>{% if r.guest.alias %} <span class="badge text-bg-blue">{{ r.guest.alias }}</span>{% endif %}{% if r.guest.description %}<div class="small">{{ r.guest.description }}</div>{% endif %}</td>
+    <td>{{ r.guest.name }} <code>{{ r.guest.label }}</code>{% if r.guest.alias %} <span class="badge text-bg-blue">{{ r.guest.alias }}</span>{% endif %}{% if r.guest.description %}<div class="small">{{ r.guest.description }}</div>{% endif %}</td>
     <td>{{ r.guest.email }}</td>
     <td>{% for g in r.groups %}<div>{{ g.area.name }} › {{ g.profile.name }}</div>{% empty %}–{% endfor %}</td>
     <td><span class="badge bg-{% if r.state.0 == 'active' %}green{% elif r.state.0 == 'invited' or r.state.0 == 'pause' %}yellow{% else %}red{% endif %}">{{ r.state.1 }}</span>
@@ -54,10 +54,10 @@
       <div class="col-lg-4"><div class="fw-bold small">{% trans "Changes in NetBox" %}</div>
         <table class="table table-sm mb-0"><tbody>{% for c in r.activity.changes %}<tr><td class="text-nowrap">{{ c.time|date:"Y-m-d H:i" }}</td><td>{{ c.get_action_display }}</td><td><a href="{% url 'core:objectchange' pk=c.pk %}">{{ c.object_repr }}</a></td></tr>{% empty %}<tr><td class="text-secondary">{% trans "No changes yet." %}</td></tr>{% endfor %}</tbody></table></div>
       <div class="col-lg-3"><div class="fw-bold small">{% trans "Alias and description" %}</div>
-        <form method="post" class="mb-2">{% csrf_token %}<input type="hidden" name="pk" value="{{ r.guest.pk }}"><input type="hidden" name="action" value="alias">
+        <form method="post" class="mb-2" data-confirm="{% trans 'Check the personal number once more. After saving it cannot be changed. Save?' %}" onsubmit="var n=this.elements.person_number;return n.readOnly||!n.value||confirm(this.dataset.confirm)">{% csrf_token %}<input type="hidden" name="pk" value="{{ r.guest.pk }}"><input type="hidden" name="action" value="alias">
           <div class="small text-secondary mb-1">ID: <code>{{ r.guest.user.username }}</code> ({% trans "never changes" %})</div>
           <label class="small">{% trans "Personal number (sign-in)" %}</label>
-          <input class="form-control form-control-sm mb-1" name="person_number" value="{{ r.guest.person_number|default:'' }}" maxlength="40" placeholder="{% trans 'Personal number of the organisation' %}">
+          <input class="form-control form-control-sm mb-1" name="person_number" value="{{ r.guest.person_number|default:'' }}" maxlength="40" placeholder="{% trans 'Personal number of the organisation' %}"{% if r.guest.person_number %} readonly title="{% trans 'The personal number cannot be changed.' %}"{% endif %}>
           <input class="form-control form-control-sm mb-1" name="alias" value="{{ r.guest.alias }}" maxlength="100" placeholder="{% trans 'Alias (any text)' %}">
           <input class="form-control form-control-sm mb-1" name="description" value="{{ r.guest.description }}" maxlength="150" placeholder="{% trans 'Description, e.g. technician of company XY' %}">
           <label class="small">{% trans "Language of the PIN pages and e-mails" %}</label>
@@ -154,15 +154,15 @@
   <div class="col-12 form-text">{% blocktrans with r=default_rules %}Now: {{ r }}. A blocked access works again only when an administrator unblocks it or the person sets a new PIN through a reset e-mail. Each person can have own rules (Activity and rules).{% endblocktrans %}</div>
 </form></div></div>
 <div class="card"><h2 class="card-header"><i class="mdi mdi-account-plus"></i> {% trans "New access" %}</h2>
-<div class="card-body"><form method="post" class="row g-2">{% csrf_token %}<input type="hidden" name="action" value="create">
-  <div class="col-md-4"><label class="form-label">{% trans "Name" %}</label><input class="form-control" name="name" required></div>
-  <div class="col-md-4"><label class="form-label">{% trans "E-mail" %}</label><input class="form-control" type="email" name="email" required></div>
-  <div class="col-md-4"><label class="form-label">{% trans "Group" %}</label><select class="form-select" name="group"{% if not is_keeper_level %} required{% endif %}><option value="">{% if is_keeper_level %}{% trans "— no group yet (he can only change his PIN) —" %}{% else %}{% trans "— choose a group —" %}{% endif %}</option>{% for pk, label in group_choices %}<option value="{{ pk }}">{{ label }}</option>{% endfor %}</select></div>
+<div class="card-body"><form method="post" class="row g-2" data-confirm="{% trans 'Check the personal number once more. After saving it cannot be changed. Save?' %}" onsubmit="var n=this.elements.person_number;return !n.value||confirm(this.dataset.confirm)"><input type="hidden" name="action" value="create">{% csrf_token %}
+  <div class="col-md-3"><label class="form-label">{% trans "Name" %}</label><input class="form-control" name="name" required></div>
+  <div class="col-md-3"><label class="form-label">{% trans "E-mail" %}</label><input class="form-control" type="email" name="email" required></div>
+  <div class="col-md-3"><label class="form-label">{% trans "Personal number" %}</label><input class="form-control" name="person_number" maxlength="40" required><div class="form-text">{% trans "Required. The person signs in with it and the PIN. It cannot be changed later." %}</div></div>
+  <div class="col-md-3"><label class="form-label">{% trans "Group" %}</label><select class="form-select" name="group"{% if not is_keeper_level %} required{% endif %}><option value="">{% if is_keeper_level %}{% trans "— no group yet (he can only change his PIN) —" %}{% else %}{% trans "— choose a group —" %}{% endif %}</option>{% for pk, label in group_choices %}<option value="{{ pk }}">{{ label }}</option>{% endfor %}</select></div>
   <div class="col-md-3"><label class="form-label">{% trans "Access ends (optional)" %}</label><input class="form-control" type="datetime-local" name="expires"></div>
   <div class="col-md-3"><label class="form-label">{% trans "Idle (minutes)" %}</label><input class="form-control" type="number" name="idle" value="30" min="5" max="240"></div>
   <div class="col-md-3"><label class="form-label">{% trans "Session (hours)" %}</label><input class="form-control" type="number" name="hours" value="8" min="1" max="24"></div>
   <div class="col-md-3"><label class="form-label">{% trans "Allowed IP addresses (optional)" %}</label><input class="form-control" name="ips" placeholder="10.0.0.0/24, 192.168.1.5"></div>
-  <div class="col-md-3"><label class="form-label">{% trans "Personal number" %}</label><input class="form-control" name="person_number" maxlength="40"><div class="form-text">{% trans "The person signs in with it and the PIN." %}</div></div>
   <div class="col-md-3"><label class="form-label">{% trans "Alias (optional)" %}</label><input class="form-control" name="alias" maxlength="100"><div class="form-text">{% trans "Any text. The account gets its own ID (PinUser0001 ...) that never changes." %}</div></div>
   <div class="col-md-2"><label class="form-label">{% trans "PIN language" %}</label><select class="form-select" name="pin_language"><option value="">{% trans "default" %}</option>{% for code, label in languages %}<option value="{{ code }}">{{ label }}</option>{% endfor %}</select></div>
   <div class="col-md-2"><label class="form-label">{% trans "NetBox language" %}</label><select class="form-select" name="ui_language"><option value="">{% trans "default" %}</option>{% for code, label in languages %}<option value="{{ code }}">{{ label }}</option>{% endfor %}</select></div>

@@ -131,7 +131,7 @@ def _changed(sender, instance, created, **kwargs):
             action = {'create': _('added'), 'update': _('changed'), 'delete': _('deleted')}.get(
                 str(instance.action), '')
             guest = PinGuest.objects.filter(user_id=instance.user_id).first()
-            prefix = f'OS:{guest.person_number} ' if guest and guest.person_number else ''
+            prefix = f'{guest.label} ' if guest and guest.person_number else ''
             service.log_event(PinEventAction.AREA_OBJECT_CHANGED, user=instance.user, scope='guest',
                               detail=detail_of(instance, action, prefix))
             return

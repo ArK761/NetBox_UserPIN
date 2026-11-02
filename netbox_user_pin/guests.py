@@ -458,12 +458,12 @@ def set_person_number(guest, actor, number, request=None):
     if not _may_manage(actor, guest):
         raise PermissionDenied
     number = (number or '').strip()[:40]
-    if number == (guest.person_number or ''):
+    if guest.person_number:
+        if number and number != guest.person_number:
+            raise ValidationError(_('The personal number cannot be changed.'))
         return guest.person_number
     if not number:
-        if has_pin(guest) or service.get_settings().guest_number_required:
-            raise ValidationError(_('The personal number cannot be removed from an access that has a PIN.'))
-        guest.person_number = None
+        return None
     else:
         if PinGuest.objects.exclude(pk=guest.pk).filter(person_number__iexact=number).exists():
             raise ValidationError(_('This personal number belongs to another access.'))
@@ -629,7 +629,7 @@ def set_manager(guest, actor, manager):
 
 def display(guest):
     """'PinUser0001 – alias (name)' for lists."""
-    parts = [guest.user.username]
+    parts = [guest.label]
     if guest.alias:
         parts.append(guest.alias)
     return ' – '.join(parts)
@@ -1323,6 +1323,25 @@ def _grant_saved(sender, instance, created, **kwargs):
             'name': guest.name, 'admin': (actor.get_full_name() or actor.username) if actor else who, 'what': what()}))
 
 
+def install_display():
+    """A person with a PIN only is shown as 'UserPIN : personal number' everywhere NetBox prints the user."""
+    user_model = get_user_model()
+    if getattr(user_model, '_userpin_display', False):
+        return
+    original = user_model.__str__
+
+    def __str__(self):
+        try:
+            guest = guest_of(self) if self.pk else None
+            if guest is not None and guest.person_number:
+                return guest.label
+        except Exception:  # noqa: BLE001 - never break a page for a label
+            pass
+        return original(self)
+    user_model.__str__ = __str__
+    user_model._userpin_display = True
+
+
 def install_signals():
     from django.db.models.signals import post_save
     post_save.connect(_grant_saved, sender=AreaGrant, dispatch_uid='userpin_guest_grant_mail')
@@ -1369,8 +1388,7 @@ def _send_changes(guest, changes, since, settings):
     if creator is not None and creator not in recipients:
         recipients.insert(0, creator)
     with translation.override(settings.language or 'en'):
-        who = (guest.user.username + (f' OS:{guest.person_number}' if guest.person_number else '')
-               + (f' ({guest.alias})' if guest.alias else ''))
+        who = guest.label + (f' ({guest.alias})' if guest.alias else '')
         subject = (_('%(id)s made a change') % {'id': who} if len(changes) == 1 else
                    _('%(id)s made changes (%(n)d)') % {'id': who, 'n': len(changes)})
         body = '\n\n'.join('\n'.join(_change_lines(change)) for change in changes)

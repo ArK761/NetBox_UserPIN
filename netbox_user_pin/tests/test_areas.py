@@ -2510,7 +2510,7 @@ class AreaChangeMailTest(AreaTestCase):
         self.assertEqual(len(events), 1)
         self.assertEqual((events[0].username, events[0].scope), (guest.user.username, 'guest'))
         self.assertIn('description', events[0].detail_more)
-        self.assertTrue(events[0].detail_first.startswith('OS:12345 '))
+        self.assertTrue(events[0].detail_first.startswith('UserPIN : 12345 '))
         self.assertIn('new', events[0].detail_more)
 
     def test_the_summary_goes_to_the_keepers_and_the_managers_of_the_section(self):
@@ -3163,6 +3163,9 @@ class GuestAccessTest(AreaTestCase):
         self.guests.set_pin(other, 'Secret-pin-1', first=True)  # the same PIN: fine with a personal number
         with self.assertRaises(ValidationError):
             self.guests.set_person_number(other, self.keeper, 'j-100')  # a number belongs to one access
+        with self.assertRaises(ValidationError):
+            self.guests.set_person_number(self.guest, self.keeper, 'J-999')  # once set, it never changes
+        self.assertEqual(str(self.guests.PinGuest.objects.get(pk=self.guest.pk).user), 'UserPIN : J-100')
         self.client.logout()
         cache.clear()
         self.assertRedirects(self.client.post('/plugins/user-pin/pin/', {'number': 'E-200', 'pin': 'Secret-pin-1'}),
