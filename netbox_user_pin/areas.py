@@ -179,8 +179,15 @@ def active_areas():
     return _cache['areas']
 
 
-def hides_denied(area=None):
-    """B: what is not allowed is not shown at all (the area's own choice, else the settings'); A: a door."""
+def hides_denied(area=None, user=None):
+    """
+    B: what is not allowed is not shown at all (the area's own choice, else the settings'); A: a door. A person with a
+    PIN only always lives in B: they see only the areas of their groups.
+    """
+    if user is not None:
+        from . import guests
+        if guests.is_guest(user):
+            return True
     active_areas()
     if area is not None and area.hide_denied is not None:
         return bool(area.hide_denied)
@@ -316,7 +323,7 @@ def sees_nothing(user):
     B: the user sees nothing - no group in any area, no keeper, no owner. Only meaningful while "deny everything not
     allowed" is on and the settings choose B.
     """
-    if not (getattr(user, 'is_authenticated', False) and default_deny_active() and hides_denied()):
+    if not (getattr(user, 'is_authenticated', False) and default_deny_active() and hides_denied(user=user)):
         return False
     if is_keeper(user) or is_exempt(user) or administers_any(user):
         return False
@@ -975,14 +982,14 @@ def check_perm(user, perm):
         if model and default_deny_blocks(user, app_label, model, app_label):
             # nothing allows it. The door (menu item) stays, so that the "request access" page can be reached;
             # buttons do not, and the system apps (users, permissions, jobs ...) have no door at all
-            if action == 'view' and app_label not in SENSITIVE_APPS and not hides_denied():
+            if action == 'view' and app_label not in SENSITIVE_APPS and not hides_denied(user=user):
                 return None
             return False, None
         return None
     rights = _memo_rights(user, area, f'{app_label}.{model}' if model else None)
     if not rights:
         # the door (menu item) stays so that a request can be made (unless the area hides what is not allowed)
-        return action == 'view' and not hides_denied(area), area
+        return action == 'view' and not hides_denied(area, user), area
     # a permission named after a right of the area (e.g. app.config_model) asks for exactly that right
     return (action if action in rights_available(area) else 'change') in rights, area
 

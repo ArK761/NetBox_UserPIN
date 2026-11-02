@@ -3201,6 +3201,15 @@ class GuestAccessTest(AreaTestCase):
             self.guests.set_pin(self.guests.PinGuest.objects.get(pk=self.guest.pk), 'onlyletters', first=True)
         self.guests.set_pin(self.guests.PinGuest.objects.get(pk=self.guest.pk), 'letters1234', first=True)
 
+    def test_a_person_with_a_pin_only_never_gets_a_door_for_what_is_not_in_his_groups(self):
+        areas.set_visibility(self.keeper, 'doors', False, False)  # the settings say A, a person with a PIN only lives in B
+        self.sign_in()
+        user = self.guests.PinGuest.objects.get(pk=self.guest.pk).user
+        self.assertTrue(areas.hides_denied(user=user))
+        self.assertFalse(areas.hides_denied(user=self.keeper))
+        self.assertFalse(user.has_perm('dcim.view_device'))
+        self.assertNotContains(self.client.get('/tenancy/tenants/'), 'href="/dcim/devices/"')
+
     def test_wrong_pins_from_a_computer_make_it_wait(self):
         self.sign_in()
         self.client.logout()

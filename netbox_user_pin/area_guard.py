@@ -766,7 +766,7 @@ def _tab_hidden(tab, instance):
             or areas.is_exempt(user):
         return False
     area = areas.area_for(meta.app_label, meta.model_name, package=meta.app_label)
-    if area is None or not areas.hides_denied(area):
+    if area is None or not areas.hides_denied(area, user):
         return False
     target = f'{meta.app_label}.{meta.model_name}'
     for config, view in areas._tab_configs(meta.app_label, meta.model_name):
