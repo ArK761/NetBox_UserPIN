@@ -30,7 +30,8 @@ from datetime import timedelta
 
 from django.apps import apps
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.db import DatabaseError, transaction
+from django.core.cache import cache as shared_cache
+from django.db import DatabaseError, ProgrammingError, transaction
 from django.db.models import Q
 from django.utils import timezone, translation
 from django.utils.translation import gettext as _
@@ -53,10 +54,21 @@ DEFAULT_PROFILES = (
 # Never protectable: the plugin itself (it holds the means to get access).
 NEVER = frozenset({'netbox_user_pin'})
 CACHE_SECONDS = 5
+VERSION_KEY = 'userpin:areas-version'   # in the cache NetBox shares between its processes (Redis)
+VERSION_CHECK_SECONDS = 0.5             # how often a process looks at it: a change elsewhere is seen within this time
+MAX_STALE = 30                          # the last known state is served this long while the database cannot be read
+RETRY_SECONDS = 1                       # ... and the database is asked again this often meanwhile
+
+
+class ProtectionUnavailable(Exception):
+    """
+    The state of the protection (areas, keepers, exceptions) cannot be read and there is no recent known state: what
+    is protected is unknown, so the request must be refused (HTTP 503), never let through.
+    """
 EVENT_TYPE = 'netbox_user_pin_area_request'
 
 _registry = {}
-_cache = {'at': 0.0, 'areas': None, 'deny': False, 'keepers': frozenset(), 'hide': False, 'requests': True, 'tokens': False, 'exempt': frozenset(), 'allowed': {}, 'guest_path': 'pin'}
+_cache = {'at': 0.0, 'ok': 0.0, 'version': None, 'version_at': 0.0, 'next_expiry': None, 'areas': None, 'deny': False, 'keepers': frozenset(), 'hide': False, 'requests': True, 'tokens': False, 'exempt': frozenset(), 'allowed': {}, 'guest_path': 'pin'}
 # Never refused by the default deny: technical data NetBox needs to draw its forms. Nothing else - the user may do what
 # a group allows him, and change his password (a view without objects, never refused).
 DEFAULT_DENY_EXEMPT = frozenset({'core.objecttype'})
@@ -108,9 +120,23 @@ def registered():
     return dict(_registry)
 
 
+def _bump_shared_version():
+    """Tell the other processes (through the shared cache) that the protection changed."""
+    try:
+        shared_cache.set(VERSION_KEY, uuid.uuid4().hex, None)
+    except Exception:  # noqa: BLE001 - no shared cache: the others learn it within CACHE_SECONDS
+        logger.warning('PIN: the shared cache is not available, other processes follow within %s s', CACHE_SECONDS)
+
+
 def clear_cache():
+    """This process re-reads at once; the others as soon as they look at the shared version (and after a commit)."""
     _cache['at'] = 0.0
     _cache['areas'] = None
+    _bump_shared_version()
+    try:
+        transaction.on_commit(_bump_shared_version)  # a reader in another process must not read the old rows
+    except Exception:  # noqa: BLE001
+        pass
 
 
 def sync_plugin_areas():
@@ -126,13 +152,11 @@ def sync_plugin_areas():
             ProtectedArea.objects.filter(pk=area.pk).update(targets=info['targets'], plugin=True)
 
 
-def _load_active():
+def _read_state():
+    """Everything the guards need, read in one go. Any database error is raised: nothing is taken half-read."""
     settings = service.get_settings()
-    try:
-        sync_plugin_areas()
-        rows = list(ProtectedArea.objects.all())
-    except DatabaseError:  # before the migrations - or a hiccup of the database: the caller keeps what it knew
-        return None
+    sync_plugin_areas()
+    rows = list(ProtectedArea.objects.all())
     active = []
     for area in rows:
         if area.plugin:
@@ -146,35 +170,69 @@ def _load_active():
                 active.append(area)
         elif settings.areas_enabled and area.enabled:
             active.append(area)
-    return active
+    keepers = frozenset(PolicyKeeper.objects.filter(user__is_active=True).values_list('user_id', flat=True))
+    live = list(PolicyException.objects.filter(
+        Q(expires__isnull=True) | Q(expires__gt=timezone.now()), user__is_active=True, active=True))
+    from .models import PinGuest
+    return {
+        'areas': active, 'keepers': keepers, 'deny': bool(settings.default_deny and keepers),
+        'hide': settings.denied_view == 'hidden', 'requests': bool(settings.allow_requests),
+        'tokens': bool(settings.allow_own_tokens), 'guest_path': settings.guest_path or 'pin',
+        'exempt': frozenset(e.user_id for e in live), 'allowed': {e.user_id: e.allowed_set for e in live},
+        'scope': settings.protect_scope or 'all', 'guests': frozenset(PinGuest.objects.values_list('user_id', flat=True)),
+        # the earliest end of a running exception: a request after it re-reads (the end is not a "cache age")
+        'next_expiry': min((e.expires for e in live if e.expires), default=None),
+    }
 
 
 def _refresh():
-    loaded = _load_active()
-    _cache['areas'] = loaded if loaded is not None else (_cache['areas'] or [])
+    """
+    Read the state of the protection. FAIL CLOSED: when the database cannot be read, the last known state is served
+    for MAX_STALE seconds at most (asking again every RETRY_SECONDS) and a process that knows nothing yet (or knew it
+    too long ago) raises ProtectionUnavailable. An empty list of areas is only ever the result of a successful read.
+    """
+    now = time.monotonic()
     try:
-        keepers = frozenset(PolicyKeeper.objects.filter(user__is_active=True).values_list('user_id', flat=True))
-        _settings = service.get_settings()
-        _cache['deny'] = bool(_settings.default_deny and keepers)
-        _cache['hide'] = _settings.denied_view == 'hidden'
-        _cache['requests'] = bool(_settings.allow_requests)
-        _cache['tokens'] = bool(_settings.allow_own_tokens)
-        _cache['guest_path'] = _settings.guest_path or 'pin'
-        _cache['keepers'] = keepers
-        _live = list(PolicyException.objects.filter(
-            Q(expires__isnull=True) | Q(expires__gt=timezone.now()), user__is_active=True, active=True))
-        _cache['exempt'] = frozenset(e.user_id for e in _live)
-        _cache['allowed'] = {e.user_id: e.allowed_set for e in _live}
-        _cache['scope'] = _settings.protect_scope or 'all'
-        from .models import PinGuest
-        _cache['guests'] = frozenset(PinGuest.objects.values_list('user_id', flat=True))
-    except DatabaseError:
-        logger.exception('PIN: the keepers cannot be read, the last known state stays')
-    _cache['at'] = time.monotonic()
+        version = shared_cache.get(VERSION_KEY)  # read BEFORE the rows: a change in between is then seen next time
+    except Exception:  # noqa: BLE001
+        version = None
+    try:
+        state = _read_state()
+    except ProgrammingError as exc:
+        if 'does not exist' not in str(exc):
+            raise ProtectionUnavailable('the protection cannot be read') from exc
+        state = None  # a table of the plugin is missing: the migrations did not run yet, nothing is protected yet
+    except DatabaseError as exc:
+        if _cache['areas'] is None or now - _cache['ok'] > MAX_STALE:
+            raise ProtectionUnavailable('the protection cannot be read') from exc
+        logger.error('PIN: the database cannot be read, the last known state is served for %d s more',
+                     int(MAX_STALE - (now - _cache['ok'])))
+        _cache['at'] = now - CACHE_SECONDS + RETRY_SECONDS  # ask again soon
+        return
+    if state is None:
+        state = {'areas': [], 'keepers': frozenset(), 'deny': False, 'hide': False, 'requests': True, 'tokens': False,
+                 'guest_path': 'pin', 'exempt': frozenset(), 'allowed': {}, 'scope': 'all', 'guests': frozenset(),
+                 'next_expiry': None}
+    _cache.update(state)
+    _cache.update({'at': now, 'ok': now, 'version': version, 'version_at': now})
+
+
+def _shared_version_changed(now):
+    """Did another process (or a commit) change the protection since this process read it?"""
+    if now - _cache['version_at'] < VERSION_CHECK_SECONDS:
+        return False
+    _cache['version_at'] = now
+    try:
+        return shared_cache.get(VERSION_KEY) != _cache['version']
+    except Exception:  # noqa: BLE001 - no shared cache: the age of the cache is the limit
+        return False
 
 
 def active_areas():
-    if _cache['areas'] is None or time.monotonic() - _cache['at'] > CACHE_SECONDS:
+    now = time.monotonic()
+    expiry = _cache['next_expiry']
+    if (_cache['areas'] is None or now - _cache['at'] > CACHE_SECONDS or _shared_version_changed(now)
+            or (expiry is not None and timezone.now() >= expiry)):
         _refresh()
     return _cache['areas']
 
@@ -192,6 +250,14 @@ def hides_denied(area=None, user=None):
     if area is not None and area.hide_denied is not None:
         return bool(area.hide_denied)
     return bool(_cache['hide'])
+
+
+def own_tokens_only(user):
+    """
+    Each person manages only their own API keys while the protection runs: everybody but a keeper (the keepers run the
+    protection and may administer foreign keys). A superuser and a holder of an exception are no keepers.
+    """
+    return bool(getattr(user, 'is_authenticated', False) and default_deny_active() and not is_keeper(user))
 
 
 def own_rows_only(user, app_label, model):

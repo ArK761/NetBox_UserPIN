@@ -92,16 +92,31 @@ python manage.py userpin_default_deny --off     # switches the protection off</p
 <tr><td>Bookmarks</td><td><span class="no">not allowed</span></td><td><code>/user/bookmarks/</code></td></tr>
 <tr><td>Notifications</td><td><span class="no">not allowed</span></td><td><code>/user/notifications/</code> and the bell is hidden</td></tr>
 <tr><td>Subscriptions</td><td><span class="no">not allowed</span></td><td><code>/user/subscriptions/</code></td></tr>
-<tr><td>API tokens (create and manage their own)</td><td><span class="no">not allowed</span></td><td><code>/user/api-tokens/</code>, <code>/users/tokens/</code>, <code>/api/users/tokens/</code>; the item <em>Admin → API Tokens</em> disappears too</td></tr>
-<tr><td>API (REST, GraphQL) with a token</td><td><span class="no">not allowed</span></td><td>a token of such a user is refused (an authentication error). The browser itself (UI) works through the session and is not affected</td></tr>
+<tr><td>API tokens (create and manage their own)</td><td><span class="no">not allowed</span></td><td><code>/user/api-tokens/</code>, <code>/users/tokens/</code>, <code>/api/users/tokens/</code>; the item <em>Admin → API Tokens</em> disappears too. It applies the same to the browser and to a token and does not depend on the <em>API</em> choice. Everybody (a superuser too) sees and changes <strong>only their own</strong> keys; the foreign ones are for the keepers</td></tr>
+<tr><td>API (REST, GraphQL)</td><td><span class="no">not allowed</span></td><td>the <strong>general REST and GraphQL API</strong> is refused for a token and for a session with the cookies of a browser (<code>/api/status/</code> too). A token of such a user is refused. The one exception: the list of values of a drop-down in a form (GET with <code>?brief</code>), without which the forms would not work</td></tr>
 </table>
 <ul>
 <li>Under the name of every user there is an arrow <strong>▾ May use</strong> that unfolds the check boxes with a <em>Save</em> button, and small tags: <span class="ok">green ✓</span> allowed, <span class="no">red ✗</span> not allowed.</li>
 <li>What is not allowed disappears from the menu and the tabs and the direct address returns 403 (<em>Not allowed for this account</em>, with the names of the keepers).</li>
 <li>NetBox has no link to the password in the user menu (only a tab of the profile). While the password is allowed, the plugin adds one to the menu.</li>
+<li><strong>Paths of the account that nobody listed are refused</strong> (a default deny): in the personal account (<code>/user/…</code>) and in the users app (<code>/users/…</code>, <code>/api/users/…</code>) whatever is not on the list is closed. The administration of users, groups and permissions stays under the NetBox permissions. The other data addresses of NetBox (devices, IPAM …) are not touched.</li>
 <li><strong>A keeper can always do everything.</strong> While the protection is off nothing is taken away. A superuser who is not a keeper is not limited either while there is no keeper. With the exception <em>off</em> the list of allowances is not used (the PIN rules the user).</li>
 </ul>
 <div class="note"><strong>Why it matters.</strong> NetBox gives every signed-in user the right to their own API tokens (<code>DEFAULT_PERMISSIONS</code>), so a user without any rights sees <em>Admin → API Tokens</em> in the menu. A token carries only the permissions of its owner, but the plugin does not judge requests with a token: a user with rights could read beyond their areas through a token. The list of allowances solves it without touching the NetBox configuration.</div>
+
+<h2>API tokens and the PIN: a deliberate security boundary</h2>
+<div class="note"><strong>Decision of the owner of the project (option A).</strong> A request that NetBox authenticated with a <strong>valid API token</strong> is <strong>not judged</strong> by the PIN protection of the protected areas and the field rules: it follows the NetBox permissions (RBAC) of the token's owner alone. It is intended, so that the integrations and scripts (monitoring, synchronisations, backups) that have no PIN and no browser keep working.
+<ul>
+<li>Whoever holds a token sees and, with the matching rights, changes and deletes everything NetBox allows, <strong>also outside their areas and the hidden fields</strong> (GraphQL too). In a browser the PIN would stop them.</li>
+<li>So give tokens only to <strong>accounts with the narrowest NetBox permissions</strong> (permissions limited to the needed objects, read-only where it is enough) and do not use superuser accounts for integrations.</li>
+<li>The token must be <strong>really valid</strong>. A false <code>Authorization</code> header next to a signed-in session does not switch the protection off: with a session the session decides and the PIN applies.</li>
+<li>For an account with an exception the <em>API</em> check box decides too (a token without it is refused) and <em>API tokens</em> for the management of keys.</li>
+<li>A user may have their own key only if the settings allow it (<em>Users may create their own API key</em>) and sees only their own keys.</li>
+</ul>
+Changing this rule (so that a token follows the areas like a person) is possible as a separate version, but every integration account then needs a group in an area or an exception.</div>
+
+<h2>When the PIN cannot read the state of the protection</h2>
+<p>If the plugin cannot read the database (areas, keepers, exceptions), it <strong>allows nothing</strong>: a cold process, or a state older than 30 seconds, answers <strong>HTTP 503</strong> (<em>The protection of the data cannot be checked now</em>) and once the database is back the protection is read again. The last known state is kept for at most 30 s and the database is asked every second. With a total outage NetBox fails even earlier (500), without data. A change of the protection (an exception, a keeper, an area) is seen by the other NetBox processes within half a second (the shared cache); the end of an exception is exact even without <code>netbox-rq</code>.</p>
 
 <h1>Section managers</h1>
 <div class="facts">

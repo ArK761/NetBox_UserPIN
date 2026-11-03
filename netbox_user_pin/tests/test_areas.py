@@ -1858,8 +1858,14 @@ class HiddenFieldPathsTest(AreaTestCase):
         body = {'query': '{ __typename }'}
         response = self.client.post('/graphql/', body, content_type='application/json')
         self.assertEqual((response.status_code, response.headers.get('X-UserPIN')), (403, 'denied'))
-        scripted = self.client.post('/graphql/', body, content_type='application/json', HTTP_AUTHORIZATION='Token x')
-        self.assertNotEqual(scripted.headers.get('X-UserPIN'), 'denied')  # a script with a token is not ours to judge
+        # CHANGED after the security audit (F-01): this used to assert that a SIGNED-IN browser plus any Authorization
+        # header was "a script with a token, not ours to judge". That was the bypass: next to a valid session the header
+        # is never evaluated by NetBox, so the request is the person's and is judged like one.
+        with_header = self.client.post('/graphql/', body, content_type='application/json', HTTP_AUTHORIZATION='Token x')
+        self.assertEqual((with_header.status_code, with_header.headers.get('X-UserPIN')), (403, 'denied'))
+        from django.test import Client
+        scripted = Client().post('/graphql/', body, content_type='application/json', HTTP_AUTHORIZATION='Token x')
+        self.assertNotEqual(scripted.headers.get('X-UserPIN'), 'denied')  # a script without a session: NetBox judges its token
 
     def test_api_refuses_to_write_a_read_only_custom_field_and_a_text_rule(self):
         url = f'/api/dcim/devices/{self.other.pk}/'

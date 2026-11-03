@@ -17,7 +17,7 @@ from django.conf import settings as django_settings
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.db.models import Q
-from django.http import JsonResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
 from django.utils.functional import SimpleLazyObject
 from django.utils import timezone, translation
@@ -267,11 +267,35 @@ def denied_response(request, area, right='view', target=None, tab_label=None, on
     return response
 
 
+def _unavailable(request):
+    """The protection cannot be read (the database): refuse, do not guess. The caller may try again."""
+    logger.error('PIN: the protection cannot be read, %s refused (503)', request.path_info)
+    if request.path_info.startswith(('/api/', '/graphql')) or 'application/json' in request.headers.get('Accept', ''):
+        response = JsonResponse({'detail': 'The protection of the data cannot be checked now. Try again later.'},
+                                status=503)
+    else:
+        response = HttpResponse('The protection of the data cannot be checked now. Try again later.', status=503,
+                                content_type='text/plain; charset=utf-8')
+    response['Retry-After'] = '5'
+    return response
+
+
 class AreaGuardMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
 
     def __call__(self, request):
+        try:
+            return self._call(request)
+        except areas.ProtectionUnavailable:
+            return _unavailable(request)
+
+    def process_exception(self, request, exception):
+        if isinstance(exception, areas.ProtectionUnavailable):
+            return _unavailable(request)  # raised inside a view: no 500 page, a 503 that says what happened
+        return None
+
+    def _call(self, request):
         path = request.path_info
         chosen = guests.login_path()
         if path.rstrip('/').lower() == chosen.rstrip('/').lower():
@@ -317,6 +341,12 @@ class AreaGuardMiddleware:
         return response
 
     def process_view(self, request, view_func, view_args, view_kwargs):
+        try:
+            return self._process_view(request, view_func, view_args, view_kwargs)
+        except areas.ProtectionUnavailable:
+            return _unavailable(request)
+
+    def _process_view(self, request, view_func, view_args, view_kwargs):
         guest = guests.guest_of(request.user)
         if guest is not None and (response := guests.guard(request, guest)) is not None:
             return response
@@ -328,10 +358,9 @@ class AreaGuardMiddleware:
         if _hides_menu_for(request.user) and request.path_info.startswith(HIDDEN_DOCS) \
                 and not _is_token_request(request):
             return denied_response(request, None, right='view', target=None)
-        if (areas.restricted(request.user) and not _is_token_request(request)
-                and (code := _exception_code(request.path_info))
-                and not areas.exception_allows(request.user, code)):
-            return _exception_denied(request, code)  # an exception does not lift what a keeper did not allow
+        if areas.restricted(request.user) and not _allowed_by_exception(request.user, request):
+            # an exception does not lift what a keeper did not allow (a path nobody listed is refused too)
+            return _exception_denied(request, _exception_code(request.path_info))
         if not getattr(request.user, 'is_authenticated', False) and getattr(view_func, '__module__', '').startswith(
                 'netbox_user_pin.'):
             return None  # the pages of this plugin ask for the sign-in themselves (the public link of a PIN-only access)
@@ -525,21 +554,79 @@ def _child_denied(request, user, cls, tab=None):
 # hidden until it is allowed: nothing here lists plugins or pages by name.
 #
 
-# the account pages and the API a keeper can allow one by one to a user with an exception (see areas.EXCEPTION_ALLOWS)
+# the account pages and the API a keeper can allow one by one to a user with an exception (see areas.EXCEPTION_ALLOWS).
+# The first prefix that fits names the part; a path of the personal account / the users app that fits none is UNKNOWN and
+# refused (a default deny: what NetBox or a plugin adds later stays closed until it is listed here).
 EXCEPTION_PATHS = (('/user/password', 'password'), ('/user/profile', 'profile'), ('/user/preferences', 'preferences'),
                    ('/user/bookmarks', 'bookmarks'), ('/user/notifications', 'notifications'),
                    ('/user/subscriptions', 'subscriptions'), ('/user/api-tokens', 'tokens'),
-                   ('/users/tokens', 'tokens'), ('/api/users/tokens', 'tokens'))
+                   ('/users/tokens', 'tokens'), ('/api/users/tokens', 'tokens'),
+                   # the same features on other addresses (their twins)
+                   ('/api/users/config', 'preferences'),
+                   ('/extras/bookmarks', 'bookmarks'), ('/api/extras/bookmarks', 'bookmarks'),
+                   ('/extras/subscriptions', 'subscriptions'), ('/api/extras/subscriptions', 'subscriptions'),
+                   ('/extras/notifications', 'notifications'), ('/api/extras/notifications', 'notifications'))
+# the personal account and the users app: here everything NOT listed is refused for a user with an exception ...
+ACCOUNT_REGIONS = ('/user', '/users', '/api/users')
+# ... except the administration of NetBox users, which NetBox's own permissions rule (not an account feature)
+RBAC_ADMIN_PATHS = ('/users/users', '/users/groups', '/users/permissions', '/users/owners', '/users/owner-groups',
+                    '/api/users/users', '/api/users/groups', '/api/users/permissions', '/api/users/owners',
+                    '/api/users/owner-groups')
+UNKNOWN = 'unknown'  # never allowed (not a flag a keeper can give)
+
+
+def _under(path, prefix):
+    """The path is the prefix itself or below it (``/user/api-tokens`` fits ``/user/api-tokens/1/``, not ``/user/api-tokensX``)."""
+    return path == prefix or path.startswith(prefix + '/')
 
 
 def _exception_code(path):
-    """The part of the account / API a path belongs to (``None``: not one that an exception can take away)."""
-    return next((code for prefix, code in EXCEPTION_PATHS if path.startswith(prefix)), None)
+    """
+    The part of the account / API a path belongs to: a code of ``areas.EXCEPTION_ALLOWS``, ``UNKNOWN`` (in the personal
+    account or the users app, and nobody listed it: refused) or ``None`` (not a path of this kind).
+    """
+    path = path or ''
+    for prefix, code in EXCEPTION_PATHS:
+        if _under(path, prefix) or path == prefix:
+            return code
+    if any(_under(path, region) for region in ACCOUNT_REGIONS):
+        if any(_under(path, admin) for admin in RBAC_ADMIN_PATHS) or path in ('/users', '/api/users'):
+            return None
+        return UNKNOWN
+    if path.startswith(('/api/', '/graphql')) or path in ('/api', '/graphql'):
+        return 'api'
+    return None
+
+
+def _is_ui_helper(request):
+    """The requests the web pages of NetBox make by themselves (the drop-down of a relation field): not a script's use."""
+    return request.method == 'GET' and 'brief' in request.GET
+
+
+def _allowed_by_exception(user, request, token=False):
+    """May a user with an exception use this path / API (a keeper allowed it)? Everybody else: yes."""
+    from . import areas as _areas
+    if not _areas.restricted(user):
+        return True
+    code = _exception_code(request.path_info)
+    if code is None:
+        return True
+    if code == UNKNOWN:
+        return False
+    if token:  # authenticated by a token: it is the API; the token pages need `tokens`, the rest `api` (and its own part)
+        if code == 'tokens':
+            return _areas.exception_allows(user, 'tokens')
+        return _areas.exception_allows(user, 'api') and (code == 'api' or _areas.exception_allows(user, code))
+    if code == 'api' and _is_ui_helper(request):
+        return True  # the drop-down of a form is the page, not the API
+    return _areas.exception_allows(user, code)
 
 
 def _exception_href_allowed(user, href):
     code = _exception_code(href)
-    return code is None or areas.exception_allows(user, code)
+    if code == UNKNOWN:
+        return False
+    return code is None or code == 'api' or areas.exception_allows(user, code)
 
 
 def _exception_denied(request, code):
@@ -779,17 +866,30 @@ def _tab_hidden(tab, instance):
     return False
 
 
+def _auth_scheme(request):
+    return (request.headers.get('Authorization', '').split(' ', 1)[0] or '').lower()
+
+
 def _is_token_request(request):
-    """A script calling the API or GraphQL with a token: whoever holds the key is not a person at a screen."""
+    """
+    A request that is going to be authenticated by an API token: a path of the API / GraphQL, an Authorization header
+    of the token kinds and NO signed-in browser session. NetBox's REST framework tries the session first and its
+    GraphQL view reads the token only of somebody not signed in, so next to a valid session the header is never looked
+    at: such a request is the session's person, whatever the header says (the header alone must never switch the PIN
+    protection off). That this is a real token is checked by NetBox when it authenticates (a wrong one is refused).
+    """
     if request is None or not request.path_info.startswith(('/api/', '/graphql/')):
         return False
-    return request.headers.get('Authorization', '').split(' ', 1)[0].lower() in ('token', 'bearer')
+    if _auth_scheme(request) not in ('token', 'bearer'):
+        return False
+    return not getattr(getattr(request, 'user', None), 'is_authenticated', False)
 
 
 def _token_request():
+    """Has the current request really been authenticated by an API token (set by the authentication below)?"""
     try:
         from netbox.context import current_request
-        return _is_token_request(current_request.get())
+        return bool(getattr(current_request.get(), '_userpin_token_auth', False))
     except Exception:  # noqa: BLE001
         return False
 
@@ -873,6 +973,14 @@ def install():
             if self.model is get_user_model():
                 # the PIN-only accesses are no NetBox users: no list, detail, drop-down or API of NetBox shows them
                 self = self.filter(pin_guest__isnull=True)
+            result = narrowed(self, user, action)
+            if self.model._meta.label_lower == 'users.token' and areas.own_tokens_only(user):
+                # the API keys: each person works with their own, a superuser and an exception holder included (the
+                # administration of foreign keys is the keepers' only)
+                result = result.filter(user=user)
+            return result
+
+        def narrowed(self, user, action):
             if _token_request() or areas.is_exempt(user):
                 return original(self, user, action)
             meta = self.model._meta
@@ -949,9 +1057,13 @@ def install():
         def wrap(method):
             def authenticate(self, request):
                 result = method(self, request)
-                if result and isinstance(self, TokenAuthentication) and not areas.exception_allows(result[0], 'api'):
+                if result and isinstance(self, TokenAuthentication):
+                    # the request was authenticated by a token (not by the session): from here on it is a script
+                    getattr(request, '_request', request)._userpin_token_auth = True
+                if result and isinstance(self, TokenAuthentication) and not _allowed_by_exception(
+                        result[0], getattr(request, '_request', request), token=True):
                     from rest_framework.exceptions import AuthenticationFailed
-                    raise AuthenticationFailed('The API is not allowed for this account by the protection keeper.')
+                    raise AuthenticationFailed('This is not allowed for this account by the protection keeper.')
                 if result and areas.active_areas() and not isinstance(self, TokenAuthentication):
                     arm_user(result[0])  # a token (a script) is NetBox's own business; a browser session is not
                 return result

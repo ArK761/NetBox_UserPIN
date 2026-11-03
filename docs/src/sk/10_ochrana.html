@@ -92,16 +92,31 @@ python manage.py userpin_default_deny --off     # vypne ochranu</pre>
 <tr><td>Záložky</td><td><span class="no">zakázané</span></td><td><code>/user/bookmarks/</code></td></tr>
 <tr><td>Notifikácie</td><td><span class="no">zakázané</span></td><td><code>/user/notifications/</code> a skrytý zvonček</td></tr>
 <tr><td>Odbery</td><td><span class="no">zakázané</span></td><td><code>/user/subscriptions/</code></td></tr>
-<tr><td>API tokeny (vytvárať a spravovať vlastné)</td><td><span class="no">zakázané</span></td><td><code>/user/api-tokens/</code>, <code>/users/tokens/</code>, <code>/api/users/tokens/</code>; zmizne aj položka <em>Admin → API Tokens</em></td></tr>
-<tr><td>API (REST, GraphQL) s tokenom</td><td><span class="no">zakázané</span></td><td>token takého používateľa je odmietnutý (chyba autentifikácie). Prehliadač sám (UI) pracuje cez reláciu a nie je dotknutý</td></tr>
+<tr><td>API tokeny (vytvárať a spravovať vlastné)</td><td><span class="no">zakázané</span></td><td><code>/user/api-tokens/</code>, <code>/users/tokens/</code>, <code>/api/users/tokens/</code>; zmizne aj položka <em>Admin → API Tokens</em>. Platí rovnako pre prehliadač aj pre token a nezávisí od voľby <em>API</em>. Každý (aj superuser) vidí a mení <strong>len vlastné</strong> kľúče; cudzie spravuje len strážca</td></tr>
+<tr><td>API (REST, GraphQL)</td><td><span class="no">zakázané</span></td><td>zakázané je <strong>všeobecné REST a GraphQL API</strong> pre token aj pre reláciu s cookies prehliadača (aj <code>/api/status/</code>). Token takého používateľa je odmietnutý. Jediná výnimka: výber hodnôt v rozbaľovacom zozname formulára (GET s <code>?brief</code>), bez ktorého by formuláre nefungovali
 </table>
 <ul>
 <li>Pri každom používateľovi je pod menom šípka <strong>▾ Smie používať</strong>, ktorá rozbalí zaškrtávacie polia s tlačidlom <em>Uložiť</em>, a malé štítky: <span class="ok">zelený ✓</span> povolené, <span class="no">červený ✗</span> zakázané.</li>
 <li>Čo nie je povolené, zmizne z menu a kariet a priama adresa vráti 403 (<em>Not allowed for this account</em>, s menami strážcov).</li>
 <li>NetBox nemá v menu používateľa odkaz na heslo (je len ako karta v Profile). Kým je heslo povolené, plugin ho do menu doplní.</li>
+<li><strong>Cesty účtu, ktoré nikto nezaradil, sú zakázané</strong> (default deny): v osobnom účte (<code>/user/…</code>) a v aplikácii používateľov (<code>/users/…</code>, <code>/api/users/…</code>) platí, že čo nie je v zozname, je zatvorené. Správa používateľov, skupín a oprávnení ostáva pod oprávneniami NetBoxu. Ostatné dátové adresy NetBoxu (zariadenia, IPAM …) tým nie sú dotknuté.</li>
 <li><strong>Strážca môže vždy všetko.</strong> Pri vypnutej ochrane sa nič neberie. Superuser, ktorý nie je strážca, kým strážca nie je, tiež nie je obmedzený. Pri <em>vypnutej</em> výnimke sa zoznam povolení nepoužíva (používateľa riadi PIN).</li>
 </ul>
 <div class="note"><strong>Prečo to je dôležité.</strong> NetBox dáva každému prihlásenému právo na vlastné API tokeny (<code>DEFAULT_PERMISSIONS</code>), takže používateľ bez akýchkoľvek práv vidí v menu <em>Admin → API Tokens</em>. Token nesie len oprávnenia svojho majiteľa, no požiadavky s tokenom plugin PIN-om neposudzuje: používateľ s právami by cez token čítal aj mimo svojich oblastí. Zoznam povolení to rieši bez zásahu do konfigurácie NetBoxu.</div>
+
+<h2>API tokeny a PIN: vedomá bezpečnostná hranica</h2>
+<div class="note"><strong>Rozhodnutie vlastníka projektu (variant A).</strong> Požiadavka, ktorú NetBox overil <strong>platným API tokenom</strong>, sa PIN ochranou chránených oblastí a poľami <strong>neposudzuje</strong>: riadi sa výhradne oprávneniami NetBoxu (RBAC) majiteľa tokenu. Je to zámer, aby fungovali integrácie a skripty (monitoring, synchronizácie, zálohy), ktoré nemajú PIN ani prehliadač.
+<ul>
+<li>Kto má token, vidí a pri zodpovedajúcich právach aj mení a maže všetko, čo mu povoľuje NetBox, <strong>aj mimo svojich oblastí a skrytých polí</strong> (aj cez GraphQL). V prehliadači by ho PIN zastavil.</li>
+<li>Preto dávaj tokeny len <strong>účtom s minimálnymi oprávneniami NetBoxu</strong> (oprávnenia s obmedzením na potrebné objekty, len čítanie tam, kde stačí) a nepoužívaj superuser účty na integrácie.</li>
+<li>Token musí byť <strong>skutočne platný</strong>. Falošná hlavička <code>Authorization</code> pri prihlásenej relácii ochranu nevypne: pri relácii rozhoduje relácia a PIN sa uplatní.</li>
+<li>Pre účty s výnimkou rozhoduje aj zaškrtnutie <em>API</em> (token bez neho je odmietnutý) a pre správu kľúčov <em>API tokeny</em>.</li>
+<li>Používateľ môže mať vlastný kľúč len ak to nastavenia dovolia (<em>Používatelia smú vytvoriť vlastný API kľúč</em>) a vidí len svoje kľúče.</li>
+</ul>
+Zmena tohto pravidla (aby sa token riadil oblasťami ako človek) je možná ako samostatná verzia, ale vyžaduje, aby každý integračný účet dostal skupinu v oblasti alebo výnimku.</div>
+
+<h2>Keď PIN nevie prečítať stav ochrany</h2>
+<p>Ak plugin nevie prečítať databázu (oblasti, strážcov, výnimky), <strong>nič nepovolí</strong>: studený proces alebo stav starší ako 30 sekúnd odpovie <strong>HTTP 503</strong> (<em>The protection of the data cannot be checked now</em>) a po zotavení databázy sa ochrana načíta znova. Posledný známy stav sa drží najviac 30 s a databáza sa pýta každú sekundu. Pri úplnom výpadku databázy skončí NetBox chybou ešte skôr (500), bez dát. Zmena ochrany (výnimka, strážca, oblasť) sa v ostatných procesoch NetBoxu prejaví do pol sekundy (zdieľaná cache), koniec výnimky je presný aj bez <code>netbox-rq</code>.</p>
 
 <h1>Správcovia úsekov</h1>
 <div class="facts">

@@ -10,8 +10,8 @@ import subprocess
 import sys
 
 HERE = pathlib.Path(__file__).parent
-VERSION = '2.5.0'
-DATE = '2026-11-02'
+VERSION = '3.0.0'
+DATE = '2026-11-03'
 
 DOCS = {
     'en': dict(src='en', out='../GUIDE_User_PIN_EN.pdf', lang='en',

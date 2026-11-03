@@ -3,11 +3,26 @@
 The guides, written from the code: [`docs/GUIDE_User_PIN_EN.pdf`](docs/GUIDE_User_PIN_EN.pdf) (English), [`docs/NAVOD_User_PIN_SK.pdf`](docs/NAVOD_User_PIN_SK.pdf) (Slovak).
 Sources and the build script: `docs/src/` (`python3 docs/src/build.py`).
 
-The version in the code is **2.5.0** (tag `2.5.0`: everything below up to 2.0.1 plus the personal number sign-in, the audit detail and the guides). The earlier release is 2.0.0.
+The version in the code is **3.0.0** (security fixes after the audit, on top of 2.5.0). Earlier releases: 2.5.0, 2.0.0.
 The base was 0.38.4 (commit 7bed7de); the interim numbers 2.0.1 … 2.2.2 in the commit history of 27–30 October 2026
 were working labels, everything is part of the 2.0.0 line and is listed by topic below.
-Verzia v kóde je **2.5.0** (značka `2.5.0`; predchádzajúce vydanie 2.0.0); priebežné čísla 2.0.1 … 2.2.2
+Verzia v kóde je **3.0.0** (bezpečnostné opravy po audite; predchádzajúce vydania 2.5.0, 2.0.0); priebežné čísla 2.0.1 … 2.2.2
 v histórii commitov boli pracovné označenia, všetko patrí do línie 2.0.0 a je rozdelené podľa tém.
+
+## 3.0.0 - security fixes after the audit / bezpečnostné opravy po audite
+
+* F-01: an `Authorization` header never switches the PIN protection off for a signed-in session (REST and GraphQL). /
+  Hlavička `Authorization` nikdy nevypne PIN ochranu pre prihlásenú reláciu.
+* `tokens` and `api` are two flags (token, session; REST, GraphQL); `api=0` also refuses the REST API by a session (except
+  the `?brief` drop-downs); everybody manages only their own API keys, foreign keys are the keepers'. / `tokens` a `api`
+  sú samostatné; `api=0` blokuje aj reláciu; každý spravuje len vlastné kľúče.
+* Default deny for the account and the users app (an unlisted path is refused); twins of the allowed features listed. /
+  Default deny pre účet a users app.
+* Fail closed: an unreadable protection state gives HTTP 503, never "no areas". Shared version in the cache NetBox shares:
+  a change is seen by other processes within 0.5 s; the end of an exception is exact. / Pri nečitateľnom stave HTTP 503;
+  zdieľaná verzia v cache.
+* API tokens stay outside the PIN protection (decision A) - see the guide, chapter "Protection and exceptions". /
+  API tokeny ostávajú mimo PIN ochrany (rozhodnutie A).
 
 ## 2.0.1 – permissions of exceptions / oprávnenia výnimiek
 
