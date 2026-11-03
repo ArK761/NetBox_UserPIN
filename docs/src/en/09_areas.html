@@ -93,7 +93,7 @@
 <tr><th>Where</th><th>How</th></tr>
 <tr><td>NetBox pages (lists, details, add/edit/delete, bulk actions, plugin pages)</td><td>middleware refuses without the right (<em>view</em> for reading, <em>add / change / delete</em> by the kind of page); the PIN has to be unlocked</td></tr>
 <tr><td>Rows</td><td>wrapped <code>RestrictedQuerySet.restrict</code>: in a protected area it returns the rows the group allows (none without one): lists, details, REST API, drop-downs</td></tr>
-<tr><td>REST API and GraphQL</td><td>refused without the right (403 JSON)</td></tr>
+<tr><td>REST API and GraphQL</td><td>for a signed-in session refused without the right (403 JSON); an <code>Authorization</code> header next to a session changes nothing. A request with a <strong>valid API token</strong> is outside the PIN protection and follows the NetBox permissions alone (see the chapter Protection and exceptions)</td></tr>
 <tr><td>Menu and tabs</td><td><code>has_perm</code> is answered by the accesses from the PIN</td></tr>
 <tr><td>Change log, journal, attachments</td><td>never show rows of objects a user may not view</td></tr>
 </table>

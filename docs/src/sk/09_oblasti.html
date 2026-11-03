@@ -93,7 +93,7 @@
 <tr><th>Kde</th><th>Ako</th></tr>
 <tr><td>Stránky NetBoxu (zoznamy, detaily, pridať/upraviť/zmazať, hromadné akcie, stránky pluginov)</td><td>middleware odmietne bez práva (<em>zobraziť</em> na čítanie, <em>pridať / zmeniť / zmazať</em> podľa druhu stránky); PIN musí byť odomknutý</td></tr>
 <tr><td>Riadky</td><td>obalené <code>RestrictedQuerySet.restrict</code>: v chránenej oblasti vráti riadky, ktoré povoľuje skupina (bez nej žiadne): zoznamy, detaily, REST API, rozbaľovacie zoznamy</td></tr>
-<tr><td>REST API a GraphQL</td><td>odmietnuté bez práva (403 JSON)</td></tr>
+<tr><td>REST API a GraphQL</td><td>pre prihlásenú reláciu odmietnuté bez práva (403 JSON); hlavička <code>Authorization</code> pri relácii nič nemení. Požiadavka s <strong>platným API tokenom</strong> je mimo PIN ochrany a riadi sa len oprávneniami NetBoxu (pozri kapitolu Ochrana a výnimky)</td></tr>
 <tr><td>Menu a karty</td><td><code>has_perm</code> odpovedá podľa prístupov z PINu</td></tr>
 <tr><td>Záznam zmien, žurnál, prílohy</td><td>nikdy neukážu riadky objektov, ktoré používateľ nesmie vidieť</td></tr>
 </table>

@@ -39,8 +39,8 @@
 <h2>1. Balíky</h2>
 <pre>source /opt/netbox/venv/bin/activate
 pip install "argon2-cffi&gt;=23.1" "cryptography&gt;=42" "segno&gt;=1.5" "holidays&gt;=0.50"
-pip install --upgrade --force-reinstall --no-deps "git+https://github.com/ArK761/NetBox_UserPIN.git@2.0.0"</pre>
-<p>Namiesto <code>@2.0.0</code> môžeš použiť ľubovoľný tag alebo commit. Pip môže po inštalácii napísať upozornenie o <code>python-dateutil</code> (pozri Riešenie problémov): je neškodné.</p>
+pip install --upgrade --force-reinstall --no-deps "git+https://github.com/ArK761/NetBox_UserPIN.git@3.0.0"</pre>
+<p>Namiesto <code>@3.0.0</code> môžeš použiť ľubovoľný tag alebo commit. Pip môže po inštalácii napísať upozornenie o <code>python-dateutil</code> (pozri Riešenie problémov): je neškodné.</p>
 <h2>2. Šifrovací kľúč</h2>
 <p>Vygeneruj ho a ulož si ho bokom, <strong>skôr než</strong> plugin zapneš. Postup je v kapitole <em>Šifrovací kľúč</em>.</p>
 <h2>3. Konfigurácia</h2>
@@ -110,7 +110,7 @@ systemctl is-active netbox netbox-rq                            # active, active
 <p><code>upgrade.sh</code> vytvorí virtuálne prostredie <strong>znova</strong> a nainštaluje len to, čo je v <code>requirements.txt</code> a <code>local_requirements.txt</code>. Plugin, ktorý tam nie je, po upgrade zmizne. Riadky v <code>/opt/netbox/local_requirements.txt</code>:</p>
 <pre>netbox-librenms-plugin
 netbox-qrcode
-git+https://github.com/ArK761/NetBox_UserPIN.git@2.0.0</pre>
+git+https://github.com/ArK761/NetBox_UserPIN.git@3.0.0</pre>
 <ul>
 <li>Balík z PyPI stačí zapísať samotným menom. Plugin z GitHubu potrebuje celý odkaz.</li>
 <li>Riadok bez <code>@…</code> nainštaluje <strong>posledný commit vetvy <code>main</code></strong> (nie posledný release; pip GitHub Releases nepozná, pozná len vetvy, tagy a commity). Ak je kód plugin na inej vetve, ponechaj pripnutý commit.</li>

@@ -41,7 +41,7 @@ sudo bash pin_check.sh http://127.0.0.1 --pin /pin/ --server          # + migrá
 <li>Zmena alebo reset PINu zneplatní všetky odomknutia. Tajomstvá TOTP sú šifrované rovnako; kód TOTP sa prijme len raz.</li>
 <li>Záložné kódy (100 bitov) a e-mailové kódy sa ukladajú len ako odtlačky, jednorazové a krátko platné.</li>
 <li>Obnova nikdy neobíde 2FA. PIN je len autentifikačný faktor („som to naozaj ja pri tomto počítači“), nepoužíva sa ako kľúč na šifrovanie iných dát.</li>
-<li><strong>Požiadavky s API tokenom plugin PIN-om neposudzuje</strong> (token nesie oprávnenia NetBoxu): preto sú vlastné tokeny predvolene zakázané a pri výnimkách sa povoľujú po jednom.</li>
+<li><strong>Požiadavky s platným API tokenom plugin PIN-om neposudzuje</strong> (token nesie oprávnenia NetBoxu; vedomé rozhodnutie vlastníka projektu, variant A): preto sú vlastné tokeny predvolene zakázané a pri výnimkách sa povoľujú po jednom a tokeny dávaj len účtom s minimálnymi oprávneniami. Falošná hlavička <code>Authorization</code> pri prihlásenej relácii ochranu nevypne.</li>
 <li>Prístup na server riadi firewall; samostatný port alebo hostname pre prihlásenie osôb len s PIN-om plugin nevynucuje, ak treba, rieši sa v nginxe a firewalle.</li>
 <li>Kto má root alebo prístup do databázy na serveri, obíde akýkoľvek plugin: odpoveďou je audit.</li>
 </ul>
@@ -94,12 +94,26 @@ areas.can(request.user, 'netbox_libreoxi', 'config')   # True / False</pre>
 <tr><td>Osoba len s PIN-om môže len čítať</td><td>Je mimo pracovného času (alebo sviatok), alebo je ochrana vypnutá.</td></tr>
 <tr><td>Osoba len s PIN-om nevidí nič</td><td>Nemá skupinu, alebo je ochrana vypnutá.</td></tr>
 <tr><td>Zhrnutia zmien osôb nechodia</td><td>Nebeží <code>netbox-rq</code> alebo je vypnuté <em>Posielať správcom</em>.</td></tr>
+<tr><td>Integrácia alebo skript s tokenom dostáva 403</td><td>Účet má výnimku a nemá zaškrtnuté <em>API</em> (a pri správe kľúčov <em>API tokeny</em>). Strážca ich zaškrtne pri výnimke.</td></tr>
+<tr><td>HTTP 503 <em>The protection of the data cannot be checked now</em></td><td>Plugin nevie prečítať databázu (oblasti, strážcov, výnimky) a preto nič nepovolí. Skontroluj PostgreSQL; po zotavení sa ochrana načíta sama.</td></tr>
+<tr><td>Rozbaľovací zoznam vo formulári je prázdny pri výnimke</td><td>Výber hodnôt (<code>?brief</code>) PIN neblokuje; ak je prázdny, účet nemá v NetBoxe právo vidieť daný objekt.</td></tr>
 <tr><td>Upgrade vrátil plugin na staršiu verziu</td><td>V <code>local_requirements.txt</code> chýba pripnutý tag alebo commit, alebo riadok nemá <code>@…</code> (potom sa berie <code>main</code>).</td></tr>
 </table>
 
 <h1>Zmeny</h1>
-<p>Verzia v kóde je <strong>2.0.0</strong> (vydanie na GitHube) a <strong>2.0.1</strong> (vetva <code>feature/exception-allowlist</code>). Pôvodný základ bol 0.38.4 (commit 7bed7de); priebežné čísla 2.0.1 až 2.2.2 v histórii commitov boli pracovné označenia, všetko patrí do línie 2.0.0 a je rozdelené podľa tém.</p>
-<h2>2.0.1: oprávnenia výnimiek</h2>
+<p>Verzia v kóde je <strong>3.0.0</strong> (vydanie na GitHube; predchádzajúce vydania 2.5.0 a 2.0.0). Pôvodný základ bol 0.38.4 (commit 7bed7de); priebežné čísla 2.0.1 až 2.2.2 v histórii commitov boli pracovné označenia a patria do línie 2.0.0 a 2.5.0.</p>
+<h2>3.0.0: bezpečnostné opravy po audite</h2>
+<ul>
+<li><strong>Falošná hlavička <code>Authorization</code></strong> pri prihlásenej relácii už nevypne PIN ochranu (REST ani GraphQL; čítanie ani zápis). Požiadavka je tokenová, len keď ju NetBox skutočne overil tokenom.</li>
+<li><strong><code>API tokeny</code> a <code>API</code></strong> sú pri výnimke dve samostatné oprávnenia (token aj relácia, REST aj GraphQL). <code>API</code> vypnuté blokuje všeobecné REST a GraphQL aj v prehliadači (okrem výberu hodnôt v rozbaľovacích zoznamoch formulárov). Správa tokenov sa riadi len oprávnením <code>API tokeny</code>.</li>
+<li><strong>Vlastné API kľúče:</strong> pri zapnutej ochrane každý (aj superuser a držiteľ výnimky) vidí a mení len svoje kľúče; cudzie spravuje len strážca.</li>
+<li><strong>Default deny pre účet:</strong> cesta osobného účtu a aplikácie používateľov, ktorú nikto nezaradil, je zakázaná. Pridané sú dvojčatá povolení (<code>/api/users/config</code>, záložky, odbery a notifikácie v <code>extras</code>).</li>
+<li><strong>Fail closed:</strong> keď plugin nevie prečítať stav ochrany z databázy, nič nepovolí (HTTP 503); posledný známy stav drží najviac 30 s. Prázdny zoznam oblastí je len výsledok úspešného čítania.</li>
+<li><strong>Zdieľaná cache:</strong> zmena výnimky, strážcu alebo oblasti sa prejaví v ostatných procesoch NetBoxu do ~0,5 s; koniec výnimky je presný aj bez <code>netbox-rq</code>.</li>
+<li><strong>API tokeny ostávajú mimo PIN ochrany</strong> (vedomé rozhodnutie, variant A): pozri kapitolu Ochrana a výnimky.</li>
+<li>Bez nových migrácií (migrácie do <code>0046</code>) a bez zmeny databázy: návrat na 2.5.0 je jedným príkazom.</li>
+</ul>
+<h2>2.5.0: zmeny oproti 2.0.0 (výnimky, e-maily a audit, osobné číslo)</h2>
 <ul>
 <li>Výnimka už nie je „všetko alebo nič“: strážca zaškrtáva, čo smie používateľ používať (heslo predvolene povolené; profil, predvoľby, záložky, notifikácie, odbery, API tokeny a API s tokenom na povolenie).</li>
 <li>Čo nie je povolené, je skryté z menu a kariet a zakázané priamou adresou (403); token bez povoleného API je odmietnutý. Strážca je bez obmedzení.</li>

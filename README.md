@@ -52,7 +52,7 @@ Requires NetBox **4.7+** (Python 3.12+).
 
 | Who | Rules them | Can do |
 |---|---|---|
-| **PIN-only access** (`PinUserNNNN`) | only its groups (always) | no API, no requests; without a group only changes its PIN; not a NetBox user (hidden from every user list) |
+| **PIN-only access** (called `UserPIN : personal number`) | only its groups (always, mode B: it sees only the areas of its groups) | no API, no requests; without a group only changes its PIN; not a NetBox user (hidden from every user list) |
 | **Regular user in a group** (protection ON) | only what the groups allow | no PIN prompt, no API key |
 | **Regular user with an exception** | NetBox permissions alone; of the account pages and the API only what a keeper allowed (the password by default; profile, preferences, bookmarks, notifications, subscriptions, API tokens and the API with a token one by one) | PIN plugin pages by their role |
 | **Section manager** ("owner" before 2.2) | NetBox as any user; **full power over his section** | groups, fields, members, requests of his section (an object type or a whole area); creates / runs PIN-only accesses put under him |
@@ -329,7 +329,7 @@ user            asks for access with a reason (+ what exactly) → owners grant 
   alone – another keeper has to take over; the last keeper cannot be removed. Login, the own profile, bookmarks,
   notifications and the user's own preferences stay open - but only the user's **own** bookmarks, notifications
   and preferences (others' are not shown to anybody but a keeper). API tokens are no exception: only a group that
-  allows `users.token` (or a keeper) sees or creates them. The deny reaches every path: lists, details, the
+  allows `users.token` (or a keeper) sees or creates them, and everybody (a superuser too) works only with their **own** keys; the foreign ones are for the keepers. The deny reaches every path: lists, details, the
   REST API, GraphQL, global search, dashboard widgets, menus and buttons (a superuser who is no keeper sees none of
   Users, Groups, Permissions, Jobs, background tasks ...). The change log, journal and attachments never show rows of
   objects a user may not view. Server emergency: `manage.py userpin_default_deny --off`.
@@ -350,7 +350,7 @@ user            asks for access with a reason (+ what exactly) → owners grant 
 |---|---|
 | NetBox pages: lists, detail, add / edit / delete, bulk actions, plugin pages | middleware refuses without the right (`view` for reading, `add` / `change` / `delete` by the kind of view); the PIN has to be unlocked |
 | Rows | `RestrictedQuerySet.restrict` of NetBox is wrapped: in a protected area it returns the rows the PIN profiles allow (none without a grant) instead of NetBox's own constraints – lists, details, REST API, drop-downs |
-| REST API (session and token) | refused without the right (403 JSON); no PIN unlock step for tokens |
+| REST API and GraphQL by a **session** | refused without the right (403 JSON); an `Authorization` header next to a session changes nothing. A request authenticated by a **valid API token** is outside the PIN protection and follows the NetBox permissions alone (a deliberate decision, see the guide); give tokens only to accounts with the narrowest permissions |
 | Menu items and object tabs | `has_perm` is answered by the PIN grants; a user without any key still sees the door |
 
 **Field rules** (access entry → *Fields*, and *Fields nobody sees*): per profile and object type every field is *hidden*,
@@ -381,10 +381,9 @@ the pages answer "no access". Importing needs *add* as well. Groups made before 
 
 *User PIN > PIN-only access > People with a PIN only* (protection keepers and the owners of the area): enter a name,
 an e-mail address and a group. A technical user without a usable password stands behind it, in that group. The person
-gets a personal link by e-mail (valid 7 days for the first setup), chooses a PIN of their own (8+ characters) and
-signs in with link and PIN. From then on everybody uses **one shared page** (`/pin/` by default; a keeper chooses the address on the PIN-only page, e.g. `/tenanti/`; the address is case-insensitive; to be saved as a bookmark) and
-enters **only the PIN**: the PIN tells who the person is, so two people never hold the same PIN (the second is asked to
-choose another). An address list per access restricts the computers. E-mails to PIN-only people go to their own
+gets a personal link by e-mail (valid 7 days for the first setup), chooses a PIN of their own (by the PIN rules, 8+ characters by default) and
+signs in with link and PIN. A keeper enters the person's **personal number** when the access is made (required, unique, it never changes). From then on everybody uses **one shared page** (`/pin/` by default; a keeper chooses the address on the PIN-only page, e.g. `/tenanti/`; the address is case-insensitive; to be saved as a bookmark) and
+enters the **personal number and the PIN** (while the number is not a must, a person without a number still signs in with the PIN alone and such PINs stay unique); the keeper can make the number a must and set the PIN rules (shortest PIN, a letter, a digit) for everybody: everybody is e-mailed and chooses a new PIN at the next sign-in. An address list per access restricts the computers. E-mails to PIN-only people go to their own
 address whatever the allowed domains are.
 
 * No password, no 2FA, no API, no token; never a keeper, an owner or an exception; the account pages and the pages of

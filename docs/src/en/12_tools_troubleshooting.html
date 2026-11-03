@@ -41,7 +41,7 @@ sudo bash pin_check.sh http://127.0.0.1 --pin /pin/ --server          # + migrat
 <li>A PIN change or reset invalidates every unlock. TOTP secrets are encrypted the same way; a TOTP code is accepted only once.</li>
 <li>Backup codes (100 bits) and e-mailed codes are stored only as digests, single use, short-lived.</li>
 <li>Recovery never bypasses 2FA. The PIN is only an authentication factor ("it is really you at this computer"); it is not used as an encryption key for other data.</li>
-<li><strong>Requests with an API token are not judged by the plugin's PIN</strong> (a token carries NetBox permissions): that is why own tokens are off by default and are allowed one by one for exceptions.</li>
+<li><strong>Requests with a valid API token are not judged by the plugin's PIN</strong> (a token carries NetBox permissions; a deliberate decision of the owner of the project, option A): give tokens only to accounts with the narrowest permissions. A false <code>Authorization</code> header next to a signed-in session does not switch the protection off. That is also why own tokens are off by default and are allowed one by one for exceptions.</li>
 <li>Access to the server is ruled by the firewall; the plugin does not enforce a separate port or hostname for the PIN-only sign-in, if needed it is solved in nginx and the firewall.</li>
 <li>Anybody with root or database access on the server can bypass any plugin: the answer is the audit.</li>
 </ul>
@@ -94,12 +94,26 @@ areas.can(request.user, 'netbox_libreoxi', 'config')   # True / False</pre>
 <tr><td>A PIN-only person can only read</td><td>It is outside the working time (or a holiday), or the protection is off.</td></tr>
 <tr><td>A PIN-only person sees nothing</td><td>No group, or the protection is off.</td></tr>
 <tr><td>The summaries of changes of the people do not arrive</td><td><code>netbox-rq</code> is not running or <em>Send to the administrators</em> is off.</td></tr>
+<tr><td>An integration or a script with a token gets 403</td><td>The account has an exception without the <em>API</em> check box (and for the management of keys <em>API tokens</em>). The keeper ticks them at the exception.</td></tr>
+<tr><td>HTTP 503 <em>The protection of the data cannot be checked now</em></td><td>The plugin cannot read the database (areas, keepers, exceptions) and therefore allows nothing. Check PostgreSQL; the protection is read again by itself afterwards.</td></tr>
+<tr><td>A drop-down in a form is empty for an exception</td><td>The PIN does not block the list of values (<code>?brief</code>); if it is empty, the account has no NetBox permission to see that object.</td></tr>
 <tr><td>The upgrade put a plugin back to an older version</td><td>The pinned tag/commit is missing in <code>local_requirements.txt</code>, or the line has no <code>@…</code> (then <code>main</code> is taken).</td></tr>
 </table>
 
 <h1>Changes</h1>
-<p>The version in the code is <strong>2.0.0</strong> (the GitHub release) and <strong>2.0.1</strong> (branch <code>feature/exception-allowlist</code>). The original base was 0.38.4 (commit 7bed7de); the interim numbers 2.0.1 to 2.2.2 in the commit history were working labels, everything is part of the 2.0.0 line and is split by topic below.</p>
-<h2>2.0.1: permissions of exceptions</h2>
+<p>The version in the code is <strong>3.0.0</strong> (the GitHub release; the earlier releases are 2.5.0 and 2.0.0). The original base was 0.38.4 (commit 7bed7de); the interim numbers 2.0.1 to 2.2.2 in the commit history were working labels and belong to the 2.0.0 and 2.5.0 lines.</p>
+<h2>3.0.0: security fixes after the audit</h2>
+<ul>
+<li>A <strong>false <code>Authorization</code> header</strong> next to a signed-in session no longer switches the PIN protection off (REST and GraphQL; reading and writing). A request counts as a token request only when NetBox really authenticated it by a token.</li>
+<li><strong><code>API tokens</code> and <code>API</code></strong> are two separate permissions of an exception (token and session, REST and GraphQL). With <code>API</code> off the general REST and GraphQL API is refused in the browser too (except the list of values of a drop-down in a form). The management of tokens follows the <code>API tokens</code> permission alone.</li>
+<li><strong>Own API keys:</strong> while the protection runs everybody (a superuser and a holder of an exception too) sees and changes only their own keys; the foreign ones are for the keepers.</li>
+<li><strong>Default deny for the account:</strong> a path of the personal account and of the users app that nobody listed is refused. The twins of the allowances are added (<code>/api/users/config</code>, bookmarks, subscriptions and notifications in <code>extras</code>).</li>
+<li><strong>Fail closed:</strong> when the plugin cannot read the state of the protection from the database, it allows nothing (HTTP 503); the last known state is kept for 30 s at most. An empty list of areas is only the result of a successful read.</li>
+<li><strong>Shared cache:</strong> a change of an exception, a keeper or an area is seen by the other NetBox processes within ~0.5 s; the end of an exception is exact even without <code>netbox-rq</code>.</li>
+<li><strong>API tokens stay outside the PIN protection</strong> (a deliberate decision, option A): see the chapter Protection and exceptions.</li>
+<li>No new migrations (migrations up to <code>0046</code>) and no change of the database: going back to 2.5.0 is one command.</li>
+</ul>
+<h2>2.5.0: changes since 2.0.0 (exceptions, e-mails and audit, the personal number)</h2>
 <ul>
 <li>An exception is no longer "all or nothing": the keeper ticks what the user may use (the password allowed by default; profile, preferences, bookmarks, notifications, subscriptions, API tokens and the API with a token to be allowed).</li>
 <li>What is not allowed is hidden from the menu and the tabs and refused by the address (403); a token without the allowed API is refused. A keeper is never limited.</li>

@@ -24,7 +24,7 @@ v histórii commitov boli pracovné označenia, všetko patrí do línie 2.0.0 a
 * API tokens stay outside the PIN protection (decision A) - see the guide, chapter "Protection and exceptions". /
   API tokeny ostávajú mimo PIN ochrany (rozhodnutie A).
 
-## 2.0.1 – permissions of exceptions / oprávnenia výnimiek
+## 2.5.0 – changes since 2.0.0 (exceptions, e-mails and audit, personal number) / zmeny od 2.0.0
 
 * An exception is no longer "all or nothing": a keeper ticks what the user may use. The password is allowed by
   default; profile, preferences, bookmarks, notifications, subscriptions, API tokens and the API (REST, GraphQL) with a
