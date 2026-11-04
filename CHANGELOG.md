@@ -3,11 +3,16 @@
 The guides, written from the code: [`docs/GUIDE_User_PIN_EN.pdf`](docs/GUIDE_User_PIN_EN.pdf) (English), [`docs/NAVOD_User_PIN_SK.pdf`](docs/NAVOD_User_PIN_SK.pdf) (Slovak).
 Sources and the build script: `docs/src/` (`python3 docs/src/build.py`).
 
-The version in the code is **3.0.0** (security fixes after the audit, on top of 2.5.0). Earlier releases: 2.5.0, 2.0.0.
+The version in the code is **3.1.0** (conditions of fields and the working time, on top of 3.0.0). Earlier releases: 3.0.0, 2.5.0, 2.0.0.
 The base was 0.38.4 (commit 7bed7de); the interim numbers 2.0.1 … 2.2.2 in the commit history of 27–30 October 2026
 were working labels, everything is part of the 2.0.0 line and is listed by topic below.
-Verzia v kóde je **3.0.0** (bezpečnostné opravy po audite; predchádzajúce vydania 2.5.0, 2.0.0); priebežné čísla 2.0.1 … 2.2.2
+Verzia v kóde je **3.1.0** (podmienky polí a pracovný čas; predchádzajúce vydania 3.0.0, 2.5.0, 2.0.0); priebežné čísla 2.0.1 … 2.2.2
 v histórii commitov boli pracovné označenia, všetko patrí do línie 2.0.0 a je rozdelené podľa tém.
+
+## 3.1.0 - conditions of fields, working time / podmienky polí, pracovný čas
+
+* Working time of a PIN-only person: changed days / hours with "the general rules" chosen are refused with a message (they used to be dropped silently); each person shows how the time is set (individually / off / the general time); back to the general rules the person takes the general time. / Pracovný čas osoby len s PIN-om: zmenené hodiny pri všeobecných pravidlách sa odmietnu s hláškou; pri osobe je napísané, aký čas má; návrat na všeobecné pravidlá vezme všeobecný čas.
+* Conditions of a field rule: the drop-down of a select / multiselect custom field and of a field with a fixed list (the status ...) offers only the allowed values (it offered all of them and refused the others only on saving); a value outside the rule is refused through the REST API for the model fields too. / Podmienky pravidla poľa: rozbaľovací zoznam výberového vlastného poľa a poľa s pevným zoznamom ponúka len povolené hodnoty; hodnota mimo pravidla sa odmietne aj cez REST API pri poliach modelu.
 
 ## 3.0.0 - security fixes after the audit / bezpečnostné opravy po audite
 
@@ -21,8 +26,6 @@ v histórii commitov boli pracovné označenia, všetko patrí do línie 2.0.0 a
 * Fail closed: an unreadable protection state gives HTTP 503, never "no areas". Shared version in the cache NetBox shares:
   a change is seen by other processes within 0.5 s; the end of an exception is exact. / Pri nečitateľnom stave HTTP 503;
   zdieľaná verzia v cache.
-* Working time of a PIN-only person: changed days / hours with "the general rules" chosen are refused with a message (they used to be dropped silently); each person shows how the time is set (individually / off / the general time); back to the general rules the person takes the general time. / Pracovný čas osoby len s PIN-om: zmenené hodiny pri všeobecných pravidlách sa odmietnu s hláškou; pri osobe je napísané, aký čas má; návrat na všeobecné pravidlá vezme všeobecný čas.
-* Conditions of a field rule: the drop-down of a select / multiselect custom field and of a field with a fixed list (the status ...) offers only the allowed values (it offered all of them and refused the others only on saving); a value outside the rule is refused through the REST API for the model fields too. / Podmienky pravidla poľa: rozbaľovací zoznam výberového vlastného poľa a poľa s pevným zoznamom ponúka len povolené hodnoty; hodnota mimo pravidla sa odmietne aj cez REST API pri poliach modelu.
 * API tokens stay outside the PIN protection (decision A) - see the guide, chapter "Protection and exceptions". /
   API tokeny ostávajú mimo PIN ochrany (rozhodnutie A).
 

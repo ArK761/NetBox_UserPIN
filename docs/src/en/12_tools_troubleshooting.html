@@ -101,7 +101,13 @@ areas.can(request.user, 'netbox_libreoxi', 'config')   # True / False</pre>
 </table>
 
 <h1>Changes</h1>
-<p>The version in the code is <strong>3.0.0</strong> (the GitHub release; the earlier releases are 2.5.0 and 2.0.0). The original base was 0.38.4 (commit 7bed7de); the interim numbers 2.0.1 to 2.2.2 in the commit history were working labels and belong to the 2.0.0 and 2.5.0 lines.</p>
+<p>The version in the code is <strong>3.1.0</strong> (the GitHub release; the earlier releases are 3.0.0, 2.5.0 and 2.0.0). The original base was 0.38.4 (commit 7bed7de); the interim numbers 2.0.1 to 2.2.2 in the commit history were working labels and belong to the 2.0.0 and 2.5.0 lines.</p>
+<h2>3.1.0: conditions of fields and the working time</h2>
+<ul>
+<li><strong>Conditions of a field rule:</strong> the drop-down of a <strong>select custom field</strong> (select and multiselect) and of a <strong>field with a fixed list</strong> (for example the status of a device) offers only the values the rule allows (it used to offer all of them and refuse the others only on saving). A value outside the condition is also refused through the REST API for the model fields. When the same set of values is used by several fields, the list shows the values that any of them allows.</li>
+<li><strong>Working time of a PIN-only person:</strong> changed days or hours with <em>the general rules</em> chosen are no longer dropped silently: the plugin says so and asks for <em>own rules</em> or <em>no limit</em>. Every person shows how the time is set (individually / off / the general time applies). Going back to the general rules takes the time of the general rules.</li>
+<li>No new migrations (migrations up to <code>0046</code>).</li>
+</ul>
 <h2>3.0.0: security fixes after the audit</h2>
 <ul>
 <li>A <strong>false <code>Authorization</code> header</strong> next to a signed-in session no longer switches the PIN protection off (REST and GraphQL; reading and writing). A request counts as a token request only when NetBox really authenticated it by a token.</li>

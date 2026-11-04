@@ -101,7 +101,13 @@ areas.can(request.user, 'netbox_libreoxi', 'config')   # True / False</pre>
 </table>
 
 <h1>Zmeny</h1>
-<p>Verzia v kóde je <strong>3.0.0</strong> (vydanie na GitHube; predchádzajúce vydania 2.5.0 a 2.0.0). Pôvodný základ bol 0.38.4 (commit 7bed7de); priebežné čísla 2.0.1 až 2.2.2 v histórii commitov boli pracovné označenia a patria do línie 2.0.0 a 2.5.0.</p>
+<p>Verzia v kóde je <strong>3.1.0</strong> (vydanie na GitHube; predchádzajúce vydania 3.0.0, 2.5.0 a 2.0.0). Pôvodný základ bol 0.38.4 (commit 7bed7de); priebežné čísla 2.0.1 až 2.2.2 v histórii commitov boli pracovné označenia a patria do línie 2.0.0 a 2.5.0.</p>
+<h2>3.1.0: podmienky polí a pracovný čas</h2>
+<ul>
+<li><strong>Podmienky pravidla poľa:</strong> rozbaľovací zoznam <strong>výberového vlastného poľa</strong> (select aj multiselect) a poľa s <strong>pevným zoznamom</strong> (napríklad stav zariadenia) ponúka len hodnoty, ktoré pravidlo povoľuje (predtým ponúkol všetky a ostatné odmietol až pri uložení). Hodnota mimo podmienky sa odmietne aj pri zápise cez REST API pri poliach modelu. Ak sa tá istá sada hodnôt používa vo viacerých poliach, zoznam ukáže hodnoty, ktoré povoľuje ktorékoľvek z nich.</li>
+<li><strong>Pracovný čas osoby len s PIN-om:</strong> zmenené dni alebo hodiny pri voľbe <em>všeobecné pravidlá</em> sa už nestratia potichu, ale plugin to povie a vyzve na <em>vlastné pravidlá</em> alebo <em>bez obmedzenia</em>. Pri každej osobe je napísané, aký čas má (individuálne / vypnutý / platí všeobecný). Návrat na všeobecné pravidlá vezme čas zo všeobecných pravidiel.</li>
+<li>Bez nových migrácií (migrácie do <code>0046</code>).</li>
+</ul>
 <h2>3.0.0: bezpečnostné opravy po audite</h2>
 <ul>
 <li><strong>Falošná hlavička <code>Authorization</code></strong> pri prihlásenej relácii už nevypne PIN ochranu (REST ani GraphQL; čítanie ani zápis). Požiadavka je tokenová, len keď ju NetBox skutočne overil tokenom.</li>
