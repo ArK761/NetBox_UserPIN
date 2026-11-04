@@ -599,6 +599,23 @@ def set_work(guest, actor, mode, country='', days='', start=None, end=None, requ
     if not _may_manage(actor, guest):
         raise PermissionDenied
     mode = mode if mode in ('general', 'own', 'none') else 'general'
+    if mode == 'general':
+        # hours changed while "the general rules" is chosen would be thrown away without a word: say it instead
+        general = service.get_settings()
+        shown = (guest.work_country or general.guest_work_country, work.clean_days(guest.work_days or general.guest_work_days),
+                 guest.work_from or general.guest_work_from, guest.work_to or general.guest_work_to)
+        try:
+            sent = _clean_work(country, days, start, end)
+            sent = (sent[0], sent[1], sent[2], sent[3])
+        except ValidationError:
+            sent = shown  # nothing usable was sent: nothing was changed
+        if (sent[0], sent[1], sent[2].replace(second=0, microsecond=0), sent[3].replace(second=0, microsecond=0)) != (
+                shown[0], shown[1], shown[2].replace(second=0, microsecond=0), shown[3].replace(second=0, microsecond=0)):
+            raise ValidationError(_(
+                'The general working time applies to this access, so the changed days or hours cannot be saved. '
+                'Choose "own rules" to give this access its own working time, or "no limit".'))
+        # back to the general rules: the access takes the time of the general rules (no leftovers of its own)
+        guest.work_country, guest.work_days, guest.work_from, guest.work_to = '', '', None, None
     if mode == 'own':
         country, days, start, end = _clean_work(country, days, start, end)
         guest.work_country, guest.work_days, guest.work_from, guest.work_to = country, days, start, end
@@ -608,6 +625,19 @@ def set_work(guest, actor, mode, country='', days='', start=None, end=None, requ
         f': {country}, days {days}, {start:%H:%M}-{end:%H:%M}' if mode == 'own' else ''))
     _tell(guest, actor, lambda: (_('Your working time: %(rules)s.') % {'rules': work.describe(rules)})
           if (rules := work.rules_of(guest)) else _('Your access has no working-time limit.'))
+
+
+def work_status(guest, settings=None):
+    """(kind, text) of the working time of one access: 'own' / 'none' / 'general' (written next to the person)."""
+    settings = settings or service.get_settings()
+    rules = work.rules_of(guest, settings)
+    if guest.work_mode == 'own':
+        return 'own', _('Working time: set individually') + (f' ({work.describe(rules)})' if rules else '')
+    if guest.work_mode == 'none':
+        return 'none', _('Working time: off (no limit)')
+    if rules is None:
+        return 'general', _('Working time: the general time applies, but it is switched off (no limit)')
+    return 'general', _('Working time: the general time applies') + f' ({work.describe(rules)})'
 
 
 def set_manager(guest, actor, manager):

@@ -99,6 +99,11 @@
 <tr><td><em>vlastné pravidlá</em></td><td>vlastná krajina, dni a hodiny (napr. technik z Maďarska s maďarskými sviatkami)</td></tr>
 <tr><td><em>bez obmedzenia</em></td><td>osoba nemá žiadny limit</td></tr>
 </table>
+<ul>
+<li><strong>Pri každej osobe je napísané</strong>, aký čas má: <em>Pracovný čas: nastavený individuálne (…)</em>, <em>Pracovný čas: vypnutý (bez obmedzenia)</em> alebo <em>Pracovný čas: platí všeobecný čas (…)</em> (ak je všeobecný čas vypnutý, stojí tam, že je vypnutý a limit nie je).</li>
+<li><strong>Zmenené dni alebo hodiny pri voľbe <em>všeobecné pravidlá</em> sa neuložia a plugin to povie</strong>: <em>Pre tento prístup platí všeobecný pracovný čas, preto sa zmenené dni alebo hodiny nedajú uložiť. Vyber „vlastné pravidlá“ … alebo „bez obmedzenia“.</em> Vlastný čas sa uloží len pri voľbe <em>vlastné pravidlá</em>.</li>
+<li><strong>Návrat na všeobecné pravidlá</strong> (z vlastných alebo z vypnutých) zahodí vlastné hodnoty osoby: osoba si vezme čas zo všeobecných pravidiel (aj pri neskoršej zmene všeobecného času).</li>
+</ul>
 <p>Krajiny: SK, CZ, HU, AT, PL, DE, UA, HR, SI, RO, BG, RS, GB, IE, FR, ES, IT, NL, BE, CH, SE, NO, DK, FI, PT, GR, LT, LV, EE, US, CA. Štátne sviatky dodáva knižnica <code>holidays</code> (funguje offline, vyžaduje <code>pip install holidays</code>; bez nej stránka hlási <em>The library of public holidays is not installed</em> a kontrolujú sa len dni a hodiny). Sviatky sa riadia zákonom, ktorý knižnica implementuje: napr. na Slovensku v roku 2026 sú voľné 1. 1., 6. 1., Veľký piatok, Veľkonočný pondelok, 1. 5., 5. 7., 29. 8., 1. 11. a 24., 25., 26. 12., kým 8. 5., 1. 9., 15. 9. a 17. 11. sú pracovné dni. Vlastné voľné dni ani dovolenky plugin nemá.</p>
 <h2>Čo sa deje mimo času</h2>
 <ul>

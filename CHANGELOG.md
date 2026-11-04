@@ -21,6 +21,7 @@ v histórii commitov boli pracovné označenia, všetko patrí do línie 2.0.0 a
 * Fail closed: an unreadable protection state gives HTTP 503, never "no areas". Shared version in the cache NetBox shares:
   a change is seen by other processes within 0.5 s; the end of an exception is exact. / Pri nečitateľnom stave HTTP 503;
   zdieľaná verzia v cache.
+* Working time of a PIN-only person: changed days / hours with "the general rules" chosen are refused with a message (they used to be dropped silently); each person shows how the time is set (individually / off / the general time); back to the general rules the person takes the general time. / Pracovný čas osoby len s PIN-om: zmenené hodiny pri všeobecných pravidlách sa odmietnu s hláškou; pri osobe je napísané, aký čas má; návrat na všeobecné pravidlá vezme všeobecný čas.
 * API tokens stay outside the PIN protection (decision A) - see the guide, chapter "Protection and exceptions". /
   API tokeny ostávajú mimo PIN ochrany (rozhodnutie A).
 

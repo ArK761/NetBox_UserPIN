@@ -99,6 +99,11 @@
 <tr><td><em>own rules</em></td><td>an own country, days and hours (e.g. a Hungarian technician with the Hungarian holidays)</td></tr>
 <tr><td><em>no limit</em></td><td>the person has no limit at all</td></tr>
 </table>
+<ul>
+<li><strong>At every person it is written</strong> how the time is set: <em>Working time: set individually (…)</em>, <em>Working time: off (no limit)</em> or <em>Working time: the general time applies (…)</em> (if the general time is switched off, it says that it is switched off and that there is no limit).</li>
+<li><strong>Changed days or hours with <em>the general rules</em> chosen are not saved and the plugin says so</strong>: <em>The general working time applies to this access, so the changed days or hours cannot be saved. Choose "own rules" … or "no limit".</em> The own time is saved only with <em>own rules</em> chosen.</li>
+<li><strong>Going back to the general rules</strong> (from own or from off) drops the person's own values: the person takes the time of the general rules (also when the general time is changed later).</li>
+</ul>
 <p>Countries: SK, CZ, HU, AT, PL, DE, UA, HR, SI, RO, BG, RS, GB, IE, FR, ES, IT, NL, BE, CH, SE, NO, DK, FI, PT, GR, LT, LV, EE, US, CA. The public holidays come from the <code>holidays</code> library (works offline, needs <code>pip install holidays</code>; without it the page reports <em>The library of public holidays is not installed</em> and only days and hours are checked). The holidays follow the law the library implements: for example in Slovakia in 2026 the days off are 1 Jan, 6 Jan, Good Friday, Easter Monday, 1 May, 5 Jul, 29 Aug, 1 Nov and 24, 25, 26 Dec, while 8 May, 1 Sep, 15 Sep and 17 Nov are working days. The plugin has no vacations or custom company days.</p>
 <h2>What happens outside the time</h2>
 <ul>

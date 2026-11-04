@@ -362,6 +362,7 @@ class GuestListView(AreaViewMixin, View):
             else:
                 state = ('active', _('Active'))
             rows.append({'guest': guest, 'state': state, 'groups': guests.groups_of(guest),
+                         'work_status': guests.work_status(guest),
                          'work_days': guest.work_days or service.get_settings().guest_work_days,
                          'work_from': (guest.work_from or service.get_settings().guest_work_from).strftime('%H:%M'),
                          'work_to': (guest.work_to or service.get_settings().guest_work_to).strftime('%H:%M'),

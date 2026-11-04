@@ -3514,6 +3514,59 @@ class WorkTimeTest(AreaTestCase):
         self.guests.set_work_general(self.keeper, False, 'SK', '01234', '06:00', '16:00')
         self.assertEqual(work.state(self.get(), self.at(2026, 12, 26, 3)), 'ok')  # the general rules are off
 
+    def test_changed_hours_under_the_general_rules_are_refused_not_dropped(self):
+        guest = self.get()
+        with self.assertRaises(ValidationError) as caught:
+            self.guests.set_work(guest, self.keeper, 'general', 'SK', ['0', '1', '2', '3', '4'], '06:00', '19:00')
+        self.assertIn('own rules', str(caught.exception))
+        row = self.get()
+        self.assertEqual((row.work_mode, row.work_from, row.work_to), ('general', None, None))  # nothing was stored
+        # the same hours with "own rules" are saved
+        self.guests.set_work(guest, self.keeper, 'own', 'SK', ['0', '1', '2', '3', '4'], '06:00', '19:00')
+        self.assertEqual(self.work.rules_of(self.get()).end.strftime('%H:%M'), '19:00')
+        # unchanged values with the general rules are no change: nothing to refuse
+        self.guests.set_work(self.get(), self.keeper, 'general', 'SK', ['0', '1', '2', '3', '4'], '06:00', '19:00')
+        self.assertEqual(self.get().work_mode, 'general')
+
+    def test_back_to_the_general_rules_takes_the_general_time(self):
+        guest = self.get()
+        for mode in ('own', 'none'):
+            self.guests.set_work(guest, self.keeper, 'own', 'CZ', ['0', '1'], '08:00', '17:00')
+            if mode == 'none':
+                self.guests.set_work(self.get(), self.keeper, 'none')
+            row = self.get()
+            self.guests.set_work(row, self.keeper, 'general', row.work_country or 'SK', row.work_days or '01234',
+                                 row.work_from or '06:00', row.work_to or '16:00')
+            row = self.get()
+            self.assertEqual((row.work_mode, row.work_country, row.work_days, row.work_from, row.work_to),
+                             ('general', '', '', None, None), mode)
+            rules = self.work.rules_of(row)
+            self.assertEqual((rules.country, rules.days, rules.start.strftime('%H:%M'), rules.end.strftime('%H:%M')),
+                             ('SK', '01234', '06:00', '16:00'), mode)  # the general time
+
+    def test_the_page_says_how_the_working_time_of_each_person_is_set(self):
+        guest = self.get()
+        admin_login(self.client, self.keeper)
+        url = reverse('plugins:netbox_user_pin:guests')
+        self.assertContains(self.client.get(url), 'Working time: the general time applies (')
+        self.guests.set_work(guest, self.keeper, 'own', 'SK', ['0', '1', '2', '3', '4'], '06:00', '19:00')
+        page = self.client.get(url)
+        self.assertContains(page, 'Working time: set individually (')
+        self.assertContains(page, '19:00')
+        self.guests.set_work(self.get(), self.keeper, 'none')
+        self.assertContains(self.client.get(url), 'Working time: off (no limit)')
+
+    def test_the_page_refuses_changed_hours_with_the_general_rules_and_says_what_to_choose(self):
+        guest = self.get()
+        admin_login(self.client, self.keeper)
+        url = reverse('plugins:netbox_user_pin:guests')
+        response = self.client.post(url, {'action': 'work', 'pk': guest.pk, 'work_mode': 'general', 'country': 'SK',
+                                          'days': ['0', '1', '2', '3', '4'], 'start': '06:00', 'end': '19:00'},
+                                    follow=True)
+        self.assertContains(response, 'cannot be saved')
+        self.assertContains(response, 'own rules')
+        self.assertEqual(self.get().work_to, None)
+
     def test_the_rules_are_checked_and_not_everybody_may_set_them(self):
         guest = self.get()
         with self.assertRaises(ValidationError):
