@@ -1,0 +1,13 @@
+name: release-3-1-0
+on:
+  push:
+    branches: [tmp-release-3-1-0]
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - run: gh release create 3.1.0 --repo "$GITHUB_REPOSITORY" --target 8ad94152d2151875fae0d53dbfc329a804504dea --title "3.1.0" --notes "Conditions of field rules in drop-downs, working time of PIN-only people, corrected guides (SK/EN). See CHANGELOG.md."
+        env:
+          GH_TOKEN: ${{ github.token }}
