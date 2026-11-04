@@ -22,6 +22,7 @@ v histórii commitov boli pracovné označenia, všetko patrí do línie 2.0.0 a
   a change is seen by other processes within 0.5 s; the end of an exception is exact. / Pri nečitateľnom stave HTTP 503;
   zdieľaná verzia v cache.
 * Working time of a PIN-only person: changed days / hours with "the general rules" chosen are refused with a message (they used to be dropped silently); each person shows how the time is set (individually / off / the general time); back to the general rules the person takes the general time. / Pracovný čas osoby len s PIN-om: zmenené hodiny pri všeobecných pravidlách sa odmietnu s hláškou; pri osobe je napísané, aký čas má; návrat na všeobecné pravidlá vezme všeobecný čas.
+* Conditions of a field rule: the drop-down of a select / multiselect custom field and of a field with a fixed list (the status ...) offers only the allowed values (it offered all of them and refused the others only on saving); a value outside the rule is refused through the REST API for the model fields too. / Podmienky pravidla poľa: rozbaľovací zoznam výberového vlastného poľa a poľa s pevným zoznamom ponúka len povolené hodnoty; hodnota mimo pravidla sa odmietne aj cez REST API pri poliach modelu.
 * API tokens stay outside the PIN protection (decision A) - see the guide, chapter "Protection and exceptions". /
   API tokeny ostávajú mimo PIN ochrany (rozhodnutie A).
 

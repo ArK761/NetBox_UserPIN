@@ -403,7 +403,7 @@ def fields_of(app_label, model_name):
 
 def install():
     """Install the hooks (once). Each one falls back to NetBox's own behaviour when no rule applies."""
-    for installer in (_hook_detail, _hook_forms, _hook_tables, _hook_api, _hook_paths):
+    for installer in (_hook_detail, _hook_forms, _hook_tables, _hook_api, _hook_paths, _hook_choices):
         try:
             installer()
         except ImportError as exc:
@@ -417,6 +417,49 @@ def _once(owner, name, make):
     wrapper = make(original)
     wrapper._userpin = True
     setattr(owner, name, wrapper)
+
+
+def _choice_filter(request, pk):
+    """
+    The test of the choices of a choice set that this user may pick, or None (everything). Served to a user who holds
+    a right to write a select custom field: the values his rule allows (the union over the fields that use the set,
+    all of them when one of the fields has no condition).
+    """
+    if not getattr(request, '_userpin_select', None):
+        return None  # not the drop-down exception: NetBox's own rules (a keeper, an exception ...)
+    from extras.models import CustomField
+    user = request.user
+    names = set(CustomField.objects.filter(choice_set_id=pk, type__in=('select', 'multiselect')).values_list('name', flat=True))
+    rules = []
+    for _model, key, texts in _writable_fields(user):
+        if key.startswith('cf:') and key[3:] in names:
+            if not texts:
+                return None  # a field with no condition may pick any value of the set
+            rules.append(texts)
+    if not rules:
+        return None
+    return lambda choice: any(matches(choice[0], texts) or matches(choice[1], texts) for texts in rules)
+
+
+def _hook_choices():
+    """The API that fills the drop-down of a select custom field offers only the values the field rule allows."""
+    import functools
+
+    from extras.api.views import CustomFieldChoiceSetViewSet
+    original = CustomFieldChoiceSetViewSet.choices
+    if getattr(original, '_userpin', False):
+        return
+
+    @functools.wraps(original)  # keeps what the router needs to know about the action
+    def choices(self, request, pk):
+        keep = _choice_filter(request, pk)
+        if keep is not None:
+            paginate = self.paginate_queryset
+            self.paginate_queryset = lambda items: paginate([c for c in items if keep(c)])  # after the search, before the pages
+        return original(self, request, pk)
+
+    choices._userpin = True
+    CustomFieldChoiceSetViewSet.choices = choices
 
 
 def _hook_detail():
@@ -488,6 +531,28 @@ def _hook_detail():
         return wrapper
 
     _once(ObjectView, 'get_object', get_object)
+
+
+def _narrow_choices(field, texts):
+    """The drop-down of a field with a fixed list offers only the values the rule allows (the blank choice stays); a
+    value outside the rule is then no valid choice when the form is saved."""
+    def allowed(value, label):
+        return value in (None, '') or matches(value, texts) or matches(label, texts)
+
+    def narrow(choices):
+        result = []
+        for value, label in choices:
+            if isinstance(label, (list, tuple)):  # a group of choices
+                inner = narrow(label)
+                if inner:
+                    result.append((value, inner))
+            elif allowed(value, label):
+                result.append((value, label))
+        return result
+    try:
+        field.choices = narrow(list(field.choices))
+    except Exception:  # noqa: BLE001 - a list that cannot be narrowed is still checked by the rule on saving
+        logger.exception('Cannot narrow the choices of a field')
 
 
 def _must_include(texts):
@@ -593,6 +658,8 @@ def _hook_forms():
                 form.fields[name].required = False
             elif name not in helpers and (texts := policy.texts(name)) and hasattr(form.fields[name], 'queryset'):
                 form.fields[name].validators = list(form.fields[name].validators) + [_must_include(texts)]
+            elif name not in helpers and (texts := policy.texts(name)) and hasattr(form.fields[name], 'choices'):
+                _narrow_choices(form.fields[name], texts)  # a field with a fixed list (status ...): only what the rule allows
 
     from django.forms.forms import DeclarativeFieldsMetaclass
     if not getattr(DeclarativeFieldsMetaclass, '_userpin', False):
@@ -673,6 +740,9 @@ def _hook_api():
                     elif mode == AreaFieldMode.READ:
                         result[name].read_only = True
                         result[name].required = False
+                    elif (texts := policy.texts(name)) and not result[name].read_only:
+                        # a condition of the rule (a relation or a fixed list): a value outside it is refused when written
+                        result[name].validators.append(_must_include(texts))
             return result
 
         wrapped = cached_property(fields)
