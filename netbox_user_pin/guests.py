@@ -1387,48 +1387,107 @@ def _short(value):
 _SECRET_WORDS = ('pass', 'secret', 'token', 'key', 'pin', 'hash')
 
 
-def _change_lines(change):
-    """'28.10.2026 13:35' / 'Tenant: X' / '    name: from "a" to "b"' for every changed field (or added / deleted)."""
-    model = change.changed_object_type.name if change.changed_object_type_id else ''
-    model = model[:1].upper() + model[1:]
-    title = f'{model}: {change.object_repr}'
-    if str(change.action) == 'create':
-        title += ' – ' + _('added')
-    elif str(change.action) == 'delete':
-        title += ' – ' + _('deleted')
-    lines = [timezone.localtime(change.time).strftime('%d.%m.%Y %H:%M'), title]
+def _named(model, key, value):
+    """A related object is stored in the change record as its id: show its name (the id stays when it is gone)."""
+    try:
+        field = model._meta.get_field(key)
+        related = field.related_model if field.is_relation else None
+        if related is None or value in (None, '', [], {}):
+            return value
+        many = isinstance(value, (list, tuple))
+        ids = list(value) if many else [value]
+        names = {str(o.pk): str(o) for o in related._base_manager.filter(pk__in=ids)}
+        shown = [names.get(str(i), str(i)) for i in ids]
+        return ', '.join(shown) if many else shown[0]
+    except Exception:  # noqa: BLE001 - a name that cannot be found is never a reason to lose the line
+        return value
+
+
+def _label(model_class, key):
+    """The name of a field as NetBox shows it (Group, Description ...); a custom field by its label."""
+    try:
+        field = model_class._meta.get_field(key)
+        text = str(getattr(field, 'verbose_name', '') or key)
+    except Exception:  # noqa: BLE001
+        text = str(key)
+    return text[:1].upper() + text[1:]
+
+
+def _custom_label(name):
+    try:
+        from extras.models import CustomField
+        field = CustomField.objects.filter(name=name).first()
+        return str(field.label or field.name) if field else name
+    except Exception:  # noqa: BLE001
+        return name
+
+
+def _kind(change):
+    """The type of the changed object for a human: 'Tenant'."""
+    text = change.changed_object_type.name if change.changed_object_type_id else ''
+    return text[:1].upper() + text[1:]
+
+
+def change_word(change):
+    return {'create': _('created'), 'delete': _('deleted')}.get(str(change.action), _('change of parameters'))
+
+
+def change_headline(who, change):
+    """'X001 : created Tenant – name': the subject of the e-mail and the first line of the audit record."""
+    return f'{who} : {change_word(change)} {_kind(change)} – {change.object_repr}'
+
+
+def change_rows(change):
+    """'* Group: from "-" to "Printers"' for every changed field (created / deleted: every filled one), secrets hidden."""
     before, after = change.prechange_data or {}, change.postchange_data or {}
-    if str(change.action) in ('create', 'delete'):
-        # what the new (or the deleted) object had: every filled field, custom fields one by one, secrets hidden
-        data = after if str(change.action) == 'create' else before
+    model_class = change.changed_object_type.model_class() if change.changed_object_type_id else None
+    if model_class is not None:
+        before = {k: v if k == 'custom_fields' else _named(model_class, k, v) for k, v in before.items()}
+        after = {k: v if k == 'custom_fields' else _named(model_class, k, v) for k, v in after.items()}
+
+    def label(key, custom=False):
+        return _custom_label(key) if custom else (_label(model_class, key) if model_class is not None else str(key))
+
+    def secret(key):
+        return any(word in str(key).lower() for word in _SECRET_WORDS)
+
+    rows = []
+    action = str(change.action)
+    if action in ('create', 'delete'):
+        data = after if action == 'create' else before
         for key in sorted(data):
             if key in ('id', 'last_updated', 'created'):
                 continue
             value = data[key]
-            items = sorted(value.items()) if key == 'custom_fields' and isinstance(value, dict) else [(key, value)]
-            for name, item in items:
+            custom = key == 'custom_fields' and isinstance(value, dict)
+            for name, item in (sorted(value.items()) if custom else [(key, value)]):
                 if item in (None, '', [], {}):
                     continue
-                if any(word in name.lower() for word in _SECRET_WORDS):
-                    item = '***'
-                lines.append('    ' + _('%(field)s: "%(value)s"') % {'field': name, 'value': _short(item)})
-    if str(change.action) == 'update':
+                rows.append('* ' + _('%(field)s: "%(value)s"') % {
+                    'field': label(name, custom), 'value': '***' if secret(name) else _short(item)})
+    elif action == 'update':
         pairs = []
         for key in sorted(set(before) | set(after)):
             if key in ('last_updated', 'created'):
                 continue
             if key == 'custom_fields':
                 old, new = before.get(key) or {}, after.get(key) or {}
-                pairs += [(name, old.get(name), new.get(name)) for name in sorted(set(old) | set(new))
+                pairs += [(name, old.get(name), new.get(name), True) for name in sorted(set(old) | set(new))
                           if old.get(name) != new.get(name)]
             elif before.get(key) != after.get(key):
-                pairs.append((key, before.get(key), after.get(key)))
-        for key, old, new in pairs:
-            if any(word in str(key).lower() for word in _SECRET_WORDS):
+                pairs.append((key, before.get(key), after.get(key), False))
+        for key, old, new, custom in pairs:
+            if secret(key):
                 old = new = '***'
-            lines.append('    ' + _('%(field)s: from "%(old)s" to "%(new)s"') % {
-                'field': key, 'old': _short(old), 'new': _short(new)})
-    return lines
+            rows.append('* ' + _('%(field)s: from "%(old)s" to "%(new)s"') % {
+                'field': label(key, custom), 'old': _short(old), 'new': _short(new)})
+    return rows
+
+
+def change_block(change):
+    """The first bullet (what happened, when) and the bullets of the fields."""
+    first = f'* {change_word(change)} {_kind(change)} {change.object_repr} ({timezone.localtime(change.time).strftime("%d.%m.%Y %H:%M")})'
+    return [first, *change_rows(change)]
 
 
 def _send_changes(guest, changes, since, settings):
@@ -1437,10 +1496,10 @@ def _send_changes(guest, changes, since, settings):
     if creator is not None and creator not in recipients:
         recipients.insert(0, creator)
     with translation.override(settings.language or 'en'):
-        who = guest.label + (f' ({guest.alias})' if guest.alias else '')
-        subject = (_('%(id)s made a change') % {'id': who} if len(changes) == 1 else
-                   _('%(id)s made changes (%(n)d)') % {'id': who, 'n': len(changes)})
-        body = '\n\n'.join('\n'.join(_change_lines(change)) for change in changes)
+        who = (guest.person_number or guest.label) + (f' ({guest.alias})' if guest.alias else '')
+        subject = (change_headline(who, changes[0]) if len(changes) == 1 else
+                   _('%(id)s : changes (%(n)d)') % {'id': who, 'n': len(changes)})
+        body = f'USER PIN : {who}\n\n' + '\n\n'.join('\n'.join(change_block(change)) for change in changes)
     sent = [r.username for r in recipients if service.send_user_mail(r, subject, body)]
     _log(PinEventAction.MAIL_SENT if sent else PinEventAction.MAIL_FAILED, guest,
          detail=f'{len(changes)} change(s) reported to {", ".join(sent) or "nobody (no verified e-mail)"}')

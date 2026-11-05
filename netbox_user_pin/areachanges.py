@@ -54,25 +54,10 @@ def recipients(area, change):
     return [p for p in people if p.is_active and p.pk != getattr(change.user, 'pk', None)]
 
 
-def _lines(change):
-    from .guests import _change_lines
-    return _change_lines(change)
-
-
-SECRET = ('pass', 'secret', 'token', 'key', 'pin', 'hash')
-
-
-def detail_of(change, action, prefix=''):
-    """The audit text: the first line says what happened, the next ones which field changed (values of secrets hidden)."""
-    kind = change.changed_object_type
-    head = f'{prefix}{kind.app_label}.{kind.model} "{change.object_repr}" {action}'
-    rows = []
-    for line in _lines(change)[2:]:
-        field = line.strip().split(':', 1)[0].lower()
-        if any(word in field for word in SECRET):
-            line = '    ' + line.strip().split(':', 1)[0] + ': ***'
-        rows.append(line)
-    return '\n'.join([head, *rows])[:3000]
+def detail_of(change, who):
+    """The audit text: the first line says who did what (as the subject of the mail), then one bullet per field."""
+    from .guests import change_headline, change_rows
+    return '\n'.join([change_headline(who, change), *change_rows(change)])[:3000]
 
 
 def _who(user):
@@ -91,9 +76,8 @@ def record(change):
     area = watched(change)
     if area is None:
         return None
-    action = {'create': _('added'), 'update': _('changed'), 'delete': _('deleted')}.get(str(change.action), '')
     service.log_event(PinEventAction.AREA_OBJECT_CHANGED, user=change.user, scope=area.key,
-                      detail=detail_of(change, action))
+                      detail=detail_of(change, _who(change.user)))
     return area
 
 
@@ -107,14 +91,15 @@ def _send(changes_by_area, settings):
     for person, items in per_person.values():
         with translation.override(settings.language or 'en'):
             first_area, first = items[0]
+            from .guests import change_block, change_headline
             if len(items) == 1:
-                subject = _('%(user)s made a change in "%(area)s"') % {'user': _who(first.user), 'area': first_area.name}
+                subject = change_headline(_who(first.user), first)
             else:
                 subject = _('Changes in the protected areas (%(n)d)') % {'n': len(items)}
             blocks = []
             for area, change in items:
-                head = _('%(user)s – area "%(area)s"') % {'user': _who(change.user), 'area': area.name}
-                blocks.append('\n'.join([head, *_lines(change)]))
+                head = _('%(user)s – area "%(area)s"') % {'user': 'USER PIN : ' + _who(change.user), 'area': area.name}
+                blocks.append('\n'.join([head, *change_block(change)]))
             body = '\n\n'.join(blocks)
         if service.send_user_mail(person, subject, body):
             sent.append(person.username)
@@ -128,12 +113,10 @@ def _changed(sender, instance, created, **kwargs):
     try:
         if PinGuest.objects.filter(user_id=instance.user_id).exists():
             # a person with a PIN only: the e-mail is the guests' own (PIN-only page); the audit log gets it here
-            action = {'create': _('added'), 'update': _('changed'), 'delete': _('deleted')}.get(
-                str(instance.action), '')
             guest = PinGuest.objects.filter(user_id=instance.user_id).first()
-            prefix = f'{guest.label} ' if guest and guest.person_number else ''
+            who = (guest.person_number or guest.label) if guest else _who(instance.user)
             service.log_event(PinEventAction.AREA_OBJECT_CHANGED, user=instance.user, scope='guest',
-                              detail=detail_of(instance, action, prefix))
+                              detail=detail_of(instance, who))
             return
         area = record(instance)
     except Exception:  # noqa: BLE001 - a record that cannot be written must not break the user's save

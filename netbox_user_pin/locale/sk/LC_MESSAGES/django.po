@@ -9394,3 +9394,16 @@ msgstr ""
 #~ msgstr ""
 #~ "napr. firma.sk alebo @firma.sk. Doména sa použije až po zadaní kódu "
 #~ "odoslaného na adresu v nej."
+
+#: guests.py
+msgid "created"
+msgstr "vytvorený"
+
+#: guests.py
+msgid "change of parameters"
+msgstr "zmena parametrov"
+
+#: guests.py
+#, python-format
+msgid "%(id)s : changes (%(n)d)"
+msgstr "%(id)s : zmeny (%(n)d)"

@@ -2515,8 +2515,8 @@ class AreaChangeMailTest(AreaTestCase):
         events = self.events()
         self.assertEqual(len(events), 1)
         self.assertEqual((events[0].username, events[0].scope), (guest.user.username, 'guest'))
-        self.assertIn('description', events[0].detail_more)
-        self.assertTrue(events[0].detail_first.startswith('UserPIN : 12345 '))
+        self.assertIn('Description', events[0].detail_more)
+        self.assertTrue(events[0].detail_first.startswith('12345 : change of parameters Tenant'))
         self.assertIn('new', events[0].detail_more)
 
     def test_the_summary_goes_to_the_keepers_and_the_managers_of_the_section(self):
@@ -2534,7 +2534,7 @@ class AreaChangeMailTest(AreaTestCase):
             self.assertEqual(recipients, ['kx@example.com', 'o1@example.com', 'o2@example.com'])
             self.assertIn('worker', mail.outbox[0].subject)
             self.assertIn('T1', mail.outbox[0].body)
-            self.assertIn('description: from "old" to "new"', mail.outbox[0].body)
+            self.assertIn('Description: from "old" to "new"', mail.outbox[0].body)
             mail.outbox.clear()
             self.assertEqual(areachanges.report(force=True), 0)  # reported once
 
@@ -2982,8 +2982,9 @@ class GuestAccessTest(AreaTestCase):
             for func, args in queued:
                 func(*args)  # what netbox-rq does
             self.assertEqual(len(mail.outbox), 1)
-            self.assertIn('description: from "old" to "new"', mail.outbox[0].body)
-            self.assertIn('made a change', mail.outbox[0].subject)
+            self.assertIn('Description: from "old" to "new"', mail.outbox[0].body)
+            self.assertIn(' : change of parameters Tenant – T1', mail.outbox[0].subject)
+            self.assertTrue(mail.outbox[0].body.startswith('USER PIN : '))
             self.assertIn('hw: from "A" to "B"', mail.outbox[0].body)
             self.guests.report_changes(force=True)  # at once, so no summary as well
             self.assertEqual(len(mail.outbox), 1)
@@ -2997,7 +2998,7 @@ class GuestAccessTest(AreaTestCase):
             self.guests.report_changes()
             self.assertEqual(mail.outbox, [])  # 15 minutes are not over yet
             self.guests.report_changes(force=True)
-            self.assertIn('description: from "old" to "newer"', mail.outbox[-1].body)
+            self.assertIn('Description: from "old" to "newer"', mail.outbox[-1].body)
 
     def test_pin_only_accesses_are_no_netbox_users_and_wait_while_switched_off(self):
         from netbox_user_pin import roles
