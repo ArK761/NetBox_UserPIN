@@ -71,7 +71,8 @@
     }
     function addNow() {
       if (op.value === '=' && values.length) {
-        Array.prototype.forEach.call(choice.selectedOptions, function (o) { chip('=' + o.value); o.selected = false; });
+        // a copy: selectedOptions is live, deselecting inside the loop would skip every second value
+        Array.prototype.slice.call(choice.selectedOptions).forEach(function (o) { chip('=' + o.value); o.selected = false; });
       } else if (text.value.trim()) {
         chip(op.value + text.value.trim()); text.value = '';
       }
