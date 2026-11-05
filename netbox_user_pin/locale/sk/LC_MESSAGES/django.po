@@ -2174,6 +2174,11 @@ msgstr "Bol si pridaný do skupiny %(group)s."
 
 #: guests.py:1410
 #, python-format
+msgid "%(field)s: \"%(value)s\""
+msgstr "%(field)s: „%(value)s“"
+
+#: guests.py:1410
+#, python-format
 msgid "%(field)s: from \"%(old)s\" to \"%(new)s\""
 msgstr "%(field)s: z „%(old)s“ na „%(new)s“"
 

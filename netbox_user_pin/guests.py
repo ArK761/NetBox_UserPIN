@@ -1384,6 +1384,9 @@ def _short(value):
     return text if len(text) <= 80 else text[:77] + '...'
 
 
+_SECRET_WORDS = ('pass', 'secret', 'token', 'key', 'pin', 'hash')
+
+
 def _change_lines(change):
     """'28.10.2026 13:35' / 'Tenant: X' / '    name: from "a" to "b"' for every changed field (or added / deleted)."""
     model = change.changed_object_type.name if change.changed_object_type_id else ''
@@ -1395,6 +1398,20 @@ def _change_lines(change):
         title += ' – ' + _('deleted')
     lines = [timezone.localtime(change.time).strftime('%d.%m.%Y %H:%M'), title]
     before, after = change.prechange_data or {}, change.postchange_data or {}
+    if str(change.action) in ('create', 'delete'):
+        # what the new (or the deleted) object had: every filled field, custom fields one by one, secrets hidden
+        data = after if str(change.action) == 'create' else before
+        for key in sorted(data):
+            if key in ('id', 'last_updated', 'created'):
+                continue
+            value = data[key]
+            items = sorted(value.items()) if key == 'custom_fields' and isinstance(value, dict) else [(key, value)]
+            for name, item in items:
+                if item in (None, '', [], {}):
+                    continue
+                if any(word in name.lower() for word in _SECRET_WORDS):
+                    item = '***'
+                lines.append('    ' + _('%(field)s: "%(value)s"') % {'field': name, 'value': _short(item)})
     if str(change.action) == 'update':
         pairs = []
         for key in sorted(set(before) | set(after)):
@@ -1407,6 +1424,8 @@ def _change_lines(change):
             elif before.get(key) != after.get(key):
                 pairs.append((key, before.get(key), after.get(key)))
         for key, old, new in pairs:
+            if any(word in str(key).lower() for word in _SECRET_WORDS):
+                old = new = '***'
             lines.append('    ' + _('%(field)s: from "%(old)s" to "%(new)s"') % {
                 'field': key, 'old': _short(old), 'new': _short(new)})
     return lines
