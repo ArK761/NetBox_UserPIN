@@ -1,0 +1,15 @@
+name: release-3-1-0b
+on:
+  push:
+    branches: [tmp-release-3-1-0b]
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          gh release delete 3.1.0 --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes
+          gh release create 3.1.0 --repo "$GITHUB_REPOSITORY" --target 110dbbd9aa4d0f83e4528e3c555603408acea27a --title "3.1.0" --notes "Conditions of field rules in drop-downs, working time of PIN-only people, conditions editor fix, e-mail and audit log of changes with all fields and names, corrected guides (SK/EN). See CHANGELOG.md."
+        env:
+          GH_TOKEN: ${{ github.token }}
