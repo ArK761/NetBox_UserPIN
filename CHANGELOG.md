@@ -11,6 +11,9 @@ v histórii commitov boli pracovné označenia, všetko patrí do línie 2.0.0 a
 
 ## 3.1.0 - conditions of fields, working time / podmienky polí, pracovný čas
 
+* E-mail and audit log of changes: subject `X001 : created Tenant – name` (change of parameters / deleted), body `USER PIN : X001` and a line per filled or changed field, related objects by name, secrets hidden; the scheduling of the e-mails is unchanged. / E-mail a audit zmien: predmet `X001 : vytvorený Tenant – názov`, riadok na každé pole, súvisiace objekty menom.
+* Conditions editor: "Add" with "is one of" adds all the chosen values (it took every second one). / Editor podmienok: Pridať pridá všetky označené hodnoty.
+* Working-time badge is readable. / Štítok pracovného času je čitateľný.
 * Working time of a PIN-only person: changed days / hours with "the general rules" chosen are refused with a message (they used to be dropped silently); each person shows how the time is set (individually / off / the general time); back to the general rules the person takes the general time. / Pracovný čas osoby len s PIN-om: zmenené hodiny pri všeobecných pravidlách sa odmietnu s hláškou; pri osobe je napísané, aký čas má; návrat na všeobecné pravidlá vezme všeobecný čas.
 * Conditions of a field rule: the drop-down of a select / multiselect custom field and of a field with a fixed list (the status ...) offers only the allowed values (it offered all of them and refused the others only on saving); a value outside the rule is refused through the REST API for the model fields too. / Podmienky pravidla poľa: rozbaľovací zoznam výberového vlastného poľa a poľa s pevným zoznamom ponúka len povolené hodnoty; hodnota mimo pravidla sa odmietne aj cez REST API pri poliach modelu.
 

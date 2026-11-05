@@ -106,6 +106,8 @@ areas.can(request.user, 'netbox_libreoxi', 'config')   # True / False</pre>
 <ul>
 <li><strong>Conditions of a field rule:</strong> the drop-down of a <strong>select custom field</strong> (select and multiselect) and of a <strong>field with a fixed list</strong> (for example the status of a device) offers only the values the rule allows (it used to offer all of them and refuse the others only on saving). A value outside the condition is also refused through the REST API for the model fields. When the same set of values is used by several fields, the list shows the values that any of them allows.</li>
 <li><strong>Working time of a PIN-only person:</strong> changed days or hours with <em>the general rules</em> chosen are no longer dropped silently: the plugin says so and asks for <em>own rules</em> or <em>no limit</em>. Every person shows how the time is set (individually / off / the general time applies). Going back to the general rules takes the time of the general rules.</li>
+<li><strong>E-mail and audit log of changes:</strong> subject <em>PN : created Tenant – name</em> (<em>change of parameters</em>, <em>deleted</em>), body <em>USER PIN : PN</em> and a line <em>* Field: value</em> for every filled field (from → to for a change), related objects by name, empty fields left out, secret values hidden. The audit log has the same first line and the field lines under the arrow. The scheduling of the e-mails (summary / at every change) did not change.</li>
+<li><strong>Conditions editor:</strong> <em>Add</em> with "is one of" adds all the chosen values (it used to add every second one).</li>
 <li>No new migrations (migrations up to <code>0046</code>).</li>
 </ul>
 <h2>3.0.0: security fixes after the audit</h2>
@@ -156,7 +158,7 @@ areas.can(request.user, 'netbox_libreoxi', 'config')   # True / False</pre>
 </ul>
 <h2>PIN-only people</h2>
 <ul>
-<li>E-mails both ways: the person about the changes of an administrator; the administrators a summary every N minutes or at every change (not both), subject <em>UserPIN : PN made a change</em>, body: time, object, changed fields (from → to); sent after the save through <code>netbox-rq</code>.</li>
+<li>E-mails both ways: the person about the changes of an administrator; the administrators a summary every N minutes or at every change (not both), subject <em>PN : created Tenant – name</em> (or <em>change of parameters</em>, <em>deleted</em>), body: <em>USER PIN : PN</em> and a line for every filled or changed field (related objects by name); sent after the save through <code>netbox-rq</code>.</li>
 <li>The drop-downs of forms work; saving own table columns.</li>
 <li>Conditions on relation fields: contains / starts with / is one of, several values, the Conditions button.</li>
 </ul>

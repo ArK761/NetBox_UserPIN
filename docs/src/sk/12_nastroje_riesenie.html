@@ -106,6 +106,8 @@ areas.can(request.user, 'netbox_libreoxi', 'config')   # True / False</pre>
 <ul>
 <li><strong>Podmienky pravidla poľa:</strong> rozbaľovací zoznam <strong>výberového vlastného poľa</strong> (select aj multiselect) a poľa s <strong>pevným zoznamom</strong> (napríklad stav zariadenia) ponúka len hodnoty, ktoré pravidlo povoľuje (predtým ponúkol všetky a ostatné odmietol až pri uložení). Hodnota mimo podmienky sa odmietne aj pri zápise cez REST API pri poliach modelu. Ak sa tá istá sada hodnôt používa vo viacerých poliach, zoznam ukáže hodnoty, ktoré povoľuje ktorékoľvek z nich.</li>
 <li><strong>Pracovný čas osoby len s PIN-om:</strong> zmenené dni alebo hodiny pri voľbe <em>všeobecné pravidlá</em> sa už nestratia potichu, ale plugin to povie a vyzve na <em>vlastné pravidlá</em> alebo <em>bez obmedzenia</em>. Pri každej osobe je napísané, aký čas má (individuálne / vypnutý / platí všeobecný). Návrat na všeobecné pravidlá vezme čas zo všeobecných pravidiel.</li>
+<li><strong>E-mail a Audit log zmien:</strong> predmet <em>OC : vytvorený Tenant – názov</em> (<em>zmena parametrov</em>, <em>zmazaný</em>), telo <em>USER PIN : OC</em> a riadok <em>* Pole: hodnota</em> pre každé vyplnené pole (pri zmene z → na), súvisiace objekty menom, prázdne polia sa vynechajú, tajné hodnoty skryté. Audit log má ten istý prvý riadok a riadky polí pod šípkou. Plánovanie e-mailov (súhrn / pri každej zmene) sa nezmenilo.</li>
+<li><strong>Editor podmienok:</strong> <em>Pridať</em> pri „je jedno z“ pridá všetky označené hodnoty (predtým každú druhú).</li>
 <li>Bez nových migrácií (migrácie do <code>0046</code>).</li>
 </ul>
 <h2>3.0.0: bezpečnostné opravy po audite</h2>
@@ -156,7 +158,7 @@ areas.can(request.user, 'netbox_libreoxi', 'config')   # True / False</pre>
 </ul>
 <h2>Osoby len s PIN-om</h2>
 <ul>
-<li>E-maily oboma smermi: osoba o zmenách správcu; správcovia zhrnutie každých N minút alebo pri každej zmene (nie oboje), predmet <em>UserPIN : OC vykonal zmenu</em>, telo: čas, objekt, zmenené polia (z → na); odosielanie po uložení cez <code>netbox-rq</code>.</li>
+<li>E-maily oboma smermi: osoba o zmenách správcu; správcovia zhrnutie každých N minút alebo pri každej zmene (nie oboje), predmet <em>OC : vytvorený Tenant – názov</em> (alebo <em>zmena parametrov</em>, <em>zmazaný</em>), telo: <em>USER PIN : OC</em> a riadok na každé vyplnené alebo zmenené pole (súvisiace objekty menom); odosielanie po uložení cez <code>netbox-rq</code>.</li>
 <li>Rozbaľovacie zoznamy vo formulároch fungujú; ukladanie vlastných stĺpcov tabuliek.</li>
 <li>Podmienky pre polia typu relácia: obsahuje / začína na / je jedno z, viac hodnôt, tlačidlo Podmienky.</li>
 </ul>
