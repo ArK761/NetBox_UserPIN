@@ -74,6 +74,14 @@
 </table>
 <h2>Tabs of the detail</h2>
 <p>The page <em>Tabs of the detail page</em> decides which tabs of an object's detail (Interfaces, Config Context, Changelog …) the user may open. The main page is always allowed. A new access allows only the main page. A section manager opens every tab.</p>
+<h2>A group: e-mails about the changes</h2>
+<p>The page of a group has a card <strong>E-mails about the changes of this group</strong>. Besides the e-mails that are sent anyway (to the administrators, to the user, a summary or at every change; none of that changes), you can name <strong>further e-mail addresses</strong> here that are told when a <strong>member of this group</strong> creates, changes or deletes an object of the type of the group.</p>
+<ul>
+<li>There can be several rules. Each has a <em>Name of the rule</em>, <em>E-mail addresses</em> (one per line; a comma or a semicolon also works), the choices <em>Tell about</em> (<em>creating</em>, <em>changing</em>, <em>deleting</em>), <em>At every change</em> or <em>Summary every</em> 5 to 1440 minutes, and <em>Switched on</em>.</li>
+<li>Only addresses of the <strong>verified allowed e-mail domains</strong> (the Settings card) are accepted; another domain is refused with a message. The data of the changes come from NetBox, so the plugin does not send them outside the allowed domains.</li>
+<li><em>At every change</em>: the e-mail is sent <strong>right after the change</strong> through <code>netbox-rq</code>. <em>Summary</em>: once in the chosen time one e-mail arrives with the changes that piled up (the system job runs every 5 minutes; the first run only sets the start, nothing from the past is sent). The rule has its own setting, independent of the other e-mails. The subject and the body have the same shape as the other e-mails about changes: <em>PN : created Tenant – name</em>, <em>USER PIN : PN</em> and a line for every field.</li>
+<li>Who manages the group manages the rule (a keeper, an owner of the area, a section manager). Every adding, change and deleting of a rule is in the audit log.</li>
+</ul>
 <h2>An access request</h2>
 <ol>
 <li>A user whose way is closed sees the page "This area is protected" (who manages the access, what was blocked, what you can do here: <em>Change the password</em>, <em>My PIN</em>, <em>My API keys</em>). They tick <strong>what they need</strong> (view / add / change / delete), write <strong>why</strong> and <strong>what exactly</strong> (section, group, object) and press <em>Request access</em>.</li>

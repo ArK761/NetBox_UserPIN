@@ -3,11 +3,15 @@
 The guides, written from the code: [`docs/GUIDE_User_PIN_EN.pdf`](docs/GUIDE_User_PIN_EN.pdf) (English), [`docs/NAVOD_User_PIN_SK.pdf`](docs/NAVOD_User_PIN_SK.pdf) (Slovak).
 Sources and the build script: `docs/src/` (`python3 docs/src/build.py`).
 
-The version in the code is **3.1.0** (conditions of fields and the working time, on top of 3.0.0). Earlier releases: 3.0.0, 2.5.0, 2.0.0.
+The version in the code is **3.2.0** (e-mails about the changes of a group, on top of 3.1.0). Earlier releases: 3.1.0, 3.0.0, 2.5.0, 2.0.0.
 The base was 0.38.4 (commit 7bed7de); the interim numbers 2.0.1 … 2.2.2 in the commit history of 27–30 October 2026
 were working labels, everything is part of the 2.0.0 line and is listed by topic below.
-Verzia v kóde je **3.1.0** (podmienky polí a pracovný čas; predchádzajúce vydania 3.0.0, 2.5.0, 2.0.0); priebežné čísla 2.0.1 … 2.2.2
+Verzia v kóde je **3.2.0** (e-maily o zmenách skupiny; predchádzajúce vydania 3.1.0, 3.0.0, 2.5.0, 2.0.0); priebežné čísla 2.0.1 … 2.2.2
 v histórii commitov boli pracovné označenia, všetko patrí do línie 2.0.0 a je rozdelené podľa tém.
+
+## 3.2.0 - e-mails about the changes of a group / e-maily o zmenách skupiny
+
+* A card on the page of a group: extra e-mail addresses (verified allowed domains only) told right after a member creates / changes / deletes an object of the type; several rules, audited; the other e-mails and their scheduling are untouched; migrations 0047, 0048; each rule is sent at once or as a summary every N minutes. / Karta na stránke skupiny: ďalšie e-mailové adresy, voľby vytvorenie / zmena / zmazanie, viac pravidiel; ostatné e-maily sa nemenia.
 
 ## 3.1.0 - conditions of fields, working time / podmienky polí, pracovný čas
 

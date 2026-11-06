@@ -39,8 +39,8 @@
 <h2>1. Packages</h2>
 <pre>source /opt/netbox/venv/bin/activate
 pip install "argon2-cffi&gt;=23.1" "cryptography&gt;=42" "segno&gt;=1.5" "holidays&gt;=0.50"
-pip install --upgrade --force-reinstall --no-deps "git+https://github.com/ArK761/NetBox_UserPIN.git@3.1.0"</pre>
-<p>Instead of <code>@3.1.0</code> you can use any tag or commit. After the installation pip may print a warning about <code>python-dateutil</code> (see Troubleshooting): it is harmless.</p>
+pip install --upgrade --force-reinstall --no-deps "git+https://github.com/ArK761/NetBox_UserPIN.git@3.2.0"</pre>
+<p>Instead of <code>@3.2.0</code> you can use any tag or commit. After the installation pip may print a warning about <code>python-dateutil</code> (see Troubleshooting): it is harmless.</p>
 <h2>2. The encryption key</h2>
 <p>Generate it and store it aside <strong>before</strong> you switch the plugin on. The procedure is in the chapter <em>Encryption key</em>.</p>
 <h2>3. Configuration</h2>
@@ -110,7 +110,7 @@ systemctl is-active netbox netbox-rq                            # active, active
 <p><code>upgrade.sh</code> creates the virtual environment <strong>anew</strong> and installs only what is in <code>requirements.txt</code> and <code>local_requirements.txt</code>. A plugin that is not listed there disappears after the upgrade. Lines in <code>/opt/netbox/local_requirements.txt</code>:</p>
 <pre>netbox-librenms-plugin
 netbox-qrcode
-git+https://github.com/ArK761/NetBox_UserPIN.git@3.1.0</pre>
+git+https://github.com/ArK761/NetBox_UserPIN.git@3.2.0</pre>
 <ul>
 <li>A package from PyPI needs only its name. A plugin from GitHub needs the whole link.</li>
 <li>A line without <code>@…</code> installs the <strong>latest commit of the <code>main</code> branch</strong> (not the latest release; pip does not know GitHub Releases, only branches, tags and commits). If the code of a plugin is on another branch, keep the pinned commit.</li>

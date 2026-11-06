@@ -17,3 +17,4 @@ class RoleHousekeepingJob(JobRunner):
         areachanges.report()
         guests.announce_expiry()
         guests.report_changes()
+        areachanges.report_rule_mails()  # the summaries of the e-mail rules of the groups

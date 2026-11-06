@@ -1,0 +1,44 @@
+{% load i18n %}
+{# Extra e-mail addresses told about the changes of the members of the group (the other e-mails are not touched) #}
+<div class="card mt-3" id="pin-mail-rules">
+  <h2 class="card-header">{% trans "E-mails about the changes of this group" %}</h2>
+  <div class="card-body">
+    <p class="text-secondary small mb-3">{% trans "Besides the e-mails that are sent anyway, the addresses below are told when a member of this group creates, changes or deletes an object of this type. Only addresses of the verified allowed e-mail domains. Each rule is sent right after the change or as a summary every N minutes." %}</p>
+    {% for rule in mail_rules %}
+    <form method="post" class="border rounded p-2 mb-2">{% csrf_token %}<input type="hidden" name="action" value="mail-save"><input type="hidden" name="rule" value="{{ rule.pk }}">
+      <div class="row g-2">
+        <div class="col-12 col-lg-4"><label class="form-label small mb-0">{% trans "Name of the rule" %}</label><input class="form-control form-control-sm" name="name" value="{{ rule.name }}" maxlength="100"></div>
+        <div class="col-12 col-lg-5"><label class="form-label small mb-0">{% trans "E-mail addresses (one per line)" %}</label><textarea class="form-control form-control-sm" name="addresses" rows="2">{{ rule.addresses }}</textarea></div>
+        <div class="col-12 col-lg-3">
+          <div class="small mb-0">{% trans "Tell about" %}</div>
+          <label class="form-check form-check-inline"><input class="form-check-input" type="checkbox" name="events" value="create" {% if rule.on_create %}checked{% endif %}> {% trans "creating" %}</label>
+          <label class="form-check form-check-inline"><input class="form-check-input" type="checkbox" name="events" value="update" {% if rule.on_update %}checked{% endif %}> {% trans "changing" %}</label>
+          <label class="form-check form-check-inline"><input class="form-check-input" type="checkbox" name="events" value="delete" {% if rule.on_delete %}checked{% endif %}> {% trans "deleting" %}</label>
+          <div class="d-flex gap-1 mt-1 align-items-center"><select class="form-select form-select-sm w-auto" name="mode"><option value="each" {% if rule.mode == 'each' %}selected{% endif %}>{% trans "At every change" %}</option><option value="summary" {% if rule.mode == 'summary' %}selected{% endif %}>{% trans "Summary every" %}</option></select>
+            <select class="form-select form-select-sm w-auto" name="every">{% for n in mail_every %}<option value="{{ n }}" {% if rule.every == n %}selected{% endif %}>{{ n }} min</option>{% endfor %}</select></div>
+          <div><label class="form-check"><input class="form-check-input" type="checkbox" name="active" {% if rule.active %}checked{% endif %}> {% trans "Switched on" %}</label></div>
+        </div>
+      </div>
+      <div class="mt-2"><button class="btn btn-sm btn-primary" type="submit">{% trans "Save the rule" %}</button>
+        <button class="btn btn-sm btn-outline-danger" type="submit" name="action" value="mail-delete" onclick="return confirm('{% trans "Delete this rule?" %}');">{% trans "Delete" %}</button></div>
+    </form>
+    {% empty %}<p class="text-secondary">{% trans "No rules yet." %}</p>{% endfor %}
+    <form method="post" class="border rounded p-2 mt-3">{% csrf_token %}<input type="hidden" name="action" value="mail-save">
+      <div class="fw-bold mb-1">{% trans "New rule" %}</div>
+      <div class="row g-2">
+        <div class="col-12 col-lg-4"><label class="form-label small mb-0">{% trans "Name of the rule" %}</label><input class="form-control form-control-sm" name="name" maxlength="100"></div>
+        <div class="col-12 col-lg-5"><label class="form-label small mb-0">{% trans "E-mail addresses (one per line)" %}</label><textarea class="form-control form-control-sm" name="addresses" rows="2"></textarea></div>
+        <div class="col-12 col-lg-3">
+          <div class="small mb-0">{% trans "Tell about" %}</div>
+          <label class="form-check form-check-inline"><input class="form-check-input" type="checkbox" name="events" value="create" checked> {% trans "creating" %}</label>
+          <label class="form-check form-check-inline"><input class="form-check-input" type="checkbox" name="events" value="update" checked> {% trans "changing" %}</label>
+          <label class="form-check form-check-inline"><input class="form-check-input" type="checkbox" name="events" value="delete"> {% trans "deleting" %}</label>
+          <div class="d-flex gap-1 mt-1 align-items-center"><select class="form-select form-select-sm w-auto" name="mode"><option value="each" selected>{% trans "At every change" %}</option><option value="summary" >{% trans "Summary every" %}</option></select>
+            <select class="form-select form-select-sm w-auto" name="every">{% for n in mail_every %}<option value="{{ n }}" {% if n == 60 %}selected{% endif %}>{{ n }} min</option>{% endfor %}</select></div>
+          <div><label class="form-check"><input class="form-check-input" type="checkbox" name="active" checked> {% trans "Switched on" %}</label></div>
+        </div>
+      </div>
+      <div class="mt-2"><button class="btn btn-sm btn-primary" type="submit">{% trans "Add the rule" %}</button></div>
+    </form>
+  </div>
+</div>

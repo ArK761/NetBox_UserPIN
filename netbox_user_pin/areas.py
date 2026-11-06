@@ -39,7 +39,7 @@ from django.utils.translation import gettext_noop
 
 from . import roles, service
 from .models import (
-    AreaFieldMode, AreaFieldRule, AreaGrant, AreaOwner, AreaProfile, AreaRequest, AreaRequestStatus, PinEventAction, PinGuest, PolicyException, PolicyKeeper, ProtectedArea,
+    AreaFieldMode, AreaFieldRule, AreaGrant, AreaMailRule, AreaOwner, AreaProfile, AreaRequest, AreaRequestStatus, PinEventAction, PinGuest, PolicyException, PolicyKeeper, ProtectedArea,
 )
 
 logger = logging.getLogger('netbox_user_pin')
@@ -2059,6 +2059,81 @@ def set_area_mails(actor, on, mode, every, request=None, users=None):
                              f'{mode}{f" every {every} min" if mode == "summary" else ""}; '
                              f'e-mail to the user about their access {"on" if settings.area_mail_users else "off"}')
     return settings
+
+
+def clean_mail_addresses(text):
+    """Addresses separated by a comma, a semicolon, a space or a line; every one must be valid and in a verified domain."""
+    import re
+    from django.core.validators import validate_email
+    allowed = service.allowed_domains()
+    result = []
+    for part in re.split(r'[\s,;]+', text or ''):
+        address = part.strip().lower()
+        if not address or address in result:
+            continue
+        try:
+            validate_email(address)
+        except ValidationError:
+            raise ValidationError(_('"%(address)s" is not an e-mail address.') % {'address': part}) from None
+        if address.rsplit('@', 1)[1] not in allowed:
+            raise ValidationError(_('The domain of "%(address)s" is not among the verified allowed e-mail domains.')
+                                  % {'address': address})
+        result.append(address)
+    if not result:
+        raise ValidationError(_('Write at least one e-mail address.'))
+    return result
+
+
+def save_mail_rule(group, actor, rule_id, name, addresses, events, active, request=None, mode='each', every=60):
+    """Create (``rule_id`` empty) or change an e-mail rule of a group: who is told about which changes."""
+    if group.private or not group.target or not _may_grant(actor, group.area, group.target):
+        raise PermissionDenied
+    name = (name or '').strip()[:100]
+    if not name:
+        raise ValidationError(_('Write the name of the rule.'))
+    events = set(events or [])
+    if not events & {'create', 'update', 'delete'}:
+        raise ValidationError(_('Choose at least one kind of change.'))
+    listed = clean_mail_addresses(addresses)
+    from .areachanges import MAIL_EVERY
+    if mode not in ('each', 'summary'):
+        raise ValidationError(_('Choose a summary or every change.'))
+    try:
+        every = int(every)
+    except (TypeError, ValueError):
+        every = 60
+    if every not in MAIL_EVERY:
+        raise ValidationError(_('Choose one of the offered intervals.'))
+    if rule_id:
+        rule = AreaMailRule.objects.filter(pk=rule_id, profile=group).first()
+        if rule is None:
+            raise ValidationError(_('The rule does not exist.'))
+    else:
+        rule = AreaMailRule(area=group.area, profile=group, created_by=getattr(actor, 'username', ''))
+    rule.name, rule.addresses = name, '\n'.join(listed)
+    rule.on_create, rule.on_update, rule.on_delete = 'create' in events, 'update' in events, 'delete' in events
+    rule.active = bool(active)
+    if (rule.mode, rule.every) != (mode, every) or not rule.pk:
+        rule.last_sent = None  # a new schedule starts now: nothing from the past is mailed
+    rule.mode, rule.every = mode, every
+    rule.save()
+    _log(PinEventAction.AREA_CHANGED, group.area, actor, request=request,
+         detail=f'e-mail rule {"changed" if rule_id else "added"} in group {group.name}: {name}; '
+                f'{", ".join(sorted(events))}; {", ".join(listed)}; {"on" if rule.active else "off"}; '
+                f'{mode}{f" every {every} min" if mode == "summary" else ""}')
+    return rule
+
+
+def delete_mail_rule(group, actor, rule_id, request=None):
+    if group.private or not _may_grant(actor, group.area, group.target):
+        raise PermissionDenied
+    rule = AreaMailRule.objects.filter(pk=rule_id, profile=group).first()
+    if rule is None:
+        raise ValidationError(_('The rule does not exist.'))
+    name = rule.name
+    rule.delete()
+    _log(PinEventAction.AREA_CHANGED, group.area, actor, request=request,
+         detail=f'e-mail rule deleted from group {group.name}: {name}')
 
 
 def set_visibility(actor, mode, allow_requests, allow_own_tokens, request=None, scope=None):

@@ -25,6 +25,8 @@
   </div>
 </div>
 
+{% if can_manage %}{% include 'netbox_user_pin/inc/group_mail.html' %}{% endif %}
+
 {% if can_manage %}
 {% for index, text in conditions %}<form id="rd-{{ index }}" method="post" class="d-none">{% csrf_token %}<input type="hidden" name="action" value="rule-delete"><input type="hidden" name="index" value="{{ index }}"></form>{% endfor %}
 {% for index, text in deny_conditions %}<form id="dd-{{ index }}" method="post" class="d-none">{% csrf_token %}<input type="hidden" name="action" value="rule-delete"><input type="hidden" name="kind" value="deny"><input type="hidden" name="index" value="{{ index }}"></form>{% endfor %}

@@ -950,6 +950,41 @@ class AreaProfile(models.Model):
         return f'{self.area}: {self.name}'
 
 
+class AreaMailRule(models.Model):
+    """Extra e-mail addresses told about the changes made by the members of a group (create / change / delete)."""
+    area = models.ForeignKey(ProtectedArea, on_delete=models.CASCADE, related_name='mail_rules')
+    profile = models.ForeignKey(AreaProfile, on_delete=models.CASCADE, related_name='mail_rules')
+    name = models.CharField(max_length=100)
+    # One address per line.
+    addresses = models.TextField()
+    on_create = models.BooleanField(default=True)
+    on_update = models.BooleanField(default=True)
+    on_delete = models.BooleanField(default=False)
+    active = models.BooleanField(default=True)
+    # Right after every change ('each') or one e-mail every ``every`` minutes with what piled up ('summary').
+    mode = models.CharField(max_length=10, default='each', choices=[('each', _('At every change')), ('summary', _('Summary'))])
+    every = models.PositiveIntegerField(default=60)
+    last_sent = models.DateTimeField(null=True, blank=True)
+    created_by = models.CharField(max_length=150, blank=True)
+    created = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        verbose_name = _('e-mail rule of a group')
+        verbose_name_plural = _('e-mail rules of a group')
+        ordering = ('pk',)
+
+    def __str__(self):
+        return f'{self.profile}: {self.name}'
+
+    @property
+    def address_list(self):
+        return [a for a in (self.addresses or '').splitlines() if a.strip()]
+
+    def wants(self, action):
+        return self.active and {'create': self.on_create, 'update': self.on_update,
+                                'delete': self.on_delete}.get(str(action), False)
+
+
 class AreaGrant(models.Model):
     """Access of one user to one area with a profile; temporary when ``expires`` is set."""
     area = models.ForeignKey(ProtectedArea, on_delete=models.CASCADE, related_name='grants')

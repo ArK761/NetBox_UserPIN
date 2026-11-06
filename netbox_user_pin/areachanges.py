@@ -106,10 +106,121 @@ def _send(changes_by_area, settings):
     return sent
 
 
+def rules_for(change):
+    """The e-mail rules of the groups the author of the change is a member of (for the type of the changed object)."""
+    from .models import AreaGrant, AreaMailRule
+    app_label, model = _target(change)
+    if not app_label or not change.user_id:
+        return []
+    now = timezone.now()
+    profiles = {g.profile_id for g in AreaGrant.objects.filter(user_id=change.user_id, revoked__isnull=True,
+                                                               profile__target=f'{app_label}.{model}')
+                if g.expires is None or g.expires > now}
+    if not profiles:
+        return []
+    return [r for r in AreaMailRule.objects.filter(profile_id__in=profiles).select_related('profile')
+            if r.mode == 'each' and r.wants(change.action)]
+
+
+def send_rule_mails(change_pk):
+    """Job of netbox-rq: the e-mails of the group rules for one change (the other e-mails are not touched by this)."""
+    from core.models import ObjectChange
+    from .guests import change_block, change_headline
+    change = ObjectChange.objects.select_related('changed_object_type', 'user').filter(pk=change_pk).first()
+    if change is None:
+        return
+    settings = service.get_settings()
+    if not service.email_configured(settings):
+        return
+    guest = PinGuest.objects.filter(user_id=change.user_id).first()
+    who = (guest.person_number or guest.label) if guest else _who(change.user)
+    for rule in rules_for(change):
+        addresses = [a for a in rule.address_list if a.rsplit('@', 1)[-1].lower() in service.allowed_domains()]
+        if not addresses:
+            continue
+        with translation.override(settings.language or 'en'):
+            subject = change_headline(who, change)
+            body = '\n'.join([f'USER PIN : {who}', _('%(user)s – area "%(area)s"') % {'user': rule.profile.name,
+                                                                                    'area': rule.area.name},
+                              '', *change_block(change)])
+        try:
+            service._deliver(settings, addresses, subject, body)
+            service.log_event(PinEventAction.MAIL_SENT, detail=f'{rule.profile.name} / {rule.name}: {subject} -> '
+                                                              f'{", ".join(addresses)}')
+        except Exception as exc:  # noqa: BLE001 - a mail that cannot be sent must not break anything
+            logger.warning('Cannot send the e-mail of the rule %s: %s', rule, exc)
+            service.log_event(PinEventAction.MAIL_FAILED, detail=f'{rule.profile.name} / {rule.name}: {exc}')
+
+
+def report_rule_mails(force=False):
+    """The rules with a summary: every ``every`` minutes one e-mail with the changes that piled up (the job runs every
+    5 minutes). The first run of a rule only sets the mark (nothing from the past is mailed)."""
+    from core.models import ObjectChange
+    from .guests import change_block, change_headline
+    from .models import AreaGrant, AreaMailRule
+    settings = service.get_settings()
+    now = timezone.now()
+    for rule in AreaMailRule.objects.filter(mode='summary', active=True).select_related('profile', 'area'):
+        if rule.last_sent is None:
+            rule.last_sent = now
+            rule.save(update_fields=['last_sent'])
+            continue
+        if not force and now - rule.last_sent < timedelta(minutes=rule.every):
+            continue
+        since = rule.last_sent
+        rule.last_sent = now
+        rule.save(update_fields=['last_sent'])
+        members = {g.user_id for g in AreaGrant.objects.filter(profile=rule.profile, revoked__isnull=True)
+                   if g.expires is None or g.expires > now}
+        app_label, _dot, model = rule.profile.target.partition('.')
+        changes = [c for c in ObjectChange.objects.filter(
+            user_id__in=members, time__gt=since, time__lte=now, changed_object_type__app_label=app_label,
+            changed_object_type__model=model).select_related('changed_object_type', 'user').order_by('time')[:MAX_PER_REPORT]
+            if rule.wants(c.action)]
+        addresses = [a for a in rule.address_list if a.rsplit('@', 1)[-1].lower() in service.allowed_domains()]
+        if not changes or not addresses or not service.email_configured(settings):
+            continue
+        blocks = []
+        with translation.override(settings.language or 'en'):
+            for change in changes:
+                guest = PinGuest.objects.filter(user_id=change.user_id).first()
+                who = (guest.person_number or guest.label) if guest else _who(change.user)
+                blocks.append('\n'.join([change_headline(who, change), *change_block(change)]))
+            subject = _('%(rule)s : changes (%(n)d)') % {'rule': rule.profile.name, 'n': len(changes)}
+            body = '\n'.join([_('%(user)s – area "%(area)s"') % {'user': rule.profile.name, 'area': rule.area.name}, '',
+                              '\n\n'.join(blocks)])
+        try:
+            service._deliver(settings, addresses, subject, body)
+            service.log_event(PinEventAction.MAIL_SENT, detail=f'{rule.profile.name} / {rule.name}: {len(changes)} '
+                                                              f'change(s) -> {", ".join(addresses)}')
+        except Exception as exc:  # noqa: BLE001
+            logger.warning('Cannot send the summary of the rule %s: %s', rule, exc)
+            service.log_event(PinEventAction.MAIL_FAILED, detail=f'{rule.profile.name} / {rule.name}: {exc}')
+
+
+def _queue_rule_mails(change):
+    try:
+        if not rules_for(change):
+            return
+    except Exception:  # noqa: BLE001
+        logger.exception('Cannot look up the e-mail rules of a group')
+        return
+    pk = change.pk
+
+    def enqueue():
+        try:
+            from django_rq import get_queue
+            get_queue('default').enqueue(send_rule_mails, pk)
+        except Exception:  # noqa: BLE001 - no queue: the audit log has the change
+            logger.exception('Cannot queue the e-mail of a group rule')
+    transaction.on_commit(enqueue)
+
+
 def _changed(sender, instance, created, **kwargs):
     """post_save of a change record: the audit record at once; the e-mail now ('every change') or in the summary."""
     if not created or not instance.user_id:
         return
+    _queue_rule_mails(instance)  # separate from everything below: the extra addresses of the group rules
     try:
         if PinGuest.objects.filter(user_id=instance.user_id).exists():
             # a person with a PIN only: the e-mail is the guests' own (PIN-only page); the audit log gets it here

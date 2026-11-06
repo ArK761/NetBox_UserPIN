@@ -9407,3 +9407,110 @@ msgstr "zmena parametrov"
 #, python-format
 msgid "%(id)s : changes (%(n)d)"
 msgstr "%(id)s : zmeny (%(n)d)"
+
+#: area_mail_rule
+#, python-format
+msgid "\"%(address)s\" is not an e-mail address."
+msgstr "„%(address)s“ nie je e-mailová adresa."
+
+#: area_mail_rule
+#, python-format
+msgid "The domain of \"%(address)s\" is not among the verified allowed e-mail domains."
+msgstr "Doména adresy „%(address)s“ nie je medzi overenými povolenými e-mailovými doménami."
+
+#: area_mail_rule
+msgid "Write at least one e-mail address."
+msgstr "Napíšte aspoň jednu e-mailovú adresu."
+
+#: area_mail_rule
+msgid "Write the name of the rule."
+msgstr "Napíšte názov pravidla."
+
+#: area_mail_rule
+msgid "Choose at least one kind of change."
+msgstr "Vyberte aspoň jeden druh zmeny."
+
+#: area_mail_rule
+msgid "The rule does not exist."
+msgstr "Pravidlo neexistuje."
+
+#: area_mail_rule
+msgid "The e-mail rule was saved."
+msgstr "E-mailové pravidlo bolo uložené."
+
+#: area_mail_rule
+msgid "The e-mail rule was deleted."
+msgstr "E-mailové pravidlo bolo zmazané."
+
+#: area_mail_rule
+msgid "E-mails about the changes of this group"
+msgstr "E-maily o zmenách tejto skupiny"
+
+#: area_mail_rule
+msgid "Besides the e-mails that are sent anyway, the addresses below are told when a member of this group creates, changes or deletes an object of this type. Only addresses of the verified allowed e-mail domains. The mail is sent right after the change."
+msgstr "Okrem e-mailov, ktoré sa posielajú aj tak, dostanú nižšie uvedené adresy správu, keď člen tejto skupiny vytvorí, zmení alebo zmaže objekt tohto typu. Len adresy z overených povolených e-mailových domén. E-mail sa pošle hneď po zmene."
+
+#: area_mail_rule
+msgid "Name of the rule"
+msgstr "Názov pravidla"
+
+#: area_mail_rule
+msgid "E-mail addresses (one per line)"
+msgstr "E-mailové adresy (jedna na riadok)"
+
+#: area_mail_rule
+msgid "Tell about"
+msgstr "Upozorniť na"
+
+#: area_mail_rule
+msgid "creating"
+msgstr "vytvorenie"
+
+#: area_mail_rule
+msgid "changing"
+msgstr "zmenu"
+
+#: area_mail_rule
+msgid "deleting"
+msgstr "zmazanie"
+
+#: area_mail_rule
+msgid "Switched on"
+msgstr "Zapnuté"
+
+#: area_mail_rule
+msgid "Save the rule"
+msgstr "Uložiť pravidlo"
+
+#: area_mail_rule
+msgid "Delete this rule?"
+msgstr "Zmazať toto pravidlo?"
+
+#: area_mail_rule
+msgid "No rules yet."
+msgstr "Zatiaľ nie sú žiadne pravidlá."
+
+#: area_mail_rule
+msgid "New rule"
+msgstr "Nové pravidlo"
+
+#: area_mail_rule
+msgid "Add the rule"
+msgstr "Pridať pravidlo"
+
+#: area_mail_rule
+msgid "e-mail rule of a group"
+msgstr "e-mailové pravidlo skupiny"
+
+#: area_mail_rule
+msgid "e-mail rules of a group"
+msgstr "e-mailové pravidlá skupiny"
+
+#: area_mail_rule
+#, python-format
+msgid "%(rule)s : changes (%(n)d)"
+msgstr "%(rule)s : zmeny (%(n)d)"
+
+#: area_mail_rule
+msgid "Besides the e-mails that are sent anyway, the addresses below are told when a member of this group creates, changes or deletes an object of this type. Only addresses of the verified allowed e-mail domains. Each rule is sent right after the change or as a summary every N minutes."
+msgstr "Okrem e-mailov, ktoré sa posielajú aj tak, dostanú nižšie uvedené adresy správu, keď člen tejto skupiny vytvorí, zmení alebo zmaže objekt tohto typu. Len adresy z overených povolených e-mailových domén. Každé pravidlo sa pošle hneď po zmene alebo ako súhrn každých N minút."

@@ -74,6 +74,14 @@
 </table>
 <h2>Záložky detailu a karty</h2>
 <p>Stránka <em>Záložky detailu</em> určuje, ktoré záložky detailu objektu (Interfaces, Config Context, Changelog …) smie používateľ otvoriť. Hlavná stránka je vždy povolená. Nový prístup povoľuje len hlavnú stránku. Správca úseku otvorí každú záložku.</p>
+<h2>Skupina: e-maily o zmenách</h2>
+<p>Na stránke skupiny je karta <strong>E-maily o zmenách tejto skupiny</strong>. Okrem e-mailov, ktoré sa posielajú aj tak (správcom, používateľovi, súhrn alebo pri každej zmene; nič z toho sa nemení), tu môžeš určiť <strong>ďalšie e-mailové adresy</strong>, ktoré dostanú správu, keď <strong>člen tejto skupiny</strong> vytvorí, zmení alebo zmaže objekt typu skupiny.</p>
+<ul>
+<li>Pravidiel môže byť viac. Každé má <em>Názov pravidla</em>, <em>E-mailové adresy</em> (jedna na riadok; aj čiarka alebo bodkočiarka), voľby <em>Upozorniť na</em> (<em>vytvorenie</em>, <em>zmenu</em>, <em>zmazanie</em>), <em>Pri každej zmene</em> alebo <em>Súhrn každých</em> 5 až 1440 minút a <em>Zapnuté</em>.</li>
+<li>Povolené sú len adresy z <strong>overených povolených e-mailových domén</strong> (karta Nastavenia); iná doména sa odmietne s hláškou. Údaje zmien sú z NetBoxu, preto ich plugin nepošle mimo povolených domén.</li>
+<li><em>Pri každej zmene</em>: e-mail sa pošle <strong>hneď po zmene</strong> cez <code>netbox-rq</code>. <em>Súhrn</em>: raz za zvolený čas príde jeden e-mail so zmenami, ktoré sa nazbierali (systémová úloha beží každých 5 minút; prvé spustenie len nastaví začiatok, nič z minulosti sa neposiela). Pravidlo má vlastné nastavenie, nezávislé od ostatných e-mailov. Predmet a telo majú ten istý tvar ako ostatné e-maily o zmenách: <em>OC : vytvorený Tenant – názov</em>, <em>USER PIN : OC</em> a riadok na každé pole.</li>
+<li>Pravidlo spravuje ten, kto spravuje skupinu (strážca, vlastník oblasti, správca úseku). Každé pridanie, zmena a zmazanie pravidla je v Audit logu.</li>
+</ul>
 <h2>Žiadosť o prístup</h2>
 <ol>
 <li>Používateľ, ktorému je cesta zatvorená, vidí stránku „Táto oblasť je chránená“ (kto prístup spravuje, čo sa zablokovalo, čo tu môže robiť: <em>Zmeniť heslo</em>, <em>Môj PIN</em>, <em>Moje API kľúče</em>). Zaškrtne <strong>čo potrebuje</strong> (zobraziť / pridať / zmeniť / zmazať), napíše <strong>prečo</strong> a <strong>čo presne</strong> (sekcia, skupina, objekt) a stlačí <em>Požiadať o prístup</em>.</li>

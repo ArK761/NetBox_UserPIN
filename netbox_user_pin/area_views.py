@@ -17,7 +17,7 @@ from .forms import (
 )
 from .mixins import PinRequiredMixin, area_gate
 from .models import (
-    AreaFieldRule, AreaGrant, AreaProfile, AreaRequest, AreaRequestStatus, PinEventAction, ProtectedArea,
+    AreaFieldRule, AreaGrant, AreaMailRule, AreaProfile, AreaRequest, AreaRequestStatus, PinEventAction, ProtectedArea,
 )
 from .views import ADMIN_SCOPE, _errors, _next_url, _step_up_context
 
@@ -829,6 +829,8 @@ class GroupView(AreaViewMixin, View):
             'plugin_tabs': [t for t in tabs if t['plugin']], 'rows': rows,
             'conditions': [(i, text) for i, text, _field in conditions], 'filter_fields': filter_fields,
             'deny_conditions': [(i, text) for i, text, _field in areas.group_deny_conditions(group)],
+            'mail_rules': list(AreaMailRule.objects.filter(profile=group)),
+            'mail_every': MAIL_EVERY,
             'records': group.records, 'denied': set(group.denied or []),
             'ops': list(areas.row_op_labels().items()),
             'can_manage': areas.can_manage(request.user, area, group.target) or areas._may_grant(
@@ -911,6 +913,15 @@ class GroupView(AreaViewMixin, View):
                 areas.remove_group_condition(group, request.user, index, request=request,
                                              deny=request.POST.get('kind') == 'deny')
                 messages.success(request, _('The condition was removed.'))
+            elif action == 'mail-save':
+                areas.save_mail_rule(group, request.user, request.POST.get('rule', ''), request.POST.get('name', ''),
+                                     request.POST.get('addresses', ''), request.POST.getlist('events'),
+                                     request.POST.get('active') == 'on', request=request,
+                                     mode=request.POST.get('mode', 'each'), every=request.POST.get('every', 60))
+                messages.success(request, _('The e-mail rule was saved.'))
+            elif action == 'mail-delete':
+                areas.delete_mail_rule(group, request.user, request.POST.get('rule', ''), request=request)
+                messages.success(request, _('The e-mail rule was deleted.'))
             elif action == 'revoke':
                 areas.revoke_grant(get_object_or_404(AreaGrant, pk=request.POST.get('pk'), profile=group),
                                    request.user, request=request)
@@ -923,5 +934,6 @@ class GroupView(AreaViewMixin, View):
                 raise PermissionDenied
         except ValidationError as exc:
             _errors(request, exc)
-        anchor = {'rule-add': '#pin-rule-form', 'rule-delete': '#pin-rule-form', 'fields': '#pin-fields-box'}.get(action, '')
+        anchor = {'rule-add': '#pin-rule-form', 'rule-delete': '#pin-rule-form', 'fields': '#pin-fields-box',
+              'mail-save': '#pin-mail-rules', 'mail-delete': '#pin-mail-rules'}.get(action, '')
         return redirect(reverse('plugins:netbox_user_pin:group', kwargs={'pk': area.pk, 'gid': group.pk}) + anchor)

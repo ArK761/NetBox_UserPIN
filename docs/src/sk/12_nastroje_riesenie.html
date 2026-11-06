@@ -101,14 +101,18 @@ areas.can(request.user, 'netbox_libreoxi', 'config')   # True / False</pre>
 </table>
 
 <h1>Zmeny</h1>
-<p>Verzia v kóde je <strong>3.1.0</strong> (vydanie na GitHube; predchádzajúce vydania 3.0.0, 2.5.0 a 2.0.0). Pôvodný základ bol 0.38.4 (commit 7bed7de); priebežné čísla 2.0.1 až 2.2.2 v histórii commitov boli pracovné označenia a patria do línie 2.0.0 a 2.5.0.</p>
+<p>Verzia v kóde je <strong>3.2.0</strong> (vydanie na GitHube; predchádzajúce vydania 3.1.0, 3.0.0, 2.5.0 a 2.0.0). Pôvodný základ bol 0.38.4 (commit 7bed7de); priebežné čísla 2.0.1 až 2.2.2 v histórii commitov boli pracovné označenia a patria do línie 2.0.0 a 2.5.0.</p>
+<h2>3.2.0: e-maily o zmenách skupiny</h2>
+<ul>
+<li>Na stránke skupiny je karta <strong>E-maily o zmenách tejto skupiny</strong>: ďalšie e-mailové adresy (len z overených domén), voľby <em>vytvorenie / zmenu / zmazanie</em>, <em>pri každej zmene</em> alebo <em>súhrn každých N minút</em>, viac pravidiel. Ostatné e-maily a ich plánovanie sa nezmenili. Nové migrácie <code>0047</code>, <code>0048</code>.</li>
+</ul>
 <h2>3.1.0: podmienky polí a pracovný čas</h2>
 <ul>
 <li><strong>Podmienky pravidla poľa:</strong> rozbaľovací zoznam <strong>výberového vlastného poľa</strong> (select aj multiselect) a poľa s <strong>pevným zoznamom</strong> (napríklad stav zariadenia) ponúka len hodnoty, ktoré pravidlo povoľuje (predtým ponúkol všetky a ostatné odmietol až pri uložení). Hodnota mimo podmienky sa odmietne aj pri zápise cez REST API pri poliach modelu. Ak sa tá istá sada hodnôt používa vo viacerých poliach, zoznam ukáže hodnoty, ktoré povoľuje ktorékoľvek z nich.</li>
 <li><strong>Pracovný čas osoby len s PIN-om:</strong> zmenené dni alebo hodiny pri voľbe <em>všeobecné pravidlá</em> sa už nestratia potichu, ale plugin to povie a vyzve na <em>vlastné pravidlá</em> alebo <em>bez obmedzenia</em>. Pri každej osobe je napísané, aký čas má (individuálne / vypnutý / platí všeobecný). Návrat na všeobecné pravidlá vezme čas zo všeobecných pravidiel.</li>
 <li><strong>E-mail a Audit log zmien:</strong> predmet <em>OC : vytvorený Tenant – názov</em> (<em>zmena parametrov</em>, <em>zmazaný</em>), telo <em>USER PIN : OC</em> a riadok <em>* Pole: hodnota</em> pre každé vyplnené pole (pri zmene z → na), súvisiace objekty menom, prázdne polia sa vynechajú, tajné hodnoty skryté. Audit log má ten istý prvý riadok a riadky polí pod šípkou. Plánovanie e-mailov (súhrn / pri každej zmene) sa nezmenilo.</li>
 <li><strong>Editor podmienok:</strong> <em>Pridať</em> pri „je jedno z“ pridá všetky označené hodnoty (predtým každú druhú).</li>
-<li>Bez nových migrácií (migrácie do <code>0046</code>).</li>
+<li>Bez nových migrácií (migrácie do <code>0048</code>).</li>
 </ul>
 <h2>3.0.0: bezpečnostné opravy po audite</h2>
 <ul>
