@@ -15,6 +15,7 @@
     <section class="pin-node">
       <h3 class="h4 mb-3">{% trans "Main menu and the page of the object" %}</h3>
       {% include 'netbox_user_pin/inc/group_access.html' %}
+      {% if can_manage %}<hr>{% include 'netbox_user_pin/inc/group_mail.html' %}{% endif %}
       {% if level != 'none' %}
       <hr>
       {% include 'netbox_user_pin/inc/group_filter.html' %}
@@ -24,8 +25,6 @@
     </section>
   </div>
 </div>
-
-{% if can_manage %}{% include 'netbox_user_pin/inc/group_mail.html' %}{% endif %}
 
 {% if can_manage %}
 {% for index, text in conditions %}<form id="rd-{{ index }}" method="post" class="d-none">{% csrf_token %}<input type="hidden" name="action" value="rule-delete"><input type="hidden" name="index" value="{{ index }}"></form>{% endfor %}

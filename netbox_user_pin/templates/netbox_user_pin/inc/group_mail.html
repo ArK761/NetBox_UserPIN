@@ -1,8 +1,8 @@
 {% load i18n %}
 {# Extra e-mail addresses told about the changes of the members of the group (the other e-mails are not touched) #}
-<div class="card mt-3" id="pin-mail-rules">
-  <h2 class="card-header">{% trans "E-mails about the changes of this group" %}</h2>
-  <div class="card-body">
+<div id="pin-mail-rules">
+  <h4 class="h5">{% trans "E-mails about the changes of this group" %}</h4>
+  <div>
     <p class="text-secondary small mb-3">{% trans "Besides the e-mails that are sent anyway, the addresses below are told when a member of this group creates, changes or deletes an object of this type. Only addresses of the verified allowed e-mail domains. Each rule is sent right after the change or as a summary every N minutes." %}</p>
     {% for rule in mail_rules %}
     <form method="post" class="border rounded p-2 mb-2">{% csrf_token %}<input type="hidden" name="action" value="mail-save"><input type="hidden" name="rule" value="{{ rule.pk }}">
