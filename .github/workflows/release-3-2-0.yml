@@ -1,0 +1,13 @@
+name: release-3-2-0
+on:
+  push:
+    branches: [tmp-release-3-2-0]
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - run: gh release create 3.2.0 --repo "$GITHUB_REPOSITORY" --target 42af258d19013d0d53b33d643c332fd8cdd978d2 --title "3.2.0" --notes "E-mail rules of a group (extra addresses, create / change / delete, at once or as a summary), on top of 3.1.0. Migrations 0047, 0048. Guides SK/EN updated. See CHANGELOG.md."
+        env:
+          GH_TOKEN: ${{ github.token }}
