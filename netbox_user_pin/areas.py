@@ -180,6 +180,9 @@ def _read_state():
         'tokens': bool(settings.allow_own_tokens), 'guest_path': settings.guest_path or 'pin',
         'exempt': frozenset(e.user_id for e in live), 'allowed': {e.user_id: e.allowed_set for e in live},
         'scope': settings.protect_scope or 'all', 'guests': frozenset(PinGuest.objects.values_list('user_id', flat=True)),
+        # members of a group: they see only what their groups allow, also with A (the doors are for the others)
+        'members': frozenset(AreaGrant.objects.filter(revoked__isnull=True).filter(
+            Q(expires__isnull=True) | Q(expires__gt=timezone.now())).values_list('user_id', flat=True)),
         # the earliest end of a running exception: a request after it re-reads (the end is not a "cache age")
         'next_expiry': min((e.expires for e in live if e.expires), default=None),
     }
@@ -247,6 +250,8 @@ def hides_denied(area=None, user=None):
         if guests.is_guest(user):
             return True
     active_areas()
+    if user is not None and getattr(user, 'pk', None) in _cache.get('members', ()):
+        return True  # a member of a group sees only what the groups allow (A shows doors to the others only)
     if area is not None and area.hide_denied is not None:
         return bool(area.hide_denied)
     return bool(_cache['hide'])
@@ -1692,7 +1697,7 @@ def _clean_group_rights(area, rights):
     return rights
 
 
-def create_group(area, target, name, rights, actor, filters=None, request=None, records='unset'):
+def create_group(area, target, name, rights, actor, filters=None, request=None, records='all'):
     rights = rights or ['view']  # a new group reads; what else it may do is ticked inside the group
     if not _may_grant(actor, area, target):
         raise PermissionDenied

@@ -29,26 +29,15 @@
 <table>
 <tr><th>Part</th><th>Options</th></tr>
 <tr><td><strong>Name of the group</strong></td><td>text</td></tr>
-<tr><td><strong>Access</strong></td><td><em>Sees nothing</em> / <em>Read only</em> / <em>Read and write</em>. Whoever may write may read as well</td></tr>
+<tr><td><strong>Access</strong></td><td><em>Sees nothing</em> / <em>Read only</em> / <em>Read and write</em>. Whoever may write may read as well. A group with access <strong>sees every record</strong> of its type; what of it may be seen or changed is set in the part <em>Fields</em></td></tr>
 <tr><td>Further rights</td><td><em>May delete</em>; <em>May import (needs adding as well)</em>; <em>May export</em>. Without them the Import / Export buttons are not drawn and the pages answer "no access"</td></tr>
 <tr><td>Rights of a plugin</td><td>if a plugin defines own rights (e.g. <em>config</em>) they are offered as further check boxes</td></tr>
-<tr><td><strong>Deny</strong> (<em>wins over any allowance</em>)</td><td>a right the group never has, even if it would get it otherwise</td></tr>
 <tr><td><strong>Tabs of the page</strong></td><td>for each system tab of the detail (Interfaces, Config Context, Changelog …) <em>Hidden</em> / <em>Visible</em>. The main page is always allowed. Tabs of plugins follow the area of that plugin</td></tr>
 <tr><td><strong>Members</strong></td><td><em>Add users to the group</em>; the button <em>Remove</em></td></tr>
 </table>
 <p>A tab that lists <strong>other objects</strong> (a device's interfaces) needs the right on their type as well; with the protection on, that type must also be in some area.</p>
-<h2>A group: the records it sees</h2>
-<table>
-<tr><th>Option</th><th>Meaning</th></tr>
-<tr><td><em>Not set (sees no record)</em></td><td>the starting point: the members see no row</td></tr>
-<tr><td><em>All records</em></td><td>the members see all rows of this type</td></tr>
-<tr><td><em>Only by conditions</em></td><td>they see only the rows that match the conditions</td></tr>
-</table>
-<ul>
-<li><strong>Allowed</strong>: several values of one condition are alternatives (<em>agg</em> or <em>core</em>); several conditions must <strong>all hold at once</strong>. With no condition the group sees nothing.</li>
-<li><strong>Denied</strong>: records that match any of these conditions are <strong>never shown</strong>, whatever else allows them.</li>
-<li>A condition = a <em>field</em> + an <em>operator</em> + a value. Operators: <em>is</em>, <em>is not</em>, <em>contains</em>, <em>does not contain</em>, <em>starts with</em>, <em>is one of</em>, <em>is not one of</em>. For a field with choices or a relation the values are chosen from a list.</li>
-</ul>
+<h2>A group: the menu</h2>
+<p>A member of a group sees in the menu <strong>only what his groups give him</strong>, also with A. A (the doors) is for the users in no group only. For who is to see nothing outside the groups even without a group, B applies.</p>
 <h2>Fields</h2>
 <p>For a group (or for everybody in the area) and an object type every field is:</p>
 <table>

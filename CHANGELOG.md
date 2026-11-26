@@ -3,11 +3,16 @@
 The guides, written from the code: [`docs/GUIDE_User_PIN_EN.pdf`](docs/GUIDE_User_PIN_EN.pdf) (English), [`docs/NAVOD_User_PIN_SK.pdf`](docs/NAVOD_User_PIN_SK.pdf) (Slovak).
 Sources and the build script: `docs/src/` (`python3 docs/src/build.py`).
 
-The version in the code is **3.2.0** (e-mails about the changes of a group, on top of 3.1.0). Earlier releases: 3.1.0, 3.0.0, 2.5.0, 2.0.0.
+The version in the code is **3.3.0** (a simpler group, on top of 3.2.0). Earlier releases: 3.2.0, 3.1.0, 3.0.0, 2.5.0, 2.0.0.
 The base was 0.38.4 (commit 7bed7de); the interim numbers 2.0.1 … 2.2.2 in the commit history of 27–30 October 2026
 were working labels, everything is part of the 2.0.0 line and is listed by topic below.
-Verzia v kóde je **3.2.0** (e-maily o zmenách skupiny; predchádzajúce vydania 3.1.0, 3.0.0, 2.5.0, 2.0.0); priebežné čísla 2.0.1 … 2.2.2
+Verzia v kóde je **3.3.0** (jednoduchšia skupina; predchádzajúce vydania 3.2.0, 3.1.0, 3.0.0, 2.5.0, 2.0.0); priebežné čísla 2.0.1 … 2.2.2
 v histórii commitov boli pracovné označenia, všetko patrí do línie 2.0.0 a je rozdelené podľa tém.
+
+## 3.3.0 - a simpler group / jednoduchšia skupina
+
+* A group with read (or read and write) access sees every record of its type; "Deny" and "Records the group sees" (conditions, denied records) are gone from the page; migration 0049 switches the existing groups to all records and drops their conditions and denials. / Skupina s prístupom vidí všetky záznamy; Zákaz a Záznamy zmizli.
+* A member of a group sees in the menu only what the groups give him, also with A. / Člen skupiny vidí v menu len svoje, aj pri A.
 
 ## 3.2.0 - e-mails about the changes of a group / e-maily o zmenách skupiny
 

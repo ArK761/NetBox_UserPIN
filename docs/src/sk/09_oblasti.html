@@ -29,26 +29,15 @@
 <table>
 <tr><th>Časť</th><th>Voľby</th></tr>
 <tr><td><strong>Názov skupiny</strong></td><td>text</td></tr>
-<tr><td><strong>Prístup</strong></td><td><em>Nevidí</em> / <em>Len čítať</em> / <em>Čítať a zapisovať</em>. Kto smie zapisovať, smie aj čítať</td></tr>
+<tr><td><strong>Prístup</strong></td><td><em>Nevidí</em> / <em>Len čítať</em> / <em>Čítať a zapisovať</em>. Kto smie zapisovať, smie aj čítať. Skupina s prístupom <strong>vidí všetky záznamy</strong> svojho typu; čo z nich smie vidieť alebo meniť, sa nastavuje v časti <em>Polia</em></td></tr>
 <tr><td>Ďalšie práva</td><td><em>Smie mazať</em>; <em>Smie importovať</em> (potrebuje aj zapisovanie, tlačidlo Import); <em>Smie exportovať</em>. Bez nich sa tlačidlá Import / Export nevykreslia a stránky odpovedia „bez prístupu“</td></tr>
 <tr><td>Práva pluginu</td><td>ak plugin definuje vlastné práva (napr. <em>config</em>), ponúknu sa ako ďalšie zaškrtávacie polia</td></tr>
-<tr><td><strong>Zákaz</strong> (<em>vyhráva nad každým povolením</em>)</td><td>právo, ktoré skupina nikdy nemá, aj keď by ho dostala inak</td></tr>
 <tr><td><strong>Záložky stránky</strong></td><td>pri každej systémovej záložke detailu (Interfaces, Config Context, Changelog …) <em>Skryté</em> / <em>Viditeľné</em>. Hlavná stránka je vždy povolená. Záložky pluginu sa riadia oblasťou toho pluginu</td></tr>
 <tr><td><strong>Členovia</strong></td><td><em>Pridať používateľov do skupiny</em>; tlačidlo <em>Odobrať</em></td></tr>
 </table>
 <p>Záložka, ktorá vypisuje <strong>iné objekty</strong> (rozhrania zariadenia), potrebuje právo aj na ich typ; pri zapnutej ochrane musí byť aj ten typ v nejakej oblasti.</p>
-<h2>Skupina: záznamy, ktoré vidí</h2>
-<table>
-<tr><th>Voľba</th><th>Význam</th></tr>
-<tr><td><em>Nenastavené (nevidí žiadny záznam)</em></td><td>východisko: členovia nevidia žiadny riadok</td></tr>
-<tr><td><em>Všetky záznamy</em></td><td>členovia vidia všetky riadky tohto typu</td></tr>
-<tr><td><em>Len podľa podmienok</em></td><td>vidia len riadky, ktoré vyhovujú podmienkam</td></tr>
-</table>
-<ul>
-<li><strong>Povolené</strong>: viac hodnôt jednej podmienky sú alternatívy (<em>agg</em> alebo <em>core</em>); viac podmienok musí platiť <strong>všetky naraz</strong>. Bez podmienky skupina nevidí nič.</li>
-<li><strong>Zakázané</strong>: záznamy, ktoré vyhovujú niektorej z týchto podmienok, sa <strong>nikdy nezobrazia</strong>, nech ich povoľuje čokoľvek.</li>
-<li>Podmienka = <em>pole</em> + <em>operátor</em> + hodnota. Operátory: <em>je</em>, <em>nie je</em>, <em>obsahuje</em>, <em>neobsahuje</em>, <em>začína na</em>, <em>je jedno z</em>, <em>nie je jedno z</em>. Pri poli s výberom alebo väzbou sa hodnoty vyberajú zo zoznamu.</li>
-</ul>
+<h2>Skupina: menu</h2>
+<p>Člen skupiny vidí v menu <strong>len to, čo mu dávajú jeho skupiny</strong>, aj keď je nastavený režim A. Režim A (dvere) platí len pre používateľov, ktorí nie sú v žiadnej skupine. Kto nemá vidieť nič mimo skupín ani bez skupiny, pre toho platí režim B.</p>
 <h2>Polia</h2>
 <p>Pre skupinu (alebo pre každého v oblasti) a typ objektu je každé pole:</p>
 <table>

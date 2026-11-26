@@ -74,7 +74,7 @@ def _tree(user):
         groups = []
         for group in areas.groups_of(area):
             groups.append({'name': group.name, 'target': group.target,
-                           'members': [g.user.username for g in areas.group_members(group)]})
+                           'members': [(str(g.user), g.user.get_full_name()) for g in areas.group_members(group)]})
         info[area.pk] = {
             'owners': [o.username for o in areas.owners(area)],
             'users': sum(1 for g in area.grants.all() if g.is_active),

@@ -661,7 +661,7 @@ def _hides_menu_for(user):
     if guests.is_guest(user):
         return True  # whatever the settings say: a person with a PIN only sees what the groups allow
     return bool(getattr(user, 'is_authenticated', False) and areas.protection_on() and areas.default_deny_active()
-                and areas.hides_denied() and not areas.is_keeper(user) and not areas.is_exempt(user))
+                and areas.hides_denied(user=user) and not areas.is_keeper(user) and not areas.is_exempt(user))
 
 
 def _menu_item_allowed(item):

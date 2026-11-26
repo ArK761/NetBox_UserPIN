@@ -1423,7 +1423,7 @@ class RowConditionsTest(AreaTestCase):
         self.assertEqual(self.names(), ['AGG_01', 'AGG_02', 'PRINTER_1'])
 
     def test_a_group_that_is_not_set_sees_no_record_and_a_deny_of_an_operation_wins(self):
-        fresh = areas.create_group(self.area, 'dcim.device', 'Nova', ['view'], self.owner1)  # no records chosen
+        fresh = areas.create_group(self.area, 'dcim.device', 'Nova', ['view'], self.owner1, records='unset')  # (API only)
         other = User.objects.create_user('userz', 'z@example.com')
         areas.add_member(fresh, other, None, self.owner1)
         areas.clear_cache()
@@ -1499,9 +1499,10 @@ class RowConditionsTest(AreaTestCase):
         html = self.client.get(url).content.decode()
         for marker in ('<details class="border rounded">', 'pin-multi-chips'):  # the users to add: a collapsed list
             self.assertIn(marker, html)
-        for marker in ('name="access"', 'name="tabv__interfaces"', 'pin-rule-form-allow', 'name="mode__name"',
-                       'agg / core'):
+        for marker in ('name="access"', 'name="tabv__interfaces"', 'name="mode__name"'):
             self.assertIn(marker, html)
+        for marker in ('pin-rule-form-allow', 'name="records"', 'deny__'):  # 3.3.0: no records and denials on the page
+            self.assertNotIn(marker, html)
         self.client.post(url, {'action': 'rights', 'name': 'Technici', 'access': 'write', 'delete': 'on'})
         self.group.refresh_from_db()
         self.assertEqual(self.group.rights, ['view', 'add', 'change', 'delete'])
@@ -1734,22 +1735,13 @@ class RowConditionsTest(AreaTestCase):
         with self.assertRaises(PermissionDenied):
             areas.add_group_condition(self.group, self.user, 'name', 'eq', ['x'])
 
-    def test_the_page_lists_adds_and_removes_conditions(self):
-        areas.set_group_records(self.group, self.owner1, 'filtered')
+    def test_the_page_has_no_conditions_of_the_records(self):
+        """3.3.0: a group sees every record of its type; the page has no conditions of the records nor denials."""
         admin_login(self.client, self.owner1)
         url = reverse('plugins:netbox_user_pin:group', kwargs={'pk': self.area.pk, 'gid': self.group.pk})
         html = self.client.get(url).content.decode()
-        self.assertIn('id="pin-rule-form-allow"', html)  # one place for the conditions of the records
-        self.assertIn('id="pin-rule-form-deny"', html)
-        response = self.client.post(url, {'action': 'rule-add', 'field': 'role', 'op': 'ne', 'values': [self.role1.pk]})
-        self.assertEqual(response.status_code, 302, response.content[:300])
-        self.assertTrue(response['Location'].endswith('#pin-rule-form'))
-        html = self.client.get(url).content.decode()
-        self.assertIn('Role is not Switch', html)
-        self.assertIn('pin-filter-fields', html)
-        self.assertIn('form="rd-0"', html)  # the condition can be removed
-        self.client.post(url, {'action': 'rule-delete', 'index': 0})
-        self.assertNotIn('Role is not Switch', self.client.get(url).content.decode())
+        self.assertNotIn('id="pin-rule-form-allow"', html)
+        self.assertNotIn('id="pin-rule-form-deny"', html)
 
 
 class PluginMenuByRolesTest(AreaTestCase):
@@ -1954,7 +1946,7 @@ class HiddenFieldPathsTest(AreaTestCase):
         self.login(member)
         journal = f'/dcim/devices/{self.other.pk}/journal/'
         html = self.client.get(f'/dcim/devices/{self.other.pk}/').content.decode()
-        self.assertIn(journal, html)  # the default: the tab is a door, the page behind it explains
+        self.assertNotIn(journal, html)  # 3.3.0: a member of a group sees only what the groups allow, also with A
         self.assertEqual(self.client.get(journal).status_code, 403)
         areas.update_area(self.area, self.owner1, hide_denied=True)
         areas.clear_cache()

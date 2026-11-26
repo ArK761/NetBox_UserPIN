@@ -15,8 +15,6 @@
       <div class="form-check"><input class="form-check-input" type="checkbox" name="import" id="acc-import" {% if can_import %}checked{% endif %} {% if not can_manage %}disabled{% endif %}><label class="form-check-label" for="acc-import">{% trans "May import (needs adding as well)" %}</label></div>
       <div class="form-check"><input class="form-check-input" type="checkbox" name="export" id="acc-export" {% if can_export %}checked{% endif %} {% if not can_manage %}disabled{% endif %}><label class="form-check-label" for="acc-export">{% trans "May export" %}</label></div>
       {% for value, label in extra_rights %}<div class="form-check"><input class="form-check-input" type="checkbox" name="rights" value="{{ value }}" id="r-{{ value }}" {% if value in rights_set %}checked{% endif %} {% if not can_manage %}disabled{% endif %}><label class="form-check-label" for="r-{{ value }}">{{ label }}</label></div>{% endfor %}
-      <div class="mt-2"><div class="fw-bold text-danger small">{% trans "Deny (wins over any allowance)" %}</div>
-        {% for value, label in rights %}<span class="form-check form-check-inline"><input class="form-check-input" type="checkbox" name="deny__{{ value }}" id="deny-{{ value }}" {% if value in denied %}checked{% endif %} {% if not can_manage %}disabled{% endif %}><label class="form-check-label small" for="deny-{{ value }}">{{ label }}</label></span>{% endfor %}</div>
       <div class="form-text">{% trans "Whoever may write may read as well." %}</div>
     </div>
     <div class="col-12 col-lg-6">
