@@ -1,0 +1,13 @@
+name: release-3-3-0
+on:
+  push:
+    branches: [tmp-release-3-3-0]
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - run: gh release create 3.3.0 --repo "$GITHUB_REPOSITORY" --target ae92d345e98ee6ad9f50f669ad71c23785cc770a --title "3.3.0" --notes "A group with access sees all records of its type (Deny and Records removed from the group page, migration 0049), members of a group see only their menu also with A, members of groups listed under an arrow with full names. Guides SK/EN updated. See CHANGELOG.md."
+        env:
+          GH_TOKEN: ${{ github.token }}
